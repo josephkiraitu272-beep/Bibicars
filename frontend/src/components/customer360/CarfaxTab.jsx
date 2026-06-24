@@ -143,7 +143,7 @@ const CarfaxTab = ({ customerId, defaultVin = '' }) => {
   return (
     <div className="space-y-4" data-testid="customer360-carfax-tab">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3 bg-white border border-[#E4E4E7] rounded-2xl p-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-[#E4E4E7] rounded-2xl p-4 sm:p-5">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-[#FEF2F2] flex items-center justify-center shrink-0">
             <FilePdf size={20} className="text-[#DC2626]" weight="fill" />
@@ -158,7 +158,7 @@ const CarfaxTab = ({ customerId, defaultVin = '' }) => {
         <button
           type="button"
           onClick={() => setShowForm((s) => !s)}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium bg-[#18181B] text-white rounded-xl hover:bg-[#27272A] shrink-0"
+          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-sm font-medium bg-[#18181B] text-white rounded-xl hover:bg-[#27272A] shrink-0 w-full sm:w-auto"
           data-testid="carfax-attach-toggle"
         >
           <Plus size={16} weight="bold" />
@@ -283,7 +283,7 @@ const CarfaxTab = ({ customerId, defaultVin = '' }) => {
             return (
               <div
                 key={r.id}
-                className="bg-white border border-[#E4E4E7] rounded-2xl p-4 flex items-center justify-between gap-3"
+                className="bg-white border border-[#E4E4E7] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 data-testid={`carfax-row-${r.id}`}
               >
                 <div className="flex items-center gap-3 min-w-0">
@@ -308,7 +308,7 @@ const CarfaxTab = ({ customerId, defaultVin = '' }) => {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 sm:justify-end pl-[52px] sm:pl-0">
                   {href && (
                     <a
                       href={href}
