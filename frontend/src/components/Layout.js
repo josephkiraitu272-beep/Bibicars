@@ -624,6 +624,28 @@ const Layout = () => {
       roles: ['master_admin', 'admin', 'team_lead']
     },
     {
+      // CarFax — cross-cutting staff capability. One entry per role, each
+      // pointing at the role's own working route (same management page +
+      // per-customer attach via Customer 360). Backend RBAC already permits
+      // admin / team_lead / manager (require_manager_or_admin).
+      id: 'carfaxAdmin',
+      type: 'single',
+      item: { path: '/admin/carfax', icon: FileText, labelKey: 'adm_carfax' },
+      roles: ['master_admin', 'admin']
+    },
+    {
+      id: 'carfaxTeam',
+      type: 'single',
+      item: { path: '/team/carfax', icon: FileText, labelKey: 'adm_carfax' },
+      roles: ['team_lead']
+    },
+    {
+      id: 'carfaxManager',
+      type: 'single',
+      item: { path: '/manager/carfax', icon: FileText, labelKey: 'adm_carfax' },
+      roles: ['manager']
+    },
+    {
       id: 'control',
       type: 'single',
       // Control is a hub. The page itself renders a horizontal sub-nav at

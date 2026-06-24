@@ -794,6 +794,11 @@ function App() {
               <Route path="orders" element={<TeamOrdersPage />} />
               <Route path="wishlist-approvals" element={<TeamWishlistApprovalsPage />} />
               <Route path="login-audit" element={<LoginAuditPage scope="team" />} />
+              {/* CarFax — cross-cutting staff capability (team_lead). Same management
+                  surface as admin; backend RBAC (require_manager_or_admin) already
+                  permits team_lead. */}
+              <Route path="carfax" element={<CarfaxAdminPage />} />
+              <Route path="customers/:id/360" element={<Customer360 />} />
               <Route path="profile/password" element={<ChangePasswordPage />} />
             </Route>
 
@@ -810,6 +815,11 @@ function App() {
               {/* Wave-8: /manager/engagement → consolidated into Insights → Traffic tab. */}
               <Route path="engagement" element={<Navigate to="/admin/insights?tab=traffic" replace />} />
               <Route path="wishlist" element={<ManagerWishlistPage />} />
+              {/* CarFax — cross-cutting staff capability (manager). Same management
+                  surface as admin; backend RBAC (require_manager_or_admin) permits
+                  manager (own customers only on attach/list). */}
+              <Route path="carfax" element={<CarfaxAdminPage />} />
+              <Route path="customers/:id/360" element={<Customer360 />} />
               <Route path="profile/password" element={<ChangePasswordPage />} />
             </Route>
 

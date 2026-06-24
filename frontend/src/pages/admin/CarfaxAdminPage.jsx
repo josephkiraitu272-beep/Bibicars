@@ -30,6 +30,8 @@ import {
 import { toast } from 'sonner';
 
 import { useLang, getLocale } from '../../i18n';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../App';
 const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
 // Status Badge
@@ -190,6 +192,11 @@ const RejectModal = ({ request, onClose, onReject }) => {
 // Main Component
 export default function CarfaxAdminPage() {
   const { t } = useLang();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const role = (user?.role || '').toLowerCase();
+  // Role-aware base so the customer-card link stays inside the caller's cabinet.
+  const basePrefix = role === 'manager' ? '/manager' : role === 'team_lead' ? '/team' : '/admin';
   const [requests, setRequests] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -357,7 +364,17 @@ export default function CarfaxAdminPage() {
                     <div>
                       <p className="font-mono font-semibold">{request.vin}</p>
                       <p className="text-sm text-zinc-500">
-                        {request.userName} • {new Date(request.createdAt).toLocaleString(getLocale())}
+                        {request.customerId ? (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`${basePrefix}/customers/${request.customerId}/360?tab=carfax`)}
+                            className="text-blue-600 hover:underline font-medium"
+                            data-testid={`carfax-open-customer-${request.id}`}
+                            title={t('adm_carfax_open_customer') || 'Open customer card'}
+                          >
+                            {request.userName || request.customerId}
+                          </button>
+                        ) : (request.userName)} • {new Date(request.createdAt).toLocaleString(getLocale())}
                       </p>
                     </div>
                     <StatusBadge status={request.status} />

@@ -116,6 +116,10 @@ const Customer360 = () => {
   const { user } = useAuth();
   const role = (user?.role || '').toLowerCase();
   const canReassign = ['admin', 'owner', 'master_admin', 'team_lead'].includes(role);
+  // Role-aware base prefix — Customer 360 is a single ecosystem card reachable
+  // by admin, team_lead and manager (backend RBAC scopes the data). Internal
+  // navigation must stay inside the caller's cabinet, never bounce to /admin.
+  const basePrefix = role === 'manager' ? '/manager' : role === 'team_lead' ? '/team' : '/admin';
   const { managers: managersMap, invalidate: invalidateManagers } = useManagersMap();
   const [data, setData] = useState(null);
   const [timeline, setTimeline] = useState([]);
@@ -247,7 +251,11 @@ const Customer360 = () => {
       {/* Header — mobile-friendly (wraps on small screens) */}
       <div className="flex items-start sm:items-center gap-3 flex-wrap">
         <button
-          onClick={() => navigate(leadParam ? '/admin/leads' : '/admin/customers')}
+          onClick={() => {
+            if (role === 'manager') navigate('/manager');
+            else if (role === 'team_lead') navigate(leadParam ? '/team/leads' : '/team/dashboard');
+            else navigate(leadParam ? '/admin/leads' : '/admin/customers');
+          }}
           className="p-2 hover:bg-[#F4F4F5] rounded-lg transition-colors shrink-0"
           data-testid="back-btn"
         >
@@ -654,7 +662,7 @@ const Customer360 = () => {
             renderItem={(item) => (
               <div
                 className="flex items-center justify-between cursor-pointer hover:bg-[#F4F4F5] -mx-2 px-2 py-1 rounded transition-colors"
-                onClick={() => item.id && navigate(`/admin/deals/${item.id}/360`)}
+                onClick={() => { if (item.id && basePrefix === '/admin') navigate(`/admin/deals/${item.id}/360`); }}
                 data-testid={`customer360-deal-row-${item.id}`}
               >
                 <div>
