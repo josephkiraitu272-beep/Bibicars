@@ -332,33 +332,12 @@ const Layout = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Search navigation items
-  const searchItems = [
-    { path: '/admin', label: t('dashboard'), keywords: ['dashboard', t('i18n_dashboard_7e6c9a'), t('i18n_panel_c86b88')] },
-    { path: '/admin/leads', label: t('leads'), keywords: ['leads', t('i18n_leads_c10bd0'), t('i18n_clients_8c58d5')] },
-    { path: '/admin/lead-deposits', label: t('crmDeposits_nav') || 'Deposits', keywords: ['deposits', 'депозити', 'депозиты', 'deposit'] },
-    { path: '/admin/legal?tab=deal_pipeline', label: t('deals'), keywords: ['deals', t('i18n_deals_4ec303'), 'deal pipeline'] },
-    { path: '/admin/legal?tab=deposit_v2', label: t('deposits'), keywords: ['deposits', t('i18n_deposits_6633bf'), 'deposit'] },
-    { path: '/admin/documents', label: t('documents'), keywords: ['documents', t('i18n_documents_14684f')] },
-    { path: '/admin/legal', label: t('legalWorkflow'), keywords: ['legal', 'egn', 'depozit', 'contract', t('i18n_legal_fe8b9d'), t('i18n_deposit_ed89d7')] },
-    { path: '/admin/finance', label: t('w12a_title'), keywords: ['finance', 'money', 'cash', 'outstanding', 'transactions', 'refunds'] },
-    { path: '/admin/delivery', label: t('w13_title'), keywords: ['delivery', 'shipment', 'shipments', 'carrier', 'carriers', 'eta', 'cmr', 'customs', 'logistics'] },
-    { path: '/admin/operations', label: t('w14_title'), keywords: ['operations', 'ops', 'ceo', 'owner', 'dashboard', 'bottleneck', 'bottlenecks', 'sla', 'team', 'risk'] },
-    { path: '/admin/calculator', label: t('calculatorAdmin'), keywords: ['calculator', t('i18n_calculator_c43f5c')] },
-    { path: '/admin/staff', label: t('staff'), keywords: ['staff', t('i18n_team_3d2671'), t('i18n_staff_d3dfee')] },
-    { path: '/admin/tasks', label: t('tasks'), keywords: ['tasks', t('i18n_tasks_4cbd2c')] },
-    { path: '/admin/settings', label: t('system'), keywords: ['settings', t('i18n_settings_07cc11')] },
-  ];
-
-  const filteredSearchItems = searchQuery.trim() 
-    ? searchItems.filter(item => 
-        item.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.keywords.some(k => k.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : [];
+  // Global search index is built dynamically from `navGroups` further below
+  // (after `visibleGroups` is computed) so it always covers EVERY section the
+  // current user can reach — see `searchIndex` / `filteredSearchItems`.
 
   const handleSearchSelect = (path) => {
-    navigate(path);
+    navigate(resolveSearchPath(path));
     setSearchQuery('');
     setIsMobileSearchOpen(false);
   };
@@ -764,6 +743,135 @@ const Layout = () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
+  //  GLOBAL COMMAND SEARCH
+  //
+  //  Built dynamically from `visibleGroups` so the dropdown ALWAYS reflects
+  //  every section the current user can actually open (role-aware paths
+  //  included — admin/team_lead/manager get their own routes). Each entry is
+  //  enriched with a multilingual alias bank (EN / RU / UK / BG) so an
+  //  operator can type "customers", "клиенты", "продажи", "carfax", "sales",
+  //  "customer 360", etc. and still land on the right page.
+  // ─────────────────────────────────────────────────────────────────────
+  const SEARCH_ALIASES = {
+    // by labelKey
+    dashboard: ['dashboard', 'control panel', 'home', 'панель', 'главная', 'головна', 'табло', 'tablo'],
+    guideTitle: ['guide', 'crm guide', 'help', 'гайд', 'инструкция', 'довідка', 'помощь', 'допомога'],
+    w16_title: ['executive', 'executive center', 'руководитель', 'owner', 'керівник'],
+    w17_title: ['action center', 'actions', 'inbox', 'действия', 'дії', 'задачи'],
+    w18_title: ['notifications', 'notification center', 'communication', 'уведомления', 'сповіщення', 'известия'],
+    leads: ['leads', 'lead', 'customers', 'customer', 'customer 360', 'customers 360', 'client', 'clients', 'crm', 'клиенты', 'клиент', 'клиента', 'клієнти', 'клієнт', 'контакты', 'контакти', 'лиды', 'ліди'],
+    crmDeposits_nav: ['deposits', 'deposit', 'депозиты', 'депозит', 'депозити'],
+    sales_nav: ['sales', 'sale', 'sold', 'продажи', 'продажа', 'продажі', 'продаж', 'проданные'],
+    meetings_nav: ['meetings', 'meeting', 'calendar', 'встречи', 'встреча', 'зустрічі', 'календарь', 'календар'],
+    cp_portal_title: ['customer portal', 'customer 360', 'customer view', 'portal', 'портал', 'клиент 360', 'кабинет клиента', 'кабінет клієнта'],
+    roadmaps_nav: ['roadmaps', 'roadmap', 'journey', 'маршрут', 'дорожная карта', 'дорожня карта', 'путь клиента'],
+    doctpl_nav: ['document templates', 'templates', 'шаблоны', 'шаблони', 'документы', 'документи'],
+    w14_title: ['operations', 'operations 360', 'ops', 'операции', 'операції'],
+    w12c_title: ['forecast', 'forecasting', 'forecasting 360', 'прогноз', 'прогнозирование', 'прогнозування'],
+    w15_title: ['contracts', 'contract 360', 'contract', 'договоры', 'договори', 'контракты', 'контракти'],
+    w12a_title: ['finance', 'finance 360', 'money', 'cash', 'финансы', 'фінанси', 'деньги'],
+    legalWorkflow: ['legal', 'legal workflow', 'contract', 'deposit', 'egn', 'юридический', 'юридичний', 'правовой'],
+    invoiceReminders: ['invoice reminders', 'invoices', 'reminders', 'счета', 'рахунки', 'напоминания'],
+    w13_title: ['delivery', 'delivery 360', 'shipment', 'shipping', 'logistics', 'доставка', 'логистика', 'логістика', 'перевозка'],
+    calculatorAdmin: ['calculator', 'calc', 'калькулятор', 'розрахунок', 'расчет'],
+    staffSection: ['staff', 'team', 'personnel', 'персонал', 'команда', 'сотрудники', 'співробітники'],
+    teamLeadPanel: ['team lead', 'teamlead', 'тимлид', 'тімлід', 'руководитель команды'],
+    staff: ['staff', 'employees', 'персонал', 'сотрудники', 'працівники'],
+    tasks: ['tasks', 'task', 'todo', 'задачи', 'завдання', 'задачі'],
+    adm_carfax: ['carfax', 'car fax', 'карфакс', 'vin report', 'vehicle history', 'история авто', 'історія авто', 'отчет carfax'],
+    analyticsAndInsights: ['analytics', 'insights', 'reports', 'statistics', 'аналитика', 'аналітика', 'отчеты', 'звіти', 'статистика'],
+    control: ['control', 'business metrics', 'контроль', 'метрики', 'control panel'],
+    settings: ['settings', 'config', 'configuration', 'настройки', 'налаштування', 'система', 'параметры'],
+    teamDashboard: ['team dashboard', 'team', 'тимлид', 'команда', 'панель команды'],
+    myWorkspace: ['my workspace', 'workspace', 'рабочее место', 'моё пространство', 'робоче місце'],
+    topDealsBuilder: ['top deals', 'top deals builder', 'wishlist', 'подборки', 'топ сделки', 'топ пропозиції'],
+    topDealsApprovals: ['top deals approvals', 'approvals', 'одобрения', 'затвердження'],
+    userEngagement: ['engagement', 'traffic', 'вовлеченность', 'залученість', 'трафик'],
+    siteIntegrationsNav: ['integrations', 'site integrations', 'интеграции', 'інтеграції'],
+    ringostat: ['ringostat', 'calls', 'telephony', 'звонки', 'дзвінки', 'телефония'],
+    hub_sidebar_label: ['notifications', 'notification settings', 'уведомления', 'сповіщення'],
+    // by path (for items defined with a literal `label`)
+    '/admin/payments': ['payments', 'stripe', 'платежи', 'оплата', 'платіжі'],
+    '/admin/services': ['services', 'catalog', 'услуги', 'сервисы', 'послуги'],
+    '/admin/tracking': ['tracking', 'vessel', 'vesselfinder', 'shipment tracking', 'отслеживание', 'відстеження'],
+    '/admin/parser': ['parser', 'vin parser', 'парсер', 'vin'],
+    '/admin/security': ['security', '2fa', 'безопасность', 'безпека', 'защита'],
+    '/admin/settings': ['system', 'settings', 'система', 'настройки', 'налаштування'],
+    '/admin/seo-settings': ['seo', 'analytics', 'сео', 'мета теги'],
+    '/admin/manager-instructions': ['manager instructions', 'instructions', 'инструкции', 'інструкції'],
+    '/admin/manager-instructions/view': ['manager instructions', 'instructions', 'инструкции', 'інструкції'],
+    '/admin/login-audit': ['login audit', 'audit', 'аудит', 'аудит входов', 'логи входа'],
+    '/admin/info': ['info', 'information', 'информация', 'інформація', 'about'],
+  };
+
+  const searchIndex = React.useMemo(() => {
+    const out = [];
+    const seen = new Set();
+    const push = (path, label, labelKey, groupLabel) => {
+      if (!path || !label) return;
+      if (seen.has(path)) return;
+      seen.add(path);
+      const aliasByKey = labelKey ? (SEARCH_ALIASES[labelKey] || []) : [];
+      const aliasByPath = SEARCH_ALIASES[path] || [];
+      const lastSeg = (path.split('?')[0].split('/').filter(Boolean).pop() || '').replace(/-/g, ' ');
+      out.push({
+        path,
+        label,
+        group: groupLabel || null,
+        keywords: [...new Set([...aliasByKey, ...aliasByPath, lastSeg].filter(Boolean))],
+      });
+    };
+    for (const g of visibleGroups) {
+      if (g.type === 'single' && g.item) {
+        const lbl = g.item.labelKey ? t(g.item.labelKey) : g.item.label;
+        push(g.item.path, lbl, g.item.labelKey, null);
+      }
+      if (g.type === 'group' && Array.isArray(g.items)) {
+        const groupLbl = g.labelKey ? t(g.labelKey) : g.label;
+        const firstVisible = g.items.find(it => !it.roles || userHasRole(it.roles));
+        // group header → opens its first reachable child
+        if (firstVisible) push(`grp:${g.id}|${firstVisible.path}`, groupLbl, g.labelKey, null);
+        for (const it of g.items) {
+          if (it.roles && !userHasRole(it.roles)) continue;
+          const lbl = it.labelKey ? t(it.labelKey) : it.label;
+          push(it.path, lbl, it.labelKey, groupLbl);
+        }
+      }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role, t]);
+
+  const filteredSearchItems = React.useMemo(() => {
+    const raw = (searchQuery || '').trim().toLowerCase();
+    if (!raw) return [];
+    const tokens = raw.split(/\s+/).filter(Boolean);
+    const scored = [];
+    for (const entry of searchIndex) {
+      const label = (entry.label || '').toLowerCase();
+      const kw = entry.keywords.map(k => (k || '').toLowerCase());
+      const hay = `${label} ${kw.join(' ')} ${entry.path.toLowerCase()} ${(entry.group || '').toLowerCase()}`;
+      // every typed token must appear somewhere (AND match)
+      if (!tokens.every(tk => hay.includes(tk))) continue;
+      let score = 0;
+      if (label === raw) score += 100;
+      else if (label.startsWith(raw)) score += 60;
+      else if (label.includes(raw)) score += 35;
+      if (kw.some(k => k === raw)) score += 50;
+      else if (kw.some(k => k.startsWith(raw))) score += 20;
+      else if (kw.some(k => k.includes(raw))) score += 10;
+      scored.push({ ...entry, score });
+    }
+    scored.sort((a, b) => b.score - a.score || a.label.localeCompare(b.label));
+    return scored.slice(0, 12);
+  }, [searchQuery, searchIndex]);
+
+  // Resolve a search-result path (group headers are encoded as `grp:id|path`).
+  const resolveSearchPath = (path) => (path && path.startsWith('grp:') ? path.split('|')[1] : path);
+
+
+
+  // ─────────────────────────────────────────────────────────────────────
   //  Smart sidebar active-state resolver
   //
   //  Multiple sidebar items can share the same pathname but differ in the
@@ -1057,17 +1165,27 @@ const Layout = () => {
                 className="input w-full"
                 data-testid="search-input"
               />
-              {searchQuery && filteredSearchItems.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#E4E4E7] rounded-xl shadow-lg z-50 py-2 max-h-64 overflow-auto">
-                  {filteredSearchItems.map(item => (
-                    <button
-                      key={item.path}
-                      onClick={() => handleSearchSelect(item.path)}
-                      className="w-full text-left px-4 py-2 text-sm hover:bg-[#F4F4F5] transition-colors"
-                    >
-                      {item.label}
-                    </button>
-                  ))}
+              {searchQuery.trim() && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#E4E4E7] rounded-xl shadow-lg z-50 py-2 max-h-80 overflow-auto" data-testid="search-results">
+                  {filteredSearchItems.length > 0 ? (
+                    filteredSearchItems.map(item => (
+                      <button
+                        key={item.path}
+                        onClick={() => handleSearchSelect(item.path)}
+                        className="w-full text-left px-4 py-2.5 hover:bg-[#F4F4F5] transition-colors flex items-center justify-between gap-3"
+                        data-testid="search-result-item"
+                      >
+                        <span className="text-sm font-medium text-[#18181B] truncate">{item.label}</span>
+                        {item.group && (
+                          <span className="text-[11px] text-[#A1A1AA] shrink-0 px-1.5 py-0.5 bg-[#F4F4F5] rounded">{item.group}</span>
+                        )}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-4 py-3 text-sm text-[#A1A1AA]" data-testid="search-no-results">
+                      {t('searchNoResults') || 'Nothing found'}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1154,17 +1272,27 @@ const Layout = () => {
                 className="input w-full"
                 data-testid="mobile-search-input"
               />
-              {searchQuery && filteredSearchItems.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#E4E4E7] rounded-xl shadow-lg z-50 py-2 max-h-64 overflow-auto">
-                  {filteredSearchItems.map(item => (
-                    <button
-                      key={item.path}
-                      onClick={() => handleSearchSelect(item.path)}
-                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-[#F4F4F5] transition-colors"
-                    >
-                      {item.label}
-                    </button>
-                  ))}
+              {searchQuery.trim() && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#E4E4E7] rounded-xl shadow-lg z-50 py-2 max-h-72 overflow-auto" data-testid="mobile-search-results">
+                  {filteredSearchItems.length > 0 ? (
+                    filteredSearchItems.map(item => (
+                      <button
+                        key={item.path}
+                        onClick={() => handleSearchSelect(item.path)}
+                        className="w-full text-left px-4 py-2.5 hover:bg-[#F4F4F5] transition-colors flex items-center justify-between gap-3"
+                        data-testid="mobile-search-result-item"
+                      >
+                        <span className="text-sm font-medium text-[#18181B] truncate">{item.label}</span>
+                        {item.group && (
+                          <span className="text-[11px] text-[#A1A1AA] shrink-0 px-1.5 py-0.5 bg-[#F4F4F5] rounded">{item.group}</span>
+                        )}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-4 py-3 text-sm text-[#A1A1AA]">
+                      {t('searchNoResults') || 'Nothing found'}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

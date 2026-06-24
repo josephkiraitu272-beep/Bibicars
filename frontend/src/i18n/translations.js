@@ -1114,6 +1114,7 @@ export const translations = {
     
     // Common
     search: 'Пошук...',
+    searchNoResults: 'Нічого не знайдено',
     edit: 'Редагувати',
     view: 'Переглянути',
     update: 'Оновити',
@@ -9051,6 +9052,7 @@ export const translations = {
     
     // Common
     search: 'Search...',
+    searchNoResults: 'Nothing found',
     edit: 'Edit',
     view: 'View',
     update: 'Update',
@@ -16956,6 +16958,7 @@ export const translations = {
     
     // Common
     search: 'Търсене...',
+    searchNoResults: 'Нищо не е намерено',
     edit: 'Редактирай',
     view: 'Преглед',
     update: 'Обнови',
