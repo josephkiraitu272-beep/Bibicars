@@ -807,34 +807,77 @@ const Layout = () => {
   const searchIndex = React.useMemo(() => {
     const out = [];
     const seen = new Set();
+    const addEntry = (path, label, keywords, groupLabel) => {
+      if (!path || !label || seen.has(path)) return;
+      seen.add(path);
+      const lastSeg = (path.split('?')[0].split('/').filter(Boolean).pop() || '').replace(/-/g, ' ');
+      out.push({ path, label, group: groupLabel || null, keywords: [...new Set([...(keywords || []), lastSeg].filter(Boolean))] });
+    };
+    const role = (user?.role || '').toLowerCase();
+    const lbl = (key, fallback) => (key ? (t(key) || fallback) : fallback);
+
+    // ── Team Lead cabinet — pages live under /team/* (NOT /admin/*). ──
+    if (role === 'team_lead') {
+      [
+        ['/team/dashboard', lbl('teamDashboard', 'Team Dashboard'), ['dashboard', 'team dashboard', 'панель', 'табло', 'команда', 'главная', 'головна']],
+        ['/team/managers', 'Managers', ['managers', 'manager', 'load board', 'менеджеры', 'менеджери', 'загрузка']],
+        ['/team/leads', lbl('leads', 'Leads'), [...(SEARCH_ALIASES.leads || [])]],
+        ['/team/reassignments', 'Reassignments', ['reassignments', 'reassign', 'передачи', 'переназначение', 'перепризначення']],
+        ['/team/tasks', lbl('tasks', 'Tasks'), [...(SEARCH_ALIASES.tasks || [])]],
+        ['/team/payments', 'Payments', ['payments', 'payment', 'платежи', 'оплата', 'платіжі']],
+        ['/team/shipping', 'Shipping', ['shipping', 'delivery', 'доставка', 'перевозка', 'логистика', 'логістика']],
+        ['/team/alerts', 'Alerts', ['alerts', 'alert', 'уведомления', 'тревоги', 'сповіщення', 'оповіщення']],
+        ['/team/performance', 'Performance', ['performance', 'kpi', 'эффективность', 'продуктивність', 'показатели']],
+        ['/team/orders', 'Orders', ['orders', 'order', 'заказы', 'замовлення', 'заявки']],
+        ['/team/wishlist-approvals', lbl('topDealsApprovals', 'Top Deals Approvals'), ['top deals', 'approvals', 'одобрения', 'затвердження', 'подборки']],
+        ['/team/login-audit', 'Login Audit', ['login audit', 'audit', 'аудит', 'логи входа']],
+        ['/team/carfax', lbl('adm_carfax', 'CarFax'), [...(SEARCH_ALIASES.adm_carfax || [])]],
+        ['/team/profile/password', 'Change Password', ['password', 'change password', 'пароль', 'смена пароля', 'зміна пароля']],
+      ].forEach(([p, l, k]) => addEntry(p, l, k, null));
+      return out;
+    }
+
+    // ── Manager cabinet — pages live under /manager/*. ──
+    if (role === 'manager') {
+      [
+        ['/manager', lbl('myWorkspace', 'My Workspace'), ['workspace', 'my workspace', 'dashboard', 'рабочее место', 'робоче місце', 'панель', 'главная']],
+        ['/manager/calls', 'Calls', ['calls', 'call', 'звонки', 'дзвінки', 'телефония', 'телефонія']],
+        ['/manager/calls/missed', 'Missed Calls', ['missed calls', 'missed', 'пропущенные', 'пропущені']],
+        ['/manager/tasks', lbl('tasks', 'Tasks'), [...(SEARCH_ALIASES.tasks || [])]],
+        ['/manager/invoices', 'Invoices', ['invoices', 'invoice', 'счета', 'рахунки', 'инвойсы']],
+        ['/manager/orders', 'Orders', ['orders', 'order', 'заказы', 'замовлення', 'заявки']],
+        ['/manager/shipments', 'Shipments', ['shipments', 'shipment', 'delivery', 'доставка', 'перевозка', 'отгрузки']],
+        ['/manager/tracking', 'Tracking', ['tracking', 'отслеживание', 'відстеження', 'трекинг']],
+        ['/manager/engagement', lbl('userEngagement', 'Engagement'), ['engagement', 'traffic', 'вовлеченность', 'залученість']],
+        ['/manager/wishlist', lbl('topDealsBuilder', 'Top Deals Builder'), ['top deals', 'wishlist', 'подборки', 'топ сделки', 'топ пропозиції']],
+        ['/manager/carfax', lbl('adm_carfax', 'CarFax'), [...(SEARCH_ALIASES.adm_carfax || [])]],
+        ['/manager/profile/password', 'Change Password', ['password', 'change password', 'пароль', 'смена пароля', 'зміна пароля']],
+      ].forEach(([p, l, k]) => addEntry(p, l, k, null));
+      return out;
+    }
+
+    // ── Admin / master_admin / moderator → derive from the full sidebar nav. ──
     const push = (path, label, labelKey, groupLabel) => {
-      if (!path || !label) return;
-      if (seen.has(path)) return;
+      if (!path || !label || seen.has(path)) return;
       seen.add(path);
       const aliasByKey = labelKey ? (SEARCH_ALIASES[labelKey] || []) : [];
       const aliasByPath = SEARCH_ALIASES[path] || [];
       const lastSeg = (path.split('?')[0].split('/').filter(Boolean).pop() || '').replace(/-/g, ' ');
-      out.push({
-        path,
-        label,
-        group: groupLabel || null,
-        keywords: [...new Set([...aliasByKey, ...aliasByPath, lastSeg].filter(Boolean))],
-      });
+      out.push({ path, label, group: groupLabel || null, keywords: [...new Set([...aliasByKey, ...aliasByPath, lastSeg].filter(Boolean))] });
     };
     for (const g of visibleGroups) {
       if (g.type === 'single' && g.item) {
-        const lbl = g.item.labelKey ? t(g.item.labelKey) : g.item.label;
-        push(g.item.path, lbl, g.item.labelKey, null);
+        const l = g.item.labelKey ? t(g.item.labelKey) : g.item.label;
+        push(g.item.path, l, g.item.labelKey, null);
       }
       if (g.type === 'group' && Array.isArray(g.items)) {
         const groupLbl = g.labelKey ? t(g.labelKey) : g.label;
         const firstVisible = g.items.find(it => !it.roles || userHasRole(it.roles));
-        // group header → opens its first reachable child
         if (firstVisible) push(`grp:${g.id}|${firstVisible.path}`, groupLbl, g.labelKey, null);
         for (const it of g.items) {
           if (it.roles && !userHasRole(it.roles)) continue;
-          const lbl = it.labelKey ? t(it.labelKey) : it.label;
-          push(it.path, lbl, it.labelKey, groupLbl);
+          const l = it.labelKey ? t(it.labelKey) : it.label;
+          push(it.path, l, it.labelKey, groupLbl);
         }
       }
     }
