@@ -10857,6 +10857,21 @@ async def carfax_manager_attach(
     return {"success": True, "data": _carfax_clean(doc)}
 
 
+@fastapi_app.get("/api/admin/customers/{customer_id}/carfax", dependencies=[Depends(require_manager_or_admin)])
+async def carfax_manager_list(customer_id: str):
+    """Customer 360 (manager/admin): list every CarFax report/request attached
+    to a customer — both manager-attached uploads and customer self-requests.
+    Mirrors what the customer sees in their cabinet, plus pending/processing."""
+    try:
+        rows = await db.carfax_requests.find(
+            {"$or": [{"customerId": customer_id}, {"userId": customer_id}]},
+            {"_id": 0},
+        ).sort("createdAt", -1).to_list(length=200)
+        return {"success": True, "data": [_carfax_clean(r) for r in rows]}
+    except Exception:
+        return {"success": True, "data": []}
+
+
 @fastapi_app.delete("/api/carfax/{request_id}", dependencies=[Depends(require_manager_or_admin)])
 async def carfax_delete(request_id: str):
     """Remove a Carfax report/request (and its stored PDF, if any)."""

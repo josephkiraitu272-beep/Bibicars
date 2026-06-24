@@ -2251,7 +2251,7 @@ export const CabinetCarfax = () => {
                   <p className="text-xs text-[#71717A]">{(r.issuedAt || r.createdAt) ? new Date(r.issuedAt || r.createdAt).toLocaleDateString(getLocale()) : ''}</p>
                 </div>
                 <span className={`text-xs px-2 py-1 rounded-full ${
-                  r.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                  (r.status === 'completed' || r.status === 'uploaded') ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                 }`}>{r.status}</span>
               </div>
               {r.pdfUrl && (

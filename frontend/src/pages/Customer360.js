@@ -74,6 +74,7 @@ import MeetingsTab from '../components/customer360/MeetingsTab';
 import LeadActionBar from '../components/customer360/LeadActionBar';
 import QuickCallButton from '../components/calls/QuickCallButton';
 import ViberButton from '../components/calls/ViberButton';
+import CarfaxTab from '../components/customer360/CarfaxTab';
 
 // Localized labels for the Customer 360 tabs. Previously the tab labels were
 // rendered by capitalising the raw English key, so they never switched with the
@@ -98,6 +99,7 @@ const TAB_LABELS = {
   calls:     { en: 'Calls',     uk: 'Дзвінки',        bg: 'Обаждания' },
   contracts: { en: 'Contracts', uk: 'Договори',       bg: 'Договори' },
   documents: { en: 'Documents', uk: 'Документи',      bg: 'Документи' },
+  carfax:    { en: 'CarFax',    uk: 'CarFax',         bg: 'CarFax' },
   activity:  { en: 'Activity',  uk: 'Активність',     bg: 'Активност' },
   timeline:  { en: 'Timeline',  uk: 'Хронологія',     bg: 'Хронология' },
   history:   { en: 'History',   uk: 'Історія',        bg: 'История' },
@@ -481,7 +483,7 @@ const Customer360 = () => {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-[#E4E4E7] overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0" style={{ scrollbarWidth: 'none' }}>
-        {['overview', 'account', 'roadmap', 'comments', 'tasks', 'legal', 'leads', 'quotes', 'deals', 'sales', 'meetings', 'invoices', 'orders', 'payments', 'deposits', 'calls', 'contracts', 'documents', 'activity', 'timeline', 'history'].map((tab) => {
+        {['overview', 'account', 'roadmap', 'comments', 'tasks', 'legal', 'leads', 'quotes', 'deals', 'sales', 'meetings', 'invoices', 'orders', 'payments', 'deposits', 'calls', 'contracts', 'documents', 'carfax', 'activity', 'timeline', 'history'].map((tab) => {
           // When the card is opened from a lead, gently highlight the tabs a
           // manager works in most during the lead stage (single ecosystem —
           // every tab stays available, relevant ones are just surfaced).
@@ -724,6 +726,10 @@ const Customer360 = () => {
 
         {activeTab === 'documents' && (
           <FileManagerTab customerId={id} />
+        )}
+
+        {activeTab === 'carfax' && (
+          <CarfaxTab customerId={id} defaultVin={customer?.vin || ''} />
         )}
 
         {activeTab === 'activity' && (
