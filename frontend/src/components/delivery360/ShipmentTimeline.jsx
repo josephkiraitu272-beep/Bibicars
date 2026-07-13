@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Check, Circle, Truck, MapPin, Package, ShieldCheck, Boat, Warehouse, Flag } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import axios from 'axios';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 
 const MILESTONE_ICON = {
   auction_won:        Flag,

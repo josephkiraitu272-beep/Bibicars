@@ -22,14 +22,14 @@ import {
   ChatCircleDots, Tray, User, UsersThree, ChartLine, Sparkle,
 } from '@phosphor-icons/react';
 
-import { API_URL } from '../App';
+import { API_URL } from '../api-config';
 import { useLang } from '../i18n';
 import { HelpTooltip } from '../components/ui/HelpTooltip';
 import RefreshButton from '../components/ui/RefreshButton';
 import { PageHeader, PageTabs, HeaderActionButton } from '../components/ui/PageHeader';
 import RoleZoneBadge from '../components/ui/RoleZoneBadge';
 import WhiteDatePicker from '../components/ui/WhiteDatePicker';
-import { Select } from '../components/ui/Select';
+import { Select } from '../components/ui/NativeSelect';
 
 const fmt   = (n, ccy = 'EUR') => { try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: ccy, maximumFractionDigits: 0 }).format(Number(n || 0)); } catch { return `${ccy} ${Number(n || 0).toFixed(0)}`; } };
 const fmtN  = (n) => new Intl.NumberFormat('en-US').format(Number(n || 0));

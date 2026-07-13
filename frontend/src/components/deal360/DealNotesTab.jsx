@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { NotePencil, PaperPlaneRight } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 
 const DealNotesTab = ({ dealId, timeline = [], onChange }) => {
   const [text, setText] = useState('');

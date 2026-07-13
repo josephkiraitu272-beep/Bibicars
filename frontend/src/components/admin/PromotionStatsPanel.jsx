@@ -29,7 +29,7 @@ import {
   ChartBar,
   Clock,
 } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 
 const POLL_MS = 15000;
 

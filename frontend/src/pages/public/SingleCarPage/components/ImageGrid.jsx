@@ -159,6 +159,7 @@ const ImageGrid = ({ className = '', car, onExactCostClick = () => {} }) => {
                 <MobRow label={t.auction} value={auction?.auction} weight="regular" />
                 <MobRow label={t.updated} value={auction?.updated} weight="regular" />
                 <MobRow label={t.bidPrice} value={auction?.bidPrice} large />
+                <MobRow label={t.startingBid} value={auction?.startingBid || t.dataUnavailable} />
                 <MobRow label={t.estimatedTotalPrice} value={auction?.estimatedTotalPrice} large />
               </div>
             </section>
@@ -323,6 +324,10 @@ const ImageGrid = ({ className = '', car, onExactCostClick = () => {} }) => {
                     <div className={styles.detailRow}>
                       <div className={styles.detailLabel}>{t.bidPrice}</div>
                       <h3 className={styles.detailValueLg}>{auction?.bidPrice || '—'}</h3>
+                    </div>
+                    <div className={styles.detailRow}>
+                      <div className={styles.detailLabel}>{t.startingBid}</div>
+                      <h3 className={styles.detailValueLg}>{auction?.startingBid || t.dataUnavailable}</h3>
                     </div>
                     <div className={styles.detailRow}>
                       <div className={styles.detailLabel}>{t.estimatedTotalPrice}</div>

@@ -12,7 +12,7 @@ import {
   ArrowSquareOut, Flag, Users, ChartPieSlice,
 } from '@phosphor-icons/react';
 
-import { API_URL } from '../App';
+import { API_URL } from '../api-config';
 import RefreshButton from '../components/ui/RefreshButton';
 import { PageHeader, PageTabs } from '../components/ui/PageHeader';
 import RoleZoneBadge from '../components/ui/RoleZoneBadge';

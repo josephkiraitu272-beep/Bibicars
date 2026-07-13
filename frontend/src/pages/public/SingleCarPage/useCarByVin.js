@@ -36,6 +36,7 @@ import {
   formatEngine,
   formatDrivetrain,
   formatBodyStyle,
+  formatLocation,
   formatUpdated,
 } from "./formatters";
 
@@ -56,24 +57,54 @@ function toCarVM(payload) {
   const rawImages = Array.isArray(d.image_urls) && d.image_urls.length
     ? d.image_urls
     : (Array.isArray(d.images) ? d.images : []);
+  // Damage & location — parser stores `damage_primary`/`damage_secondary`
+  // /`location` per source. Read across shell + enrich + statvin history
+  // so the UI shows the best available string on every render pass.
+  const damagePrimary   = d.damage_primary   || d.damage   || h?.damage_primary   || "";
+  const damageSecondary = d.damage_secondary || h?.damage_secondary || "";
+  const damage = damagePrimary || damageSecondary
+    ? [damagePrimary, damageSecondary].filter(Boolean).join(" · ")
+    : "";
+  const location = d.location || h?.location || "";
+  // Pricing — three levels of granularity when the source provides them:
+  //   * current_bid           — live standing bid (Copart/IAAI)
+  //   * starting_bid          — lot opening amount
+  //   * estimated_total_price — projected retail (Buy-It-Now / MSRP-like)
+  // If a historical sale is known (from stat.vin), we fall back to it as
+  // the "estimated total" so the UI always has SOMETHING to show.
+  const startingBid = d.starting_bid ?? d.starting_price ?? null;
+  const estimatedRetail =
+    d.estimated_total_price ??
+    d.estimated_price ??
+    d.retail_value ??
+    (h?.sale_price_usd ?? null);
+  const startingBidCcy = d.starting_bid_currency || d.currency || null;
+  const estimatedCcy   = d.estimated_total_currency || d.currency || null;
   return {
     title: d.title || `${d.year || ""} ${d.make || ""} ${d.model || ""}`.trim(),
     images: rawImages,
     imageCount: d.image_count || rawImages.length,
     price: {
       currentBid: d.current_bid ?? d.price ?? h?.sale_price_usd ?? null,
-      currency: "USD",
+      currency: d.current_bid_currency || d.currency || "USD",
     },
     vehicle: {
       brand: d.make || "—",
       model: d.model || "—",
       year: d.year || "—",
-      mileage: formatMileage(d.odometer),
+      mileage: formatMileage(d.odometer, d.odometer_unit),
       fuel: d.fuel_type || h?.fuel_type || "—",
       transmission: d.transmission || h?.transmission || "—",
-      bodyType: formatBodyStyle(d.body_style, d),
+      bodyType: formatBodyStyle(d.body_style || d.body_type, d),
       driveType: formatDrivetrain(d.drivetrain),
       engineVolume: formatEngine(d.engine),
+      color: d.color || h?.color || "—",
+      condition: d.condition || d.title_status || h?.title_status || "—",
+      // Fields that were previously ignored by the view-model but ARE
+      // present in shell/enrich/statvin payloads — expose them explicitly
+      // so the UI (ImageGrid Row / MobRow "Щети", "Локация") can render.
+      damage: damage ? damage : "—",
+      location: location ? formatLocation(location) : "—",
     },
     auction: {
       lot: d.lot_number || h?.lot_number || "—",
@@ -82,7 +113,14 @@ function toCarVM(payload) {
       updated: formatUpdated(d.sale_date || h?.sale_date),
       bidPrice: formatPrice(d.current_bid ?? d.price ?? h?.sale_price_usd, d),
       bidPriceRaw: Number(d.current_bid ?? d.price ?? 0) || 0,
-      estimatedTotalPrice: null,
+      // Prefer server-provided estimated total when present. When absent
+      // the SingleCarPage overwrites this with the calculator result.
+      estimatedTotalPrice: estimatedRetail != null
+        ? formatPrice(estimatedRetail, { ...d, currency: estimatedCcy || d.currency })
+        : null,
+      startingBid: startingBid != null
+        ? formatPrice(startingBid, { ...d, currency: startingBidCcy || d.currency })
+        : null,
     },
     description: buildDescription(d, h),
     raw: payload,
@@ -135,6 +173,13 @@ export default function useCarByVin(vinOrSlug) {
     return data;
   }, []);
 
+  // Track the latest `car` state via a ref so `fetchEnrich` can inspect
+  // it WITHOUT depending on it — otherwise setCar() → new fetchEnrich →
+  // useEffect re-runs → shell re-fetches → error state gets reset → the
+  // "VIN not found" banner flickers back on top of a rendered card.
+  const carRef = useRef(null);
+  useEffect(() => { carRef.current = car; }, [car]);
+
   const fetchEnrich = useCallback(async (vin, reqId, shellData) => {
     // Phase 2 — fire-and-forget live fallback, then merge.
     if (enrichFiredRef.current) return;
@@ -170,15 +215,30 @@ export default function useCarByVin(vinOrSlug) {
         };
         setRaw(merged);
         setCar(toCarVM(merged));
+        // ── Bug fix: if the shell said NOT_FOUND but the live enrich
+        // pipeline actually resolved the vehicle (via SEARCH / WESTMOTORS
+        // / LEMON / STATVIN chain), we MUST clear the earlier "not_found"
+        // error state — otherwise the header keeps showing
+        // "VIN не намерен" even though the car is rendered below.
+        setError(null);
+        setFreshness("fresh");
+        setAgeSeconds(0);
+        setMissingFields([]);
+        setPhase("enriched");
+      } else {
+        // Enrich confirmed the miss. If shell already had the car we
+        // keep whatever it painted; otherwise we surface not_found.
+        if (!carRef.current) {
+          setError((prev) => prev || "not_found");
+          setPhase((prev) => (prev === "shell" ? "shell" : "not_found"));
+        } else {
+          setPhase("shell");
+        }
       }
-      setFreshness("fresh");
-      setAgeSeconds(0);
-      setMissingFields([]); // assume enrich filled everything it could
-      setPhase("enriched");
     } catch (e) {
       // Enrich failure is NON-FATAL — user keeps the shell render.
       // We just stay on phase=shell and don't surface a hard error.
-      setPhase("shell");
+      setPhase((prev) => (prev === "not_found" ? "not_found" : "shell"));
     }
   }, []);
 

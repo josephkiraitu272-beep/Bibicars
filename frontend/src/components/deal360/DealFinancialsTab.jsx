@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
   CurrencyEur, TrendUp, Wallet, ReceiptX, Coins, Plus, CheckCircle, XCircle, ArrowsClockwise,
 } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 
 const Tile = ({ icon: Icon, label, value, hint, tone = 'neutral', testId }) => {
   const toneCls = {

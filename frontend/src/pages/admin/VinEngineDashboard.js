@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { useAuth, API_URL } from '../../App';
+import { useAuth, API_URL } from '../../api-config';
 import { useLang } from '../../i18n';
 import RefreshButton from '../../components/ui/RefreshButton';
 import {

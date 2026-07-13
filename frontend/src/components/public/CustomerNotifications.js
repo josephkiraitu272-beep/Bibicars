@@ -13,7 +13,7 @@ import {
   CaretRight,
   TelegramLogo,
 } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 
 /**
  * Customer Notifications Page

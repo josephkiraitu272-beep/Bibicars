@@ -17,9 +17,9 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { API_URL, useAuth } from '../App';
+import { API_URL, useAuth } from '../api-config';
 import { toast } from 'sonner';
-import { useLang } from '../i18n';
+import { useLang, localizeBreakdownLabel } from '../i18n';
 import CustomSelect from '../components/ui/CustomSelect';
 import RefreshButton from '../components/ui/RefreshButton';
 import {
@@ -512,7 +512,7 @@ const CalculatorAdmin = () => {
                           key={i}
                           className="flex justify-between py-0.5 border-b border-[#F4F4F5]"
                         >
-                          <span className="text-[#71717A] text-xs">{item.label}</span>
+                          <span className="text-[#71717A] text-xs">{localizeBreakdownLabel(item, t)}</span>
                           <span className="font-medium text-xs">
                             ${Number(item.value || 0).toLocaleString()}
                           </span>
@@ -850,7 +850,7 @@ const CalculatorAdmin = () => {
                         key={i}
                         className="flex justify-between py-0.5 border-b border-[#F4F4F5]"
                       >
-                        <span className="text-[#71717A] text-xs">{item.label}</span>
+                        <span className="text-[#71717A] text-xs">{localizeBreakdownLabel(item, t)}</span>
                         <span className="font-medium text-xs">
                           ${Number(item.value || 0).toLocaleString()}
                         </span>

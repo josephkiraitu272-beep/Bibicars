@@ -21,7 +21,7 @@ import {
   FloppyDisk, ArrowsClockwise, ListBullets, ListNumbers, LinkSimple, Code, ArrowUUpLeft, ArrowUUpRight,
   Quotes, ClockCounterClockwise, TextB, TextItalic, TextUnderline,
 } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 
 const ToolbarBtn = ({ active, onClick, title, children, disabled }) => (
   <button

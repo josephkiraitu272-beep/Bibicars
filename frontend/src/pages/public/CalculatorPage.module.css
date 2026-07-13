@@ -472,7 +472,7 @@
   align-self: stretch;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;  /* summary-only design: label is the only element */
   gap: 20px;
 }
 .estRow .lbl,
@@ -483,7 +483,7 @@
   line-height: 1;
 }
 .estRow .lbl { color: #fff; }
-.estRow .val { color: #fff; white-space: nowrap; }
+.estRow .val { display: none; }  /* per summary-only design (Jul 12, 2026) */
 
 /* ── Group total row (CAR & AUCTION / LOGISTICS / CUSTOMS) ───────────── */
 .estGroupTotal {

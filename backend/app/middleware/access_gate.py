@@ -94,6 +94,9 @@ _PUBLIC = _compile([
     r"/api/favorites(/.*)?",
     r"/api/compare(/.*)?",
     r"/api/shares(/.*)?",
+    # OG rich-preview endpoints (Viber/Telegram/WhatsApp/Facebook unfurl bots
+    # + real users transiting to /cars/*). MUST be public — no auth for bots.
+    r"/api/og(/.*)?",
     # Public lead capture forms
     r"/api/leads/consultation",
     r"/api/quick-leads",

@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { API_URL, useAuth } from '../App';
+import { API_URL, useAuth } from '../api-config';
 import { useLang } from '../i18n';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';

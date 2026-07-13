@@ -295,7 +295,11 @@ CORE_FIELDS = ['vin', 'make', 'model', 'year']
 IMPORTANT_FIELDS = ['odometer', 'damage_primary', 'title_status']
 BONUS_FIELDS = ['lot_number', 'auction_name', 'sale_date', 'location',
                 'engine', 'fuel_type', 'transmission', 'drivetrain',
-                'color', 'body_style', 'keys']
+                'color', 'body_style', 'keys',
+                # ─── Additional fields the UI shows and users expect ───
+                # (extracted when the source page includes them; empty
+                # otherwise — quality score treats them as pure bonus)
+                'damage_secondary', 'starting_bid', 'estimated_total_price']
 
 def _has_value(d, key):
     v = d.get(key)
@@ -350,7 +354,19 @@ LABELS = {
     'color':      ['Цвят', 'Color', 'Цвета'],
     'title_status': ['Документи за продажба', 'Документи', 'Documents for sale', 'Title'],
     'seller':     ['Продавач', 'Seller', 'Seller name'],
-    'body_style': ['Тип купе', 'Body'],
+    'body_style': ['Тип купе', 'Тип каросерия', 'Body', 'Body Style', 'Body type'],
+    # ─── Extended fields ──────────────────────────────────────────────
+    # These labels are optional per source; when present, they surface
+    # in the UI (starting bid, projected retail value, secondary damage).
+    'damage_secondary': ['Вторична щета', 'Втора щета', 'Secondary Damage',
+                         'Вторично увреждане', 'Additional Damage'],
+    'starting_bid':     ['Начална ставка', 'Стартова цена', 'Начална цена',
+                         'Starting Bid', 'Start Bid', 'Стартовая ставка'],
+    'estimated_total_price': ['Прогнозна цена', 'Пазарна стойност',
+                              'Оценка на цената', 'Оценка',
+                              'Retail Value', 'Estimated Retail',
+                              'Estimated Retail Value', 'Buy It Now',
+                              'Buy-It-Now', 'BIN Price'],
 }
 
 HEADERS = {
@@ -551,6 +567,33 @@ def parse_detail_page(html: str, source_url: str) -> Dict[str, Any]:
     except Exception:
         current_bid = None
 
+    # ─── Extended price fields (starting bid, estimated retail) ─────────
+    # Some sources provide these as labelled rows (Начална ставка / Retail
+    # Value / Buy It Now). When present, we normalise to a plain integer +
+    # currency so the frontend can render them uniformly with current_bid.
+    def _parse_money(raw: str) -> Tuple[Optional[int], Optional[str]]:
+        """Extract (amount_int, currency) from a label value like
+        '$25,000 USD' or '€15 000' — returns (None, None) if nothing found."""
+        if not raw:
+            return None, None
+        m = re.search(r'([\$€£])?\s*([\d][\d\s,\.]{1,})\s*(USD|EUR|BGN|GBP)?', raw)
+        if not m:
+            return None, None
+        sym, num_raw, ccy_raw = m.group(1), m.group(2), m.group(3)
+        num_clean = re.sub(r'[\s,\.]', '', num_raw)
+        try:
+            amount = int(num_clean)
+        except ValueError:
+            return None, None
+        ccy = ccy_raw or {'$': 'USD', '€': 'EUR', '£': 'GBP'}.get(sym or '')
+        return amount, ccy
+
+    starting_bid_raw = get(LABELS['starting_bid'])
+    starting_bid, starting_bid_ccy = _parse_money(starting_bid_raw) if starting_bid_raw else (None, None)
+
+    retail_raw = get(LABELS['estimated_total_price'])
+    estimated_total_price, estimated_ccy = _parse_money(retail_raw) if retail_raw else (None, None)
+
     result = {
         'vin': vin,
         'source_url': source_url,
@@ -567,6 +610,7 @@ def parse_detail_page(html: str, source_url: str) -> Dict[str, Any]:
         'drivetrain': get(LABELS['drivetrain']),
         'transmission': get(LABELS['transmission']),
         'damage_primary': get(LABELS['damage_primary']),
+        'damage_secondary': get(LABELS['damage_secondary']),
         'condition': get(LABELS['condition']),
         'location': get(LABELS['location']),
         'color': get(LABELS['color']),
@@ -576,9 +620,50 @@ def parse_detail_page(html: str, source_url: str) -> Dict[str, Any]:
         'auction_name': auction_name,
         'current_bid': current_bid,
         'current_bid_currency': current_bid_currency,
+        # Optional price fields — surfaced only when the source provides them.
+        'starting_bid': starting_bid,
+        'starting_bid_currency': starting_bid_ccy or current_bid_currency,
+        'estimated_total_price': estimated_total_price,
+        'estimated_total_currency': estimated_ccy or current_bid_currency,
         'images': image_urls,
         'source': 'bidmotors',
     }
+
+    # ── Wave 2C fallbacks ────────────────────────────────────────────
+    # BidMotors sometimes renders "Location:" / "Body type:" / "Body:" as
+    # plain sibling text nodes outside the labelled containers we scoped
+    # to above. If the scoped `get()` returned nothing, do a broader
+    # regex sweep over the raw text so these two important pills are
+    # never lost on the share preview.
+    import re as _re
+    if not result.get('location'):
+        for lbl in ('Локация', 'Location', 'Локейшн', 'State \\(location\\)'):
+            m = _re.search(rf'{lbl}\s*[:\-]?\s*([A-ZА-Я][^\n<]{{2,120}})', text or '', _re.IGNORECASE)
+            if m:
+                val = clean(m.group(1))
+                # Guard against picking up spurious "Location:" fragments
+                if val and len(val) < 120 and not val.lower().startswith(('run', 'yes', 'no', 'lot')):
+                    result['location'] = val
+                    break
+    if not result.get('body_style'):
+        for lbl in ('Body\\s+type', 'Body\\s+style', 'Тип\\s+купе', 'Тип\\s+каросерия'):
+            m = _re.search(rf'{lbl}\s*[:\-]?\s*([A-ZА-Я][^\n<]{{2,60}})', text or '', _re.IGNORECASE)
+            if m:
+                val = clean(m.group(1))
+                if val and len(val) < 60:
+                    result['body_style'] = val
+                    break
+        # Infer from model/title if still missing (very rough — SUV vs Sedan)
+        if not result.get('body_style'):
+            tt = (str(result.get('model') or '') + ' ' + str(source_url)).lower()
+            for kw, bt in [('suv','SUV'), ('sedan','Sedan'), ('coupe','Coupe'),
+                            ('hatchback','Hatchback'), ('wagon','Wagon'),
+                            ('truck','Truck'), ('pickup','Pickup'),
+                            ('minivan','Minivan'), ('convertible','Convertible')]:
+                if kw in tt:
+                    result['body_style'] = bt
+                    break
+
     return result
 
 

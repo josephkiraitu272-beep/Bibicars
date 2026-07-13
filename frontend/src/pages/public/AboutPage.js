@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 import AnimatedHeading from '../../components/AnimatedHeading';
 import PageHero from '../../components/public/PageHero';
 import useInView from '../../components/useInView';
@@ -59,7 +59,7 @@ const T = {
     fullNamePh: 'Въведете вашето име и фамилия',
     phoneLabel: 'Вашият телефонен номер*',
     phonePh: '87 123 4567',
-    submitIdle: 'ИЗПРАТИ ЗАЯВКА',
+    submitIdle: 'ОСТАВЕТЕ ЗАПИТВАНЕ',
     submitBusy: 'ИЗПРАЩАНЕ…',
     submitDone: 'ИЗПРАТЕНО ✓',
     okMsg: 'Благодарим ви! Ще се свържем с вас скоро.',

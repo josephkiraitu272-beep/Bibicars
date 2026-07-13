@@ -14,7 +14,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Clock, User, ArrowRight, ClockCounterClockwise } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 
 const PLURAL = { customer: 'customers', lead: 'leads', deal: 'deals' };
 

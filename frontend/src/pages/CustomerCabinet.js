@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, Outlet, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
-import { API_URL } from '../App';
+import { API_URL } from '../api-config';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { useLang, getLocale, CUSTOMER_LANGUAGES } from '../i18n';

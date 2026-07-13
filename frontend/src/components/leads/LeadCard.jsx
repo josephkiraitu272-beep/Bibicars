@@ -2,6 +2,8 @@ import React from 'react';
 import { Phone, Car, EnvelopeSimple, CurrencyEur, User, ArrowsClockwise } from '@phosphor-icons/react';
 import { STATUS_THEME, sourceLabel } from './leadConstants';
 import LeadPriorityBadge from './LeadPriorityBadge';
+// Wave 2B — Kanban card also uses the inline name-fix helper when name is empty
+import LeadNameFixerButton from './LeadNameFixerButton';
 
 /**
  * Wave 8 + Wave 10B Kanban card.
@@ -46,8 +48,13 @@ const LeadCard = ({ lead, lang, managers, onOpen, onReassign, canReassign, isDra
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-[#18181B] text-sm leading-tight truncate" title={`${lead.firstName||''} ${lead.lastName||''}`}>
-            {lead.firstName} {lead.lastName}
-            {!lead.firstName && !lead.lastName ? (lead.name || '—') : null}
+            {lead.firstName || lead.lastName ? (
+              <>{lead.firstName} {lead.lastName}</>
+            ) : lead.name ? (
+              lead.name
+            ) : (
+              <LeadNameFixerButton leadId={lead.id} phone={lead.phone} size="xs" />
+            )}
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">

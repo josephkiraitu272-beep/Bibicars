@@ -22,7 +22,7 @@ import {
   Lightning, ClockCounterClockwise, ShieldCheck, Target, Buildings,
 } from '@phosphor-icons/react';
 
-import { API_URL } from '../App';
+import { API_URL } from '../api-config';
 import { useLang } from '../i18n';
 import { HelpTooltip } from '../components/ui/HelpTooltip';
 import RefreshButton from '../components/ui/RefreshButton';

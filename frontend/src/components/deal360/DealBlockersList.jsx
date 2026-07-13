@@ -2,7 +2,7 @@ import React from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { Warning, CheckCircle, X } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 
 const DealBlockersList = ({ dealId, blockers = [], onChange }) => {
   const open    = blockers.filter((b) => !b.resolved);

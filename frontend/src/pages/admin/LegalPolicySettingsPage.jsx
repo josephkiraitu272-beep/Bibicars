@@ -13,7 +13,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 import { toast } from 'sonner';
 import { FloppyDisk, ArrowsClockwise, Scales } from '@phosphor-icons/react';
 

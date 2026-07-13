@@ -33,9 +33,7 @@ const T = {
     cardSourcingTitle1: "Sourcing + Delivery",
     cardSourcingTitle2: "+ Support",
     cardSourcingDesc: "Sourcing, inspection, purchase, and delivery.",
-    cardSourcingCta1: "You handle registration - we",
-    cardSourcingCta2: "connect you with trusted",
-    cardSourcingCta3: "service partners.",
+    cardSourcingCta1: "We connect you with our trusted partners in the automotive industry, we register your car, and we assist with any future events related to your car.",
     haveAQuestion: "Have a question?",
     contactUs: "Contact us",
   },
@@ -56,9 +54,7 @@ const T = {
     cardSourcingTitle1: "Намиране + Доставка",
     cardSourcingTitle2: "+ Поддръжка",
     cardSourcingDesc: "Намиране, инспекция, покупка и доставка.",
-    cardSourcingCta1: "Регистрацията е ваша – ние",
-    cardSourcingCta2: "ви свързваме с доверени",
-    cardSourcingCta3: "сервизни партньори.",
+    cardSourcingCta1: "Ние ви свързваме с наши доверени партньори в автомобилната индустрия, регистрираме вашия автомобил, като при бъдещи събития свързани с вашия автомобил, оказваме съдействие.",
     haveAQuestion: "Имате въпрос?",
     contactUs: "Свържете се с нас",
   },
@@ -211,10 +207,6 @@ const FrameComponent23 = ({ className = "" }) => {
 
             <p className={[styles.cardCta, styles.ctaOrange].join(" ")}>
               {t.cardSourcingCta1}
-              <br />
-              {t.cardSourcingCta2}
-              <br />
-              {t.cardSourcingCta3}
             </p>
           </article>
         </div>

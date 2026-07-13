@@ -84,6 +84,9 @@ EVENT_KINDS = {
     "meeting_scheduled",
     "meeting_completed",
     "meeting_cancelled",
+    # Wave 2A/2B — Call Intelligence + AI name enrichment
+    "call_analysis_completed",
+    "ai_name_detected",
 }
 
 

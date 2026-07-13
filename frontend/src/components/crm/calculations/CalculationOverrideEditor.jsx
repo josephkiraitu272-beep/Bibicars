@@ -14,7 +14,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { API_URL } from '../../../App';
-import { useLang } from '../../../i18n';
+import { useLang, localizeBreakdownLabel } from '../../../i18n';
 import {
   PencilSimple, Eye, EyeSlash, Trash, Plus, FloppyDisk, X,
   CurrencyEur, CurrencyDollar, Receipt,
@@ -137,7 +137,7 @@ export default function CalculationOverrideEditor({ calc, onChange }) {
                    data-testid={`override-row-${k}`}>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 text-[#18181B] truncate">
-                    <span className="truncate">{row.label}</span>
+                    <span className="truncate">{localizeBreakdownLabel(row, t)}</span>
                     {row.visibility && (
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-[#F4F4F5] text-[#71717A]">{row.visibility}</span>
                     )}

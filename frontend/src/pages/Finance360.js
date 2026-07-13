@@ -30,12 +30,12 @@ import {
   ArrowSquareOut, ArrowsCounterClockwise, UsersThree, Lifebuoy, Heartbeat,
 } from '@phosphor-icons/react';
 
-import { API_URL, useAuth } from '../App';
+import { API_URL, useAuth } from '../api-config';
 import { PageHeader, PageTabs, HeaderActionButton } from '../components/ui/PageHeader';
 import RefreshButton from '../components/ui/RefreshButton';
 import { HelpTooltip } from '../components/ui/HelpTooltip';
 import RoleZoneBadge from '../components/ui/RoleZoneBadge';
-import { Select } from '../components/ui/Select';
+import { Select } from '../components/ui/NativeSelect';
 import { useLang } from '../i18n';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────

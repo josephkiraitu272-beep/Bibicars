@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { useAuth, API_URL } from '../App';
+import { useAuth, API_URL } from '../api-config';
 import { useLang, getLocale } from '../i18n';
 import { useNavigate } from 'react-router-dom';
 import {

@@ -381,7 +381,6 @@
   box-shadow: 0 12px 48px rgba(0,0,0,0.6);
   border-radius: 0;
 }
-.lightboxClose,
 .lightboxNav {
   position: absolute;
   background: rgba(255,255,255,0.06);
@@ -391,12 +390,22 @@
   font-family: var(--font-mazzard);
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
+/* Close button — user feedback: circle+border look bad because the X
+   glyph doesn't visually centre inside the small round frame. We drop
+   the circle entirely and keep just the glyph. */
 .lightboxClose {
+  position: absolute;
   top: 24px; right: 24px;
-  width: 48px; height: 48px;
-  border-radius: 50%;
-  font-size: 26px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 6px;
+  color: #fff;
+  cursor: pointer;
+  font-family: var(--font-mazzard);
+  font-size: 34px;
   line-height: 1;
+  transition: color 0.15s ease, transform 0.15s ease;
 }
 .lightboxNav {
   top: 50%;
@@ -408,7 +417,7 @@
 }
 .lightboxPrev { left: 24px; }
 .lightboxNext { right: 24px; }
-.lightboxClose:hover,
+.lightboxClose:hover { color: #FEAE00; transform: scale(1.12); background: transparent; border: 0; }
 .lightboxNav:hover { background: rgba(254,174,0,0.18); border-color: rgba(254,174,0,0.5); color: #FEAE00; }
 .lightboxCount {
   position: absolute;

@@ -26,7 +26,7 @@ import {
   MapPin,
   CurrencyEur,
 } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 import { useLang } from '../../i18n';
 import WhiteSelect from '../ui/WhiteSelect';
 

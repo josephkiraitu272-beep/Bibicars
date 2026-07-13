@@ -7,3 +7,4 @@ export {
 } from './LanguageContext';
 export { default as translations } from './translations';
 export { getLocale, localeFor, fmtDate, fmtDateTime, fmtTime } from './locale';
+export { localizeBreakdownLabel, localizeBreakdownRow } from './calcBreakdown';

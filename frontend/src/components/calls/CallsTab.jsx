@@ -21,7 +21,7 @@ import {
   PlayCircle,
   WaveSine,
 } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 import { useLang } from '../../i18n';
 import useManagersMap from '../../hooks/useManagersMap';
 import CallDrawer from './CallDrawer';
@@ -75,6 +75,53 @@ const outcomeBadge = (outcome) => {
   };
   const cls = palette[outcome] || palette.next_step;
   return <span className={`text-[11px] px-2 py-0.5 rounded-full border ${cls}`}>{outcome.replace('_', ' ')}</span>;
+};
+
+/** Compact AI signals column: sentiment · intent · language. Reads mirrored
+ *  fields (ai_summary / ai_sentiment / ai_purchase_intent / transcript_language)
+ *  stored on the call row by `call_intelligence.process_call`. Also tolerates
+ *  the newer camelCase mirrors (aiSummary, aiSentiment) emitted by future
+ *  aggregators. Zero calls → single em-dash so the table stays quiet. */
+const AiChips = ({ call }) => {
+  const sentiment      = call?.ai_sentiment      || call?.aiSentiment;
+  const purchaseIntent = call?.ai_purchase_intent|| call?.aiPurchaseIntent;
+  const language       = call?.transcript_language|| call?.transcriptLanguage|| call?.ai_language;
+  const summary        = call?.ai_summary        || call?.aiSummary;
+  if (!sentiment && !purchaseIntent && !language && !summary) {
+    return <span className="text-zinc-300">—</span>;
+  }
+  const intentTone =
+    purchaseIntent === 'very_high' ? 'bg-emerald-100 text-emerald-800' :
+    purchaseIntent === 'high'      ? 'bg-emerald-50 text-emerald-700' :
+    purchaseIntent === 'medium'    ? 'bg-amber-50 text-amber-700' :
+                                     'bg-zinc-100 text-zinc-600';
+  const sentimentTone =
+    sentiment === 'positive' ? 'bg-emerald-50 text-emerald-700' :
+    sentiment === 'negative' ? 'bg-rose-50 text-rose-700' :
+    sentiment === 'mixed'    ? 'bg-amber-50 text-amber-700' :
+                              'bg-zinc-100 text-zinc-600';
+  return (
+    <div className="flex flex-wrap items-center gap-1" title={summary || undefined}>
+      {purchaseIntent && (
+        <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded-full font-medium ${intentTone}`}
+              data-testid="calls-ai-intent">
+          {String(purchaseIntent).replace('_', ' ')}
+        </span>
+      )}
+      {sentiment && (
+        <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded-full font-medium ${sentimentTone}`}
+              data-testid="calls-ai-sentiment">
+          {sentiment}
+        </span>
+      )}
+      {language && (
+        <span className="text-[10px] uppercase px-1.5 py-0.5 rounded-full font-medium bg-indigo-50 text-indigo-700 border border-indigo-100"
+              data-testid="calls-ai-language">
+          {String(language).toUpperCase()}
+        </span>
+      )}
+    </div>
+  );
 };
 
 const CallsTab = ({ customerId, customerRole }) => {
@@ -286,6 +333,7 @@ const CallsTab = ({ customerId, customerRole }) => {
                 <th className="py-2 px-2">{t('w2a_col_duration') || 'Duration'}</th>
                 <th className="py-2 px-2">{t('w2a_col_outcome') || 'Outcome'}</th>
                 <th className="py-2 px-2">{t('w2a_col_status') || 'Status'}</th>
+                <th className="py-2 px-2">AI</th>
                 <th className="py-2 px-2">{t('w2a_col_match') || 'Match'}</th>
                 <th className="py-2 px-2 text-center">{t('w2a_col_recording') || 'Rec.'}</th>
               </tr>
@@ -309,6 +357,9 @@ const CallsTab = ({ customerId, customerRole }) => {
                   <td className="py-2 px-2 tabular-nums">{formatDuration(c.duration)}</td>
                   <td className="py-2 px-2">{outcomeBadge(c.outcome)}</td>
                   <td className="py-2 px-2">{statusBadge(c.status)}</td>
+                  <td className="py-2 px-2">
+                    <AiChips call={c} />
+                  </td>
                   <td className="py-2 px-2">
                     <MatchChips matchedBy={c.matchedBy} reasons={c.matchedReasons} size="xs" />
                   </td>

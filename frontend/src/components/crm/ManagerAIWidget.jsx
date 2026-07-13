@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 import { useLang } from '../../i18n';
 import { 
   Lightning, 

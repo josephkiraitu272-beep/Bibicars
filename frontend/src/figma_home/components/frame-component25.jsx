@@ -11,7 +11,7 @@ const T = {
     ourServices: "our Services",
     import: "Import",
     importDesc:
-      "We help you find the right car based on your budget, style, and needs - handling the inspection, purchase, and delivery from the USA to Bulgaria.",
+      "We help you find the right car based on your budget, style, and needs - handling the inspection, purchase, and delivery from the USA and South Korea.",
     euAdaptation: "Adaptation to European Standards",
     euAdaptationDesc:
       "We adapt the vehicle to EU standards and ensure it’s ready for smooth registration.",
@@ -39,7 +39,7 @@ const T = {
     ourServices: "нашите услуги",
     import: "Внос",
     importDesc:
-      "Помагаме ви да намерите правилния автомобил според бюджета, стила и нуждите ви – извършваме инспекция, покупка и доставка от САЩ до България.",
+      "Помагаме ви да намерите правилния автомобил според бюджета, стила и нуждите ви – извършваме инспекция, покупка и доставка от САЩ и Южна Корея.",
     euAdaptation: "Адаптация към европейските стандарти",
     euAdaptationDesc:
       "Адаптираме автомобила към стандартите на ЕС и гарантираме готовност за безпроблемна регистрация.",
@@ -57,7 +57,7 @@ const T = {
       "Извършваме всички ремонти и техническа работа чрез доверен партньорски сервиз.",
     detailing: "Детайлинг и почистване",
     detailingDesc:
-      "Предоставяме професионално почистване и възстановяване на екстериора и интериора. Правим колата ви да изглежда и се чувства като нова.",
+      "Предоставяме професионално почистване и възстановяване на екстериора и интериора. Правим колата ви да изглежда и да се усеща като нова.",
     homeDelivery: "Доставка до дома",
     homeDeliveryDesc:
       "Организираме доставка на автомобила до всеки град в България. Получавате готов за шофиране автомобил пред вратата си – без главоболия и излишни пътувания.",

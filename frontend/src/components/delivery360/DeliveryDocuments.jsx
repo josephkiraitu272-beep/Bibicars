@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Truck, UploadSimple, Trash, FileText, FileImage, File as FileIcon, DownloadSimple } from '@phosphor-icons/react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 
 const DOC_KINDS = [
   { id: 'bill_of_sale',       label: 'Bill of Sale' },

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { File as FileIcon, Plus, Trash, ArrowSquareOut } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 
 const kindLabel = (k) => ({
   invoice:   'Invoice',

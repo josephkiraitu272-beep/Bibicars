@@ -391,6 +391,11 @@ def parse_detail_html(html: str, vin: str, url: str) -> Optional[Dict[str, Any]]
         "transmission": jl_transmission or _from_bs(bs_kv, "Transmission", "КПП"),
         # Damage
         "damage_primary": jl_damage or _from_bs(bs_kv, "Damage", "Primary damage", "Повреждение"),
+        # Secondary damage — some Copart/IAAI lots list a second impact
+        # location (e.g. "Rear End" + "Undercarriage"). Only surfaced when
+        # explicitly present in the source page.
+        "damage_secondary": _from_bs(bs_kv, "Secondary Damage", "Secondary damage",
+                                     "Additional Damage", "Дополнительное повреждение"),
         # Auction meta
         "lot_number": _from_bs(bs_kv, "Lot", "Lot #", "Номер лота"),
         "auction_name": _from_bs(bs_kv, "Auction", "Аукцион"),
@@ -400,8 +405,20 @@ def parse_detail_html(html: str, vin: str, url: str) -> Optional[Dict[str, Any]]
         "drivetrain": _from_bs(bs_kv, "Drive line", "Drive", "Привод"),
         "odometer": _from_bs(bs_kv, "Odometer, mi", "Odometer", "Mileage", "Пробег"),
         "seller": _from_bs(bs_kv, "Seller", "Seller Name", "Продавец"),
-        "body_style": _from_bs(bs_kv, "Body Style", "Body"),
+        "body_style": _from_bs(bs_kv, "Body Style", "Body", "Body type", "Кузов"),
         "cylinders": _from_bs(bs_kv, "Cylinders"),
+        # ─── Extended price fields (starting bid / retail value / BIN) ──
+        # Copart/IAAI expose these on active lots; historical (sold) lots
+        # only expose `sale_price_usd`. We surface both so the frontend
+        # can pick the most relevant value for the display context.
+        "starting_bid": _from_bs(bs_kv, "Start Bid", "Starting Bid",
+                                 "Начальная ставка", "Стартовая ставка"),
+        "estimated_total_price": _from_bs(bs_kv, "Retail Value",
+                                          "Estimated Retail Value",
+                                          "Estimated Retail",
+                                          "Buy It Now", "Buy Now",
+                                          "BIN Price", "Оценка",
+                                          "Estimated Value"),
         # Photos
         "image_urls": _extract_photos(html),
         # Sale history (the unique value — only stat.vin has this)

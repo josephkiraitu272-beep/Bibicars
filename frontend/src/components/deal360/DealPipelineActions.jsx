@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { ArrowRight, Prohibit, Warning, Plus } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 
 const STAGE_LABELS = {
   inquiry:          'Inquiry',

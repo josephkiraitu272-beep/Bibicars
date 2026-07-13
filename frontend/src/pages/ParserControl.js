@@ -56,7 +56,7 @@ import {
   TrendUp,
   Clock,
 } from '@phosphor-icons/react';
-import { useAuth, API_URL } from '../App';
+import { useAuth, API_URL } from '../api-config';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { useLang } from '../i18n';
 import PromotionStatsPanel from '../components/admin/PromotionStatsPanel';

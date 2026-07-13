@@ -25,7 +25,7 @@ import {
   Clock, CheckSquare, BellRinging, Image as ImageIcon, CaretRight, Receipt,
 } from '@phosphor-icons/react';
 
-import { API_URL } from '../App';
+import { API_URL } from '../api-config';
 import { useLang } from '../i18n';
 import { HelpTooltip } from '../components/ui/HelpTooltip';
 

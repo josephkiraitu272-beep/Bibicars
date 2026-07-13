@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
-import { API_URL, useAuth } from '../App';
+import { API_URL, useAuth } from '../api-config';
 import { useLang, getLocale } from '../i18n';
 import { motion } from 'framer-motion';
 import {

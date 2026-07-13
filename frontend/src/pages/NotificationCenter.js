@@ -28,7 +28,7 @@ import {
   PaperPlaneTilt, MoonStars,
 } from '@phosphor-icons/react';
 
-import { API_URL } from '../App';
+import { API_URL } from '../api-config';
 import RefreshButton from '../components/ui/RefreshButton';
 import { PageHeader, PageTabs, HeaderActionButton } from '../components/ui/PageHeader';
 import RoleZoneBadge from '../components/ui/RoleZoneBadge';

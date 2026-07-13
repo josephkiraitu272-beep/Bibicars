@@ -17,7 +17,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { API_URL, useAuth } from '../App';
+import { API_URL, useAuth } from '../api-config';
 import { useLang, getLocale } from '../i18n';
 import RefreshButton from '../components/ui/RefreshButton';
 import { toast } from 'sonner';

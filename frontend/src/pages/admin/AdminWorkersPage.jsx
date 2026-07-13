@@ -23,7 +23,7 @@ import {
   ClockClockwise,
   WarningCircle,
 } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 import { useLang } from '../../i18n';
 import {
   InsightsCard,

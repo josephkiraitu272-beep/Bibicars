@@ -23,7 +23,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './dialog';
 import { ArrowsClockwise, User, CheckCircle, Warning, MagnifyingGlass } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 import { useLang } from '../../i18n';
 
 const ENTITY_LABEL = {

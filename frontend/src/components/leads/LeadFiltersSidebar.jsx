@@ -6,7 +6,7 @@ import {
   Lightning, Fire, UserCircle,
 } from '@phosphor-icons/react';
 import { toast } from 'sonner';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 import { LEAD_PIPELINE, LEAD_SOURCES, statusLabel, sourceLabel } from './leadConstants';
 import { PRIORITY_CFG } from './LeadPriorityBadge';
 import { useLang } from '../../i18n/LanguageContext';

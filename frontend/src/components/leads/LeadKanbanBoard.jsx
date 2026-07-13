@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import axios from 'axios';
 import LeadCard from './LeadCard';
 import { LEAD_PIPELINE, STATUS_THEME, statusLabel } from './leadConstants';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 
 /**
  * Full Kanban board. Stateless about data — receives `columns` (the

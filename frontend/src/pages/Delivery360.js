@@ -22,13 +22,13 @@ import {
   Lifebuoy, UsersThree, Heartbeat, ArrowSquareOut, Package,
 } from '@phosphor-icons/react';
 
-import { API_URL } from '../App';
+import { API_URL } from '../api-config';
 import { DELIVERY_HEALTH_CFG } from '../components/delivery360/DeliveryHealthBadge';
 import RefreshButton from '../components/ui/RefreshButton';
 import { PageHeader, PageTabs } from '../components/ui/PageHeader';
 import RoleZoneBadge from '../components/ui/RoleZoneBadge';
 import { HelpTooltip } from '../components/ui/HelpTooltip';
-import { Select } from '../components/ui/Select';
+import { Select } from '../components/ui/NativeSelect';
 import WhiteSelect from '../components/ui/WhiteSelect';
 import { useLang } from '../i18n';
 

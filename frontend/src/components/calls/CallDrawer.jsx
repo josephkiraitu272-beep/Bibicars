@@ -24,9 +24,10 @@ import {
   Sparkle,
   Compass,
 } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 import { useLang } from '../../i18n';
 import MatchChips from './MatchChips';
+import CallIntelligencePanel from './CallIntelligencePanel';
 
 const fmt = (iso) => {
   if (!iso) return '—';
@@ -180,6 +181,16 @@ const CallDrawer = ({ call, onClose }) => {
                 </div>
               )}
             </div>
+          </section>
+
+          {/* Call Intelligence (Wave 2A-CI, Jul 12, 2026) — Whisper/gpt-4o
+              transcription + gpt-4o structured summary. Rendered above the
+              manual notes block so it's the first thing a manager sees. */}
+          <section data-testid="call-drawer-ci">
+            <CallIntelligencePanel
+              callId={call.callId || call.id}
+              recordingAvailable={!!call.recordingAvailable}
+            />
           </section>
 
           {/* AI call-analysis block removed — no AI integration in this product.

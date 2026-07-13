@@ -9,7 +9,7 @@
  */
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { API_URL } from '../App';
+import { API_URL } from '../api-config';
 
 let _cache = null;
 let _cacheTs = 0;

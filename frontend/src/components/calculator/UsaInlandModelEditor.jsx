@@ -32,7 +32,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { CaretDown, CaretUp, FloppyDisk, ArrowsClockwise, Truck, Info } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 import { US_STATES } from '../../data/usStates';
 
 const VEHICLE_LABELS = {

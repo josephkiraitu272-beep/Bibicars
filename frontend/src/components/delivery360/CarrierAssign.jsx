@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { Truck, Plus } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 
 const CarrierAssign = ({ shipmentId, currentCarrierId, currentCarrierName, onChanged }) => {
   const [carriers, setCarriers] = useState([]);

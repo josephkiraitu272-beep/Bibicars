@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams, Link } from 'react-router-dom';
-import { API_URL, useAuth } from '../../App';
+import { API_URL, useAuth } from '../../api-config';
 import { useLang } from '../../i18n';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';

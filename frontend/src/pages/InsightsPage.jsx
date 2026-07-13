@@ -11,7 +11,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChartBar, ChartLineUp, CurrencyDollar, UsersThree, ShieldCheck, ChartPie } from '@phosphor-icons/react';
-import { useAuth } from '../App';
+import { useAuth } from '../api-config';
 import { useLang } from '../i18n';
 import OverviewKpiStrip from '../components/insights/OverviewKpiStrip';
 import RiskAlertsVertical from '../components/insights/verticals/RiskAlertsVertical';

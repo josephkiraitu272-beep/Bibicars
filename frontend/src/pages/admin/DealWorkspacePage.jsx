@@ -13,7 +13,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { API_URL, useAuth } from '../../App';
+import { API_URL, useAuth } from '../../api-config';
 import { toast } from 'sonner';
 import {
   ArrowLeft, ArrowRight, CaretRight, Car, User, Coins, FileText,

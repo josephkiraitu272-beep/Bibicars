@@ -561,7 +561,33 @@ def parse_detail(html: str, url: str) -> Dict[str, Any]:
     sale_date = F("auction date", "sale date")
     lot_number = F("lot number", "lot")
     color = F("color", "exterior color")
-    body_style = F("body style", "body type")
+    body_style = F("body style", "body type", "тип купе", "тип каросерия")
+
+    # ── Extended price fields ────────────────────────────────────────
+    # BidMotors sometimes exposes a starting bid and/or a projected
+    # retail value on active lots. When present, parse them into a
+    # normalised (amount:int, currency:str) pair so the frontend
+    # renders them alongside `current_bid` without extra logic.
+    def _parse_money(raw: Optional[str]) -> Tuple[Optional[int], Optional[str]]:
+        if not raw:
+            return None, None
+        m = re.search(r"([\$€£])?\s*([\d][\d\s,\.]{1,})\s*(USD|EUR|BGN|GBP)?", str(raw))
+        if not m:
+            return None, None
+        sym, num_raw, ccy_raw = m.group(1), m.group(2), m.group(3)
+        num_clean = re.sub(r"[\s,\.]", "", num_raw)
+        try:
+            return int(num_clean), (ccy_raw or {"$": "USD", "€": "EUR", "£": "GBP"}.get(sym or ""))
+        except ValueError:
+            return None, None
+
+    starting_bid_raw = F("starting bid", "start bid", "начална ставка", "стартова цена")
+    starting_bid, starting_bid_ccy = _parse_money(starting_bid_raw)
+
+    retail_raw = F("retail value", "estimated retail", "estimated retail value",
+                   "buy it now", "buy-it-now", "bin price", "прогнозна цена",
+                   "пазарна стойност")
+    estimated_total_price, estimated_total_ccy = _parse_money(retail_raw)
 
     # ── 4. AUCTION PROVIDER ──────────────────────────────────────────
     auction_name = F("auction") or _detect_auction_provider(soup)
@@ -645,6 +671,12 @@ def parse_detail(html: str, url: str) -> Dict[str, Any]:
         # Pricing (best-effort; BidMotors hides these by default)
         "price": price,
         "current_bid": current_bid,
+        # Extended pricing surfaced when the source page includes them
+        # (Copart / IAAI mirrored via bidmotors detail markup).
+        "starting_bid": starting_bid,
+        "starting_bid_currency": starting_bid_ccy,
+        "estimated_total_price": estimated_total_price,
+        "estimated_total_currency": estimated_total_ccy,
 
         # Media & link
         "images": images,

@@ -405,6 +405,22 @@ def _normalize_call(c: Dict[str, Any], managers: Dict[str, Dict[str, Any]],
             "nextAction":       ai.get("next_action"),
             "hasAnalysis":      bool(ai),
         },
+        # Wave 2A-CI mirrors — populated by `call_intelligence.process_call`.
+        # These fields let the CallsTab render sentiment/intent/language chips
+        # without a second round-trip. Kept in flat snake_case AND camelCase
+        # form so both legacy and modern components can consume them.
+        "ai_summary":            c.get("ai_summary"),
+        "aiSummary":             c.get("ai_summary"),
+        "ai_sentiment":          c.get("ai_sentiment"),
+        "aiSentiment":           c.get("ai_sentiment"),
+        "ai_purchase_intent":    c.get("ai_purchase_intent"),
+        "aiPurchaseIntent":      c.get("ai_purchase_intent"),
+        "ai_next_action":        c.get("ai_next_action"),
+        "aiNextAction":          c.get("ai_next_action"),
+        "transcript_language":   c.get("transcript_language"),
+        "transcriptLanguage":    c.get("transcript_language"),
+        "transcript_preview":    c.get("transcript_preview"),
+        "intelligence_status":   c.get("intelligence_status"),
         "meta": {
             "leadId":     c.get("lead_id") or c.get("leadId"),
             "dealId":     c.get("deal_id") or c.get("dealId"),

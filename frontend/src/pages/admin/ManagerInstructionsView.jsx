@@ -9,7 +9,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import DOMPurify from 'isomorphic-dompurify';
 import { ArrowsClockwise, ClockCounterClockwise, BookOpen } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 
 const ManagerInstructionsView = () => {
   const [doc, setDoc] = useState(null);

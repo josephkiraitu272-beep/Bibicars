@@ -30,7 +30,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { FloppyDisk, ArrowsClockwise, Boat, Info, LinkSimple } from '@phosphor-icons/react';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 import { useLang } from '../../i18n';
 import WhiteSelect from '../ui/WhiteSelect';
 

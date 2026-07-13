@@ -26,7 +26,7 @@ import {
   Car as CarIcon,
 } from '@phosphor-icons/react';
 
-import { API_URL, useAuth } from '../App';
+import { API_URL, useAuth } from '../api-config';
 
 import DealHealthBadge from '../components/deal360/DealHealthBadge';
 import FinancialHealthBadge from '../components/deal360/FinancialHealthBadge';

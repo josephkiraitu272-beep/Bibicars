@@ -13,7 +13,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { Truck, Calendar, Plus, ShieldWarning } from '@phosphor-icons/react';
 
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 import DeliveryHealthBadge from '../delivery360/DeliveryHealthBadge';
 import ShipmentTimeline    from '../delivery360/ShipmentTimeline';
 import CarrierAssign       from '../delivery360/CarrierAssign';

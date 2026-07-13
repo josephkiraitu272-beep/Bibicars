@@ -23,7 +23,7 @@ import CatalogSearchBar from '../../components/public/catalog/CatalogSearchBar';
 import CatalogConsultationBlock from '../../components/public/catalog/CatalogConsultationBlock';
 import PageHero from '../../components/public/PageHero';
 import { useLang } from '../../i18n';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 import { buildVehiclesParams } from '../../hooks/usePublicVehicles';
 import { trackEvent, EVENT_NAMES } from '../../hooks/useTrackEvent';
 import useSeo from '../../hooks/useSeo';

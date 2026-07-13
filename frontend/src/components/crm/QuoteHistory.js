@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { API_URL } from '../../App';
+import { API_URL } from '../../api-config';
 import { toast } from 'sonner';
 import { 
   Receipt, 
