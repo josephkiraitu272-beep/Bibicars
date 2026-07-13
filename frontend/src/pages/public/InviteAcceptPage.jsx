@@ -11,9 +11,9 @@
  * login flow) and redirects to the customer cabinet — the client is now a
  * full member of the system.
  */
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Lock,
   Eye,
@@ -23,65 +23,65 @@ import {
   ArrowLeft,
   WarningCircle,
   Sparkle,
-} from '@phosphor-icons/react';
-import { toast } from 'sonner';
-import { useLang } from '../../i18n';
+} from "@phosphor-icons/react";
+import { toast } from "sonner";
+import { useLang } from "../../i18n";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 const STR = {
   en: {
-    backToLogin: 'Back to sign in',
-    validating: 'Checking your invitation\u2026',
-    invalidTitle: 'Invitation is not valid',
+    backToLogin: "Back to sign in",
+    validating: "Checking your invitation\u2026",
+    invalidTitle: "Invitation is not valid",
     invalidBody:
-      'This invitation is incorrect, expired, or has already been used. Please contact your BIBI Cars manager for a new one.',
-    goToLogin: 'Go to sign in',
+      "This invitation is incorrect, expired, or has already been used. Please contact your BIBI Cars manager for a new one.",
+    goToLogin: "Go to sign in",
     kicker: "You're invited",
-    title: 'Activate your cabinet',
-    accountLabel: 'Account:',
-    genericIntro: 'Set a password to activate your BIBI Cars cabinet.',
-    welcome: 'Welcome',
+    title: "Activate your cabinet",
+    accountLabel: "Account:",
+    genericIntro: "Set a password to activate your BIBI Cars cabinet.",
+    welcome: "Welcome",
     intro:
-      'Set a password below to activate your account. After that you can track your order, sign contracts, view invoices and follow your car from auction to keys.',
-    newPassword: 'Create password',
-    repeatPassword: 'Repeat password',
-    mismatch: 'Passwords do not match',
-    minLengthError: 'Password must be at least 6 characters',
-    submit: 'Activate & sign in',
-    submitting: 'Activating\u2026',
-    genericError: 'Could not activate your account',
-    successTitle: 'Account activated',
-    successSub: 'Taking you to your cabinet\u2026',
-    loggedIn: 'Welcome to BIBI Cars \u2014 you are signed in',
+      "Set a password below to activate your account. After that you can track your order, sign contracts, view invoices and follow your car from auction to keys.",
+    newPassword: "Create password",
+    repeatPassword: "Repeat password",
+    mismatch: "Passwords do not match",
+    minLengthError: "Password must be at least 6 characters",
+    submit: "Activate & sign in",
+    submitting: "Activating\u2026",
+    genericError: "Could not activate your account",
+    successTitle: "Account activated",
+    successSub: "Taking you to your cabinet\u2026",
+    loggedIn: "Welcome to BIBI Cars \u2014 you are signed in",
   },
   bg: {
-    backToLogin: 'Към входа',
-    validating: 'Проверка на поканата…',
-    invalidTitle: 'Невалидна покана',
+    backToLogin: "Към входа",
+    validating: "Проверка на поканата…",
+    invalidTitle: "Невалидна покана",
     invalidBody:
-      'Тази покана е неправилна, изтекла или вече е използвана. Моля, свържете се с вашия мениджър в BIBI Cars за нова.',
-    goToLogin: 'Към входа',
-    kicker: 'Поканени сте',
-    title: 'Активирайте кабинета си',
-    accountLabel: 'Акаунт:',
-    genericIntro: 'Задайте парола, за да активирате кабинета си в BIBI Cars.',
-    welcome: 'Добре дошли',
+      "Тази покана е неправилна, изтекла или вече е използвана. Моля, свържете се с вашия мениджър в BIBI Cars за нова.",
+    goToLogin: "Към входа",
+    kicker: "Поканени сте",
+    title: "Активирайте кабинета си",
+    accountLabel: "Акаунт:",
+    genericIntro: "Задайте парола, за да активирате кабинета си в BIBI Cars.",
+    welcome: "Добре дошли",
     intro:
-      'Задайте парола по-долу, за да активирате акаунта си. След това можете да следите поръчката си, да подписвате договори, да виждате фактури и да проследявате автомобила си от търга до ключовете.',
-    newPassword: 'Създайте парола',
-    repeatPassword: 'Повторете паролата',
-    mismatch: 'Паролите не съвпадат',
-    minLengthError: 'Паролата трябва да съдържа поне 6 символа',
-    submit: 'Активирай и влез',
-    submitting: 'Активиране…',
-    genericError: 'Акаунтът не беше активиран',
-    successTitle: 'Акаунтът е активиран',
-    successSub: 'Пренасочване към кабинета…',
-    loggedIn: 'Добре дошли в BIBI Cars — вече сте влезли',
+      "Задайте парола по-долу, за да активирате акаунта си. След това можете да следите поръчката си, да подписвате договори, да виждате фактури и да проследявате автомобила си от търга до ключовете.",
+    newPassword: "Създайте парола",
+    repeatPassword: "Повторете паролата",
+    mismatch: "Паролите не съвпадат",
+    minLengthError: "Паролата трябва да съдържа поне 6 символа",
+    submit: "Активирай и влез",
+    submitting: "Активиране…",
+    genericError: "Акаунтът не беше активиран",
+    successTitle: "Акаунтът е активиран",
+    successSub: "Пренасочване към кабинета…",
+    loggedIn: "Добре дошли в BIBI Cars — вече сте влезли",
   },
 };
-const pick = (lang) => (lang === 'bg' ? STR.bg : STR.en);
+const pick = (lang) => (lang === "bg" ? STR.bg : STR.en);
 
 export default function InviteAcceptPage() {
   const { lang } = useLang();
@@ -89,11 +89,11 @@ export default function InviteAcceptPage() {
 
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const token = params.get('token') || '';
+  const token = params.get("token") || "";
 
   const [valid, setValid] = useState(null); // null=loading, false=invalid, {email,name}=ok
-  const [pwd, setPwd] = useState('');
-  const [pwd2, setPwd2] = useState('');
+  const [pwd, setPwd] = useState("");
+  const [pwd2, setPwd2] = useState("");
   const [show, setShow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -108,7 +108,7 @@ export default function InviteAcceptPage() {
       try {
         const res = await axios.get(
           `${API_URL}/api/customer-auth/validate-invite`,
-          { params: { token } }
+          { params: { token } },
         );
         if (!cancelled) {
           setValid(res.data && res.data.valid ? res.data : false);
@@ -136,7 +136,7 @@ export default function InviteAcceptPage() {
     try {
       const res = await axios.post(
         `${API_URL}/api/customer-auth/accept-invite`,
-        { token, password: pwd }
+        { token, password: pwd },
       );
       const data = res.data || {};
       const sess = data.sessionToken || data.accessToken || data.token;
@@ -144,9 +144,12 @@ export default function InviteAcceptPage() {
       if (sess) {
         // Canonical session store read by lib/api.js + the cabinet, plus the
         // legacy token key used by the /customer-auth/me fallback.
-        localStorage.setItem('customer_session', JSON.stringify({ ...data, sessionToken: sess }));
-        localStorage.setItem('customer_token', sess);
-        localStorage.setItem('customer', JSON.stringify(data.user || {}));
+        localStorage.setItem(
+          "customer_session",
+          JSON.stringify({ ...data, sessionToken: sess }),
+        );
+        localStorage.setItem("customer_token", sess);
+        localStorage.setItem("customer", JSON.stringify(data.user || {}));
       }
       setDone(true);
       toast.success(t.loggedIn);
@@ -154,7 +157,7 @@ export default function InviteAcceptPage() {
       // freshly-stored session (client-side routing keeps a stale context and
       // the cabinet route guard would bounce to login).
       setTimeout(() => {
-        window.location.href = cid ? `/cabinet/${cid}` : '/cabinet';
+        window.location.href = cid ? `/cabinet/${cid}` : "/cabinet";
       }, 1400);
     } catch (err) {
       toast.error(err.response?.data?.detail || t.genericError);
@@ -167,7 +170,10 @@ export default function InviteAcceptPage() {
     return (
       <div className="min-h-screen bg-[#0B0B0C] text-white flex items-center justify-center">
         <div className="text-center">
-          <SpinnerGap size={32} className="animate-spin text-[#FEAE00] mx-auto mb-3" />
+          <SpinnerGap
+            size={32}
+            className="animate-spin text-[#FEAE00] mx-auto mb-3"
+          />
           <div className="text-white/60 text-sm">{t.validating}</div>
         </div>
       </div>
@@ -227,7 +233,7 @@ export default function InviteAcceptPage() {
           <p className="text-white/60 text-sm mb-2">{t.intro}</p>
           {valid.email && (
             <p className="text-white/50 text-sm mb-5">
-              {t.accountLabel}{' '}
+              {t.accountLabel}{" "}
               <span className="text-[#FEAE00]">{valid.email}</span>
             </p>
           )}
@@ -242,11 +248,17 @@ export default function InviteAcceptPage() {
                 weight="fill"
                 className="text-emerald-400 mx-auto mb-2"
               />
-              <div className="font-semibold text-emerald-300">{t.successTitle}</div>
+              <div className="font-semibold text-emerald-300">
+                {t.successTitle}
+              </div>
               <div className="text-white/60 text-sm mt-1">{t.successSub}</div>
             </div>
           ) : (
-            <form onSubmit={submit} className="space-y-4 mt-4" data-testid="invite-form">
+            <form
+              onSubmit={submit}
+              className="space-y-4 mt-4"
+              data-testid="invite-form"
+            >
               <div>
                 <label className="block text-[11px] font-bold text-[#FEAE00] uppercase tracking-[0.12em] mb-2">
                   {t.newPassword}
@@ -257,7 +269,7 @@ export default function InviteAcceptPage() {
                     className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#FEAE00]/80"
                   />
                   <input
-                    type={show ? 'text' : 'password'}
+                    type={show ? "text" : "password"}
                     value={pwd}
                     onChange={(e) => setPwd(e.target.value)}
                     minLength={6}
@@ -288,7 +300,7 @@ export default function InviteAcceptPage() {
                     className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#FEAE00]/80"
                   />
                   <input
-                    type={show ? 'text' : 'password'}
+                    type={show ? "text" : "password"}
                     value={pwd2}
                     onChange={(e) => setPwd2(e.target.value)}
                     minLength={6}
@@ -312,7 +324,8 @@ export default function InviteAcceptPage() {
               >
                 {submitting ? (
                   <>
-                    <SpinnerGap size={18} className="animate-spin" /> {t.submitting}
+                    <SpinnerGap size={18} className="animate-spin" />{" "}
+                    {t.submitting}
                   </>
                 ) : (
                   t.submit

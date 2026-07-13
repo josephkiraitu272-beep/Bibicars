@@ -19,66 +19,116 @@
  *   • Card padding 24, image → text 24, date → title 32, title → excerpt 24
  *   • Pagination = arrow buttons + numbered counter "01 / 10"
  */
-import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import DOMPurify from 'isomorphic-dompurify';
-import { useLang } from '../../i18n';
-import Breadcrumbs from '../../components/public/Breadcrumbs';
-import styles from './BlogPage.module.css';
-import singleStyles from './BlogArticlePage.module.css';
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import axios from "axios";
+import DOMPurify from "isomorphic-dompurify";
+import { useLang } from "../../i18n";
+import Breadcrumbs from "../../components/public/Breadcrumbs";
+import styles from "./BlogPage.module.css";
+import singleStyles from "./BlogArticlePage.module.css";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 const CATEGORY_TAG = {
   en: {
-    analysis: 'MARKET ANALYSIS',
-    guides:   'IMPORT GUIDES',
-    news:     'NEWS',
-    reviews:  'CAR REVIEWS',
-    tips:     'AUCTION TIPS',
-    costs:    'COSTS',
+    analysis: "MARKET ANALYSIS",
+    guides: "IMPORT GUIDES",
+    news: "NEWS",
+    reviews: "CAR REVIEWS",
+    tips: "AUCTION TIPS",
+    costs: "COSTS",
   },
   bg: {
-    analysis: 'ПАЗАРЕН АНАЛИЗ',
-    guides:   'РЪКОВОДСТВА',
-    news:     'НОВИНИ',
-    reviews:  'РЕВЮТА',
-    tips:     'СЪВЕТИ',
-    costs:    'РАЗХОДИ',
+    analysis: "ПАЗАРЕН АНАЛИЗ",
+    guides: "РЪКОВОДСТВА",
+    news: "НОВИНИ",
+    reviews: "РЕВЮТА",
+    tips: "СЪВЕТИ",
+    costs: "РАЗХОДИ",
   },
 };
-const fallbackTag = (locale) => (locale === 'bg' ? 'НОВИНИ' : 'NEWS');
+const fallbackTag = (locale) => (locale === "bg" ? "НОВИНИ" : "NEWS");
 
 function formatDate(iso, locale) {
-  if (!iso) return '';
+  if (!iso) return "";
   try {
-    const lc = locale === 'bg' ? 'bg-BG' : 'en-US';
-    return new Date(iso).toLocaleDateString(lc, { month: 'short', day: '2-digit', year: 'numeric' });
-  } catch { return ''; }
+    const lc = locale === "bg" ? "bg-BG" : "en-US";
+    return new Date(iso).toLocaleDateString(lc, {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return "";
+  }
 }
 function resolveImage(url) {
-  if (!url) return '';
-  if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  if (url.startsWith('/api/')) return `${API_URL}${url}`;
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (url.startsWith("/api/")) return `${API_URL}${url}`;
   return url;
 }
 
 const ArrowLeftCircle = ({ disabled }) => (
   <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
-    <circle cx="20" cy="20" r="19.5" stroke={disabled ? '#5E5E5E' : '#FEAE00'} fill="none" />
-    <path d="M23 13 16 20l7 7" stroke={disabled ? '#5E5E5E' : '#FEAE00'} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    <circle
+      cx="20"
+      cy="20"
+      r="19.5"
+      stroke={disabled ? "#5E5E5E" : "#FEAE00"}
+      fill="none"
+    />
+    <path
+      d="M23 13 16 20l7 7"
+      stroke={disabled ? "#5E5E5E" : "#FEAE00"}
+      strokeWidth="2"
+      fill="none"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 const ArrowRightCircle = ({ disabled }) => (
   <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
-    <circle cx="20" cy="20" r="19.5" fill={disabled ? 'transparent' : '#FEAE00'} stroke={disabled ? '#5E5E5E' : '#FEAE00'} />
-    <path d="M17 13l7 7-7 7" stroke={disabled ? '#5E5E5E' : '#18181B'} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    <circle
+      cx="20"
+      cy="20"
+      r="19.5"
+      fill={disabled ? "transparent" : "#FEAE00"}
+      stroke={disabled ? "#5E5E5E" : "#FEAE00"}
+    />
+    <path
+      d="M17 13l7 7-7 7"
+      stroke={disabled ? "#5E5E5E" : "#18181B"}
+      strokeWidth="2"
+      fill="none"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 const ArrowRightSm = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path d="M5 12h14M13 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  <svg
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    aria-hidden="true"
+  >
+    <path
+      d="M5 12h14M13 5l7 7-7 7"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 
@@ -102,7 +152,7 @@ export default function BlogArticlePage() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { lang } = useLang();
-  const tLocale = lang === 'bg' ? 'bg' : 'en';
+  const tLocale = lang === "bg" ? "bg" : "en";
 
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -111,14 +161,14 @@ export default function BlogArticlePage() {
   /* Track mobile vs desktop so we can use the right card width/gap when
    * paginating the related-articles scroller.  Updates on resize. */
   const [isMobile, setIsMobile] = useState(
-    typeof window !== 'undefined' && window.innerWidth <= MOBILE_BREAKPOINT
+    typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT,
   );
   const scrollerRef = useRef(null);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   const cardStep = isMobile
@@ -131,13 +181,19 @@ export default function BlogArticlePage() {
   useEffect(() => {
     const reset = () => {
       try {
-        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
         document.documentElement.scrollTop = 0;
         document.body.scrollTop = 0;
-        document.querySelectorAll('[data-scaled-chrome], main, [class*="scaledChrome"], [class*="layout"]').forEach((el) => {
-          if (el && typeof el.scrollTop === 'number') el.scrollTop = 0;
-        });
-      } catch { /* ignore */ }
+        document
+          .querySelectorAll(
+            '[data-scaled-chrome], main, [class*="scaledChrome"], [class*="layout"]',
+          )
+          .forEach((el) => {
+            if (el && typeof el.scrollTop === "number") el.scrollTop = 0;
+          });
+      } catch {
+        /* ignore */
+      }
     };
     reset();
     const t = setTimeout(reset, 30);
@@ -150,34 +206,53 @@ export default function BlogArticlePage() {
     setNotFound(false);
     setRelatedIndex(0);
     axios
-      .get(`${API_URL}/api/public/blog/articles/${encodeURIComponent(slug)}`, { params: { lang: tLocale } })
-      .then((r) => { if (alive) setArticle(r.data); })
-      .catch(() => { if (alive) setNotFound(true); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
+      .get(`${API_URL}/api/public/blog/articles/${encodeURIComponent(slug)}`, {
+        params: { lang: tLocale },
+      })
+      .then((r) => {
+        if (alive) setArticle(r.data);
+      })
+      .catch(() => {
+        if (alive) setNotFound(true);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
   }, [slug, tLocale]);
 
-  const breadcrumbT = useMemo(() => ({
-    home: tLocale === 'bg' ? 'НАЧАЛО' : 'HOME',
-    blog: tLocale === 'bg' ? 'БЛОГ'   : 'BLOG',
-  }), [tLocale]);
+  const breadcrumbT = useMemo(
+    () => ({
+      home: tLocale === "bg" ? "НАЧАЛО" : "HOME",
+      blog: tLocale === "bg" ? "БЛОГ" : "BLOG",
+    }),
+    [tLocale],
+  );
 
   const related = article?.related || [];
   const totalRelated = related.length;
 
-  const goRelated = useCallback((r) => navigate(`/blog/${r.slug || r.id}`), [navigate]);
+  const goRelated = useCallback(
+    (r) => navigate(`/blog/${r.slug || r.id}`),
+    [navigate],
+  );
 
-  const scrollToCard = useCallback((newIndex) => {
-    const safeIndex = Math.max(0, Math.min(totalRelated - 1, newIndex));
-    setRelatedIndex(safeIndex);
-    const el = scrollerRef.current;
-    if (el) {
-      el.scrollTo({
-        left: safeIndex * cardStep,
-        behavior: 'smooth',
-      });
-    }
-  }, [totalRelated, cardStep]);
+  const scrollToCard = useCallback(
+    (newIndex) => {
+      const safeIndex = Math.max(0, Math.min(totalRelated - 1, newIndex));
+      setRelatedIndex(safeIndex);
+      const el = scrollerRef.current;
+      if (el) {
+        el.scrollTo({
+          left: safeIndex * cardStep,
+          behavior: "smooth",
+        });
+      }
+    },
+    [totalRelated, cardStep],
+  );
 
   const onPrev = () => scrollToCard(relatedIndex - 1);
   const onNext = () => scrollToCard(relatedIndex + 1);
@@ -187,7 +262,7 @@ export default function BlogArticlePage() {
       <div className={styles.page}>
         <div className={singleStyles.shell}>
           <div className={singleStyles.skeleton}>
-            {tLocale === 'bg' ? 'Зареждане на статия…' : 'Loading article…'}
+            {tLocale === "bg" ? "Зареждане на статия…" : "Loading article…"}
           </div>
         </div>
       </div>
@@ -199,14 +274,22 @@ export default function BlogArticlePage() {
       <div className={styles.page}>
         <div className={singleStyles.shell}>
           <div className={singleStyles.notFound}>
-            <h1>{tLocale === 'bg' ? 'СТАТИЯТА НЕ Е НАМЕРЕНА' : 'ARTICLE NOT FOUND'}</h1>
+            <h1>
+              {tLocale === "bg"
+                ? "СТАТИЯТА НЕ Е НАМЕРЕНА"
+                : "ARTICLE NOT FOUND"}
+            </h1>
             <p>
-              {tLocale === 'bg'
-                ? 'Тази статия може да е премахната или все още да не е публикувана.'
-                : 'This article may have been removed or is not yet published.'}
+              {tLocale === "bg"
+                ? "Тази статия може да е премахната или все още да не е публикувана."
+                : "This article may have been removed or is not yet published."}
             </p>
-            <button onClick={() => navigate('/blog')} className={singleStyles.backBtn} data-testid="blog-back-btn">
-              ← {tLocale === 'bg' ? 'НАЗАД КЪМ БЛОГА' : 'BACK TO BLOG'}
+            <button
+              onClick={() => navigate("/blog")}
+              className={singleStyles.backBtn}
+              data-testid="blog-back-btn"
+            >
+              ← {tLocale === "bg" ? "НАЗАД КЪМ БЛОГА" : "BACK TO BLOG"}
             </button>
           </div>
         </div>
@@ -214,10 +297,12 @@ export default function BlogArticlePage() {
     );
   }
 
-  const safeBody = DOMPurify.sanitize(article.body || '', {
-    ADD_ATTR: ['target', 'rel', 'allow', 'allowfullscreen', 'frameborder'],
+  const safeBody = DOMPurify.sanitize(article.body || "", {
+    ADD_ATTR: ["target", "rel", "allow", "allowfullscreen", "frameborder"],
   });
-  const tagLabel = (CATEGORY_TAG[tLocale] || CATEGORY_TAG.en)[article.category] || fallbackTag(tLocale);
+  const tagLabel =
+    (CATEGORY_TAG[tLocale] || CATEGORY_TAG.en)[article.category] ||
+    fallbackTag(tLocale);
 
   return (
     <div className={styles.page} data-testid="blog-article-page">
@@ -227,9 +312,9 @@ export default function BlogArticlePage() {
         <div className={singleStyles.breadcrumb}>
           <Breadcrumbs
             items={[
-              { label: breadcrumbT.home, to: '/' },
-              { label: breadcrumbT.blog, to: '/blog' },
-              { label: (article.title || '').slice(0, 80) },
+              { label: breadcrumbT.home, to: "/" },
+              { label: breadcrumbT.blog, to: "/blog" },
+              { label: (article.title || "").slice(0, 80) },
             ]}
           />
         </div>
@@ -241,7 +326,8 @@ export default function BlogArticlePage() {
             <div className={singleStyles.dateRow}>
               <span>{formatDate(article.published_at, tLocale)}</span>
               <span className={singleStyles.minRead}>
-                {article.read_time_minutes} {tLocale === 'bg' ? 'мин. четене' : 'min read'}
+                {article.read_time_minutes}{" "}
+                {tLocale === "bg" ? "мин. четене" : "min read"}
               </span>
             </div>
           </div>
@@ -252,7 +338,9 @@ export default function BlogArticlePage() {
             <img
               src={resolveImage(article.cover_image_url)}
               alt={article.title}
-              onError={(e) => { e.target.style.display = 'none'; }}
+              onError={(e) => {
+                e.target.style.display = "none";
+              }}
             />
           </figure>
         )}
@@ -264,9 +352,14 @@ export default function BlogArticlePage() {
             data-testid="blog-article-body"
           />
           {Array.isArray(article.tags) && article.tags.length > 0 && (
-            <div className={singleStyles.tagList} data-testid="blog-article-tags">
+            <div
+              className={singleStyles.tagList}
+              data-testid="blog-article-tags"
+            >
               {article.tags.map((t) => (
-                <span key={t} className={singleStyles.tagChip}>#{t}</span>
+                <span key={t} className={singleStyles.tagChip}>
+                  #{t}
+                </span>
               ))}
             </div>
           )}
@@ -279,10 +372,17 @@ export default function BlogArticlePage() {
           <div className={singleStyles.interestInner}>
             <div className={singleStyles.interestHeader}>
               <h2 className={singleStyles.interestTitle}>
-                {tLocale === 'bg' ? (
-                  <>МОЖЕ ДА ВИ <span className={singleStyles.accent}>БЪДЕ ИНТЕРЕСНО</span></>
+                {tLocale === "bg" ? (
+                  <>
+                    МОЖЕ ДА ВИ{" "}
+                    <span className={singleStyles.accent}>БЪДЕ ИНТЕРЕСНО</span>
+                  </>
                 ) : (
-                  <>YOU MAY ALSO <span className={singleStyles.accent}>BE INTERESTED</span> IN</>
+                  <>
+                    YOU MAY ALSO{" "}
+                    <span className={singleStyles.accent}>BE INTERESTED</span>{" "}
+                    IN
+                  </>
                 )}
               </h2>
               {/* Desktop: VIEW ALL sits in the header next to the title.
@@ -291,10 +391,10 @@ export default function BlogArticlePage() {
               <button
                 type="button"
                 className={`${singleStyles.viewAllBtn} ${singleStyles.viewAllBtnDesktop}`}
-                onClick={() => navigate('/blog')}
+                onClick={() => navigate("/blog")}
                 data-testid="blog-view-all-btn"
               >
-                {tLocale === 'bg' ? 'ВСИЧКИ СТАТИИ' : 'VIEW ALL ARTICLES'}
+                {tLocale === "bg" ? "ВСИЧКИ СТАТИИ" : "VIEW ALL ARTICLES"}
                 <ArrowRightSm />
               </button>
             </div>
@@ -318,16 +418,26 @@ export default function BlogArticlePage() {
                   >
                     <img
                       className={singleStyles.relatedImg}
-                      src={resolveImage(r.cover_image_url) || '/figma/blog/image-151@2x.png'}
+                      src={
+                        resolveImage(r.cover_image_url) ||
+                        "/figma/blog/image-151@2x.png"
+                      }
                       alt={r.title}
-                      onError={(e) => { e.target.src = '/figma/blog/image-151@2x.png'; }}
+                      onError={(e) => {
+                        e.target.src = "/figma/blog/image-151@2x.png";
+                      }}
                     />
                     <div className={singleStyles.relatedMeta}>
-                      <span className={singleStyles.pill}>{(CATEGORY_TAG[tLocale] || CATEGORY_TAG.en)[r.category] || fallbackTag(tLocale)}</span>
+                      <span className={singleStyles.pill}>
+                        {(CATEGORY_TAG[tLocale] || CATEGORY_TAG.en)[
+                          r.category
+                        ] || fallbackTag(tLocale)}
+                      </span>
                       <div className={singleStyles.dateRow}>
                         <span>{formatDate(r.published_at, tLocale)}</span>
                         <span className={singleStyles.minRead}>
-                          {r.read_time_minutes} {tLocale === 'bg' ? 'мин.' : 'min read'}
+                          {r.read_time_minutes}{" "}
+                          {tLocale === "bg" ? "мин." : "min read"}
                         </span>
                       </div>
                     </div>
@@ -351,7 +461,8 @@ export default function BlogArticlePage() {
                   <ArrowLeftCircle disabled={relatedIndex === 0} />
                 </button>
                 <div className={singleStyles.pagerLabel}>
-                  {String(relatedIndex + 1).padStart(2, '0')} / {String(totalRelated).padStart(2, '0')}
+                  {String(relatedIndex + 1).padStart(2, "0")} /{" "}
+                  {String(totalRelated).padStart(2, "0")}
                 </div>
                 <button
                   type="button"
@@ -361,7 +472,9 @@ export default function BlogArticlePage() {
                   aria-label="Next"
                   data-testid="blog-related-next"
                 >
-                  <ArrowRightCircle disabled={relatedIndex >= totalRelated - 1} />
+                  <ArrowRightCircle
+                    disabled={relatedIndex >= totalRelated - 1}
+                  />
                 </button>
               </div>
             )}
@@ -372,10 +485,10 @@ export default function BlogArticlePage() {
             <button
               type="button"
               className={`${singleStyles.viewAllBtn} ${singleStyles.viewAllBtnMobile}`}
-              onClick={() => navigate('/blog')}
+              onClick={() => navigate("/blog")}
               data-testid="blog-view-all-btn-mobile"
             >
-              {tLocale === 'bg' ? 'ВСИЧКИ СТАТИИ' : 'VIEW ALL ARTICLES'}
+              {tLocale === "bg" ? "ВСИЧКИ СТАТИИ" : "VIEW ALL ARTICLES"}
             </button>
           </div>
         </section>
@@ -386,34 +499,40 @@ export default function BlogArticlePage() {
         <div className={singleStyles.ctaInner}>
           <div className={singleStyles.ctaText}>
             <h3 className={singleStyles.ctaSmallTitle}>
-              {tLocale === 'bg' ? 'ГОТОВИ ЛИ СТЕ ДА ВНЕСЕТЕ КОЛАТА СИ?' : 'READY TO IMPORT YOUR CAR?'}
+              {tLocale === "bg"
+                ? "ГОТОВИ ЛИ СТЕ ДА ВНЕСЕТЕ КОЛАТА СИ?"
+                : "READY TO IMPORT YOUR CAR?"}
             </h3>
             <div className={singleStyles.ctaBigTitle}>
-              <div>{tLocale === 'bg' ? 'СПРИ ДА ЧЕТЕШ.' : 'STOP READING.'}</div>
-              <div className={singleStyles.accent}>{tLocale === 'bg' ? 'ЗАПОЧНИ ДА КАРАШ.' : 'START DRIVING.'}</div>
+              <div>{tLocale === "bg" ? "СПРИ ДА ЧЕТЕШ." : "STOP READING."}</div>
+              <div className={singleStyles.accent}>
+                {tLocale === "bg" ? "ЗАПОЧНИ ДА КАРАШ." : "START DRIVING."}
+              </div>
             </div>
             <p className={singleStyles.ctaDesc}>
-              {tLocale === 'bg'
-                ? 'Нашите мениджъри ще намерят подходящата кола за вашия бюджет, ще се погрижат за целия процес на вноса и ще ви я доставят пред вратата. Без скрити такси — само ясна цена от първия ден.'
-                : 'Our managers will find the right car for your budget, handle the entire import process, and deliver it to your door. No hidden fees — just a clear cost from day one.'}
+              {tLocale === "bg"
+                ? "Нашите мениджъри ще намерят подходящата кола за вашия бюджет, ще се погрижат за целия процес на вноса и ще ви я доставят пред вратата. Без скрити такси — само ясна цена от първия ден."
+                : "Our managers will find the right car for your budget, handle the entire import process, and deliver it to your door. No hidden fees — just a clear cost from day one."}
             </p>
           </div>
           <div className={singleStyles.ctaButtons}>
             <button
               type="button"
               className={singleStyles.ctaPrimary}
-              onClick={() => navigate('/contacts')}
+              onClick={() => navigate("/contacts")}
               data-testid="blog-article-cta-primary"
             >
-              {tLocale === 'bg' ? 'ЗАЯВЕТЕ КОЛА' : 'REQUEST A VEHICLE'}
+              {tLocale === "bg" ? "ЗАЯВЕТЕ КОЛА" : "REQUEST A VEHICLE"}
             </button>
             <button
               type="button"
               className={singleStyles.ctaSecondary}
-              onClick={() => navigate('/calculator')}
+              onClick={() => navigate("/calculator")}
               data-testid="blog-article-cta-secondary"
             >
-              {tLocale === 'bg' ? 'ИЗПОЛЗВАЙТЕ КАЛКУЛАТОРА' : 'USE OUR CALCULATOR'}
+              {tLocale === "bg"
+                ? "ИЗПОЛЗВАЙТЕ КАЛКУЛАТОРА"
+                : "USE OUR CALCULATOR"}
             </button>
           </div>
         </div>

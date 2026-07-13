@@ -14,25 +14,25 @@
  *
  * The frontend just reads ``prefs`` and shows/hides UI accordingly.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from "react";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
+const BACKEND_URL = "https://backend-production-ae6d.up.railway.app";
 
 function getToken() {
   return (
-    localStorage.getItem('token') ||
-    localStorage.getItem('auth_token') ||
-    localStorage.getItem('access_token') ||
-    ''
+    localStorage.getItem("token") ||
+    localStorage.getItem("auth_token") ||
+    localStorage.getItem("access_token") ||
+    ""
   );
 }
 
 async function rawFetch(url, opts = {}) {
   const token = getToken();
   return fetch(`${BACKEND_URL}${url}`, {
-    credentials: 'include',
+    credentials: "include",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(opts.headers || {}),
     },
@@ -52,13 +52,13 @@ const FALLBACK = {
 export function useRingostatPrefs() {
   const [prefs, setPrefs] = useState(FALLBACK);
   const [savedPrefs, setSavedPrefs] = useState({});
-  const [role, setRole] = useState('');
+  const [role, setRole] = useState("");
   const [roleDefaults, setRoleDefaults] = useState(FALLBACK);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const r = await rawFetch('/api/me/preferences/ringostat-ui');
+      const r = await rawFetch("/api/me/preferences/ringostat-ui");
       if (!r.ok) {
         setLoading(false);
         return;
@@ -66,7 +66,7 @@ export function useRingostatPrefs() {
       const d = await r.json();
       setPrefs(d.effective || FALLBACK);
       setSavedPrefs(d.saved || {});
-      setRole(d.role || '');
+      setRole(d.role || "");
       setRoleDefaults(d.role_defaults || FALLBACK);
     } catch {
       // Silent fallback to FALLBACK — never break the UI
@@ -82,8 +82,8 @@ export function useRingostatPrefs() {
   const save = useCallback(
     async (patch) => {
       try {
-        const r = await rawFetch('/api/me/preferences/ringostat-ui', {
-          method: 'PATCH',
+        const r = await rawFetch("/api/me/preferences/ringostat-ui", {
+          method: "PATCH",
           body: JSON.stringify(patch),
         });
         if (r.ok) {
@@ -97,10 +97,18 @@ export function useRingostatPrefs() {
       }
       return false;
     },
-    [prefs, savedPrefs]
+    [prefs, savedPrefs],
   );
 
-  return { prefs, savedPrefs, role, roleDefaults, save, loading, refresh: load };
+  return {
+    prefs,
+    savedPrefs,
+    role,
+    roleDefaults,
+    save,
+    loading,
+    refresh: load,
+  };
 }
 
 export default useRingostatPrefs;

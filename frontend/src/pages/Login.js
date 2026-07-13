@@ -10,11 +10,11 @@
  * Manager has no step 2 but his session is reset daily at 12:00
  * Europe/Sofia (handled server-side + a global axios interceptor).
  */
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import axios from 'axios';
-import { useAuth } from '../App';
-import { toast } from 'sonner';
+import React, { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import axios from "axios";
+import { useAuth } from "../App";
+import { toast } from "sonner";
 import {
   Eye,
   EyeSlash,
@@ -23,11 +23,11 @@ import {
   EnvelopeSimple,
   ArrowLeft,
   ArrowsClockwise,
-} from '@phosphor-icons/react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useLang } from '../i18n';
+} from "@phosphor-icons/react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useLang } from "../i18n";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 const Login = () => {
   const { t } = useLang();
@@ -36,24 +36,24 @@ const Login = () => {
   const [params] = useSearchParams();
 
   /* ── step 1: credentials ─────────────────────────────────────────── */
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   /* ── step 2: challenge ───────────────────────────────────────────── */
   // Active challenge payload from backend (null until step 1 succeeds).
   const [challenge, setChallenge] = useState(null);
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
   // Inform the user if they were bounced here by the daily-reset interceptor.
   useEffect(() => {
-    if (params.get('reason') === 'daily_reset') {
+    if (params.get("reason") === "daily_reset") {
       toast.info(
-        'Your daily session has reset (12:00 Europe/Sofia). Please log in again.',
+        "Your daily session has reset (12:00 Europe/Sofia). Please log in again.",
         { duration: 5000 },
       );
     }
@@ -68,9 +68,9 @@ const Login = () => {
 
   /* ── helpers ─────────────────────────────────────────────────────── */
   const routeForRole = (role) => {
-    if (role === 'manager') return '/manager';
-    if (role === 'team_lead') return '/team';
-    return '/admin';
+    if (role === "manager") return "/manager";
+    if (role === "team_lead") return "/team";
+    return "/admin";
   };
 
   /* ── step 1: submit credentials ──────────────────────────────────── */
@@ -82,21 +82,31 @@ const Login = () => {
       if (result && result.__challenge) {
         // Second step required.
         setChallenge(result);
-        setCode('');
+        setCode("");
         setCooldown(60);
         return;
       }
       // No second step → straight in.
-      toast.success(t('loginSuccess'));
+      toast.success(t("loginSuccess"));
       navigate(routeForRole(result?.role));
     } catch (err) {
       const status = err.response?.status;
       if (status === 429) {
-        toast.error(t('i18n_too_many_attempts_try_again_in_92a703') || 'Too many attempts');
+        toast.error(
+          t("i18n_too_many_attempts_try_again_in_92a703") ||
+            "Too many attempts",
+        );
       } else if (status === 401) {
-        toast.error(t('i18n_invalid_email_or_password_a04dee') || 'Invalid email or password');
+        toast.error(
+          t("i18n_invalid_email_or_password_a04dee") ||
+            "Invalid email or password",
+        );
       } else {
-        toast.error(err.response?.data?.detail || err.response?.data?.message || t('loginError'));
+        toast.error(
+          err.response?.data?.detail ||
+            err.response?.data?.message ||
+            t("loginError"),
+        );
       }
     } finally {
       setLoading(false);
@@ -107,36 +117,36 @@ const Login = () => {
   const handleVerify = async (e) => {
     e?.preventDefault?.();
     if (!code.trim()) {
-      toast.error('Enter the 6-digit code');
+      toast.error("Enter the 6-digit code");
       return;
     }
     setVerifying(true);
     try {
       let user;
-      if (challenge.challenge === 'totp') {
-        user = await completeChallenge('/api/auth/2fa/verify', {
+      if (challenge.challenge === "totp") {
+        user = await completeChallenge("/api/auth/2fa/verify", {
           user_id: challenge.user_id,
           code: code.trim(),
         });
-      } else if (challenge.challenge === 'email_otp') {
-        user = await completeChallenge('/api/auth/email-otp/verify', {
+      } else if (challenge.challenge === "email_otp") {
+        user = await completeChallenge("/api/auth/email-otp/verify", {
           challenge_token: challenge.challenge_token,
           code: code.trim(),
         });
       }
-      toast.success(t('loginSuccess') || 'Welcome back');
+      toast.success(t("loginSuccess") || "Welcome back");
       navigate(routeForRole(user?.role));
     } catch (err) {
-      const detail = err.response?.data?.detail || '';
-      if (detail.includes('expired')) {
-        toast.error('Code expired. Request a new one.');
-      } else if (detail.includes('too_many_attempts')) {
-        toast.error('Too many attempts. Restart the login.');
+      const detail = err.response?.data?.detail || "";
+      if (detail.includes("expired")) {
+        toast.error("Code expired. Request a new one.");
+      } else if (detail.includes("too_many_attempts")) {
+        toast.error("Too many attempts. Restart the login.");
         setChallenge(null);
-      } else if (detail.includes('invalid')) {
-        toast.error('Wrong code — try again.');
+      } else if (detail.includes("invalid")) {
+        toast.error("Wrong code — try again.");
       } else {
-        toast.error(detail || 'Verification failed');
+        toast.error(detail || "Verification failed");
       }
     } finally {
       setVerifying(false);
@@ -145,18 +155,21 @@ const Login = () => {
 
   /* ── step 2: resend email-OTP ────────────────────────────────────── */
   const handleResend = async () => {
-    if (cooldown > 0 || challenge?.challenge !== 'email_otp') return;
+    if (cooldown > 0 || challenge?.challenge !== "email_otp") return;
     setResending(true);
     try {
-      const { data } = await axios.post(`${API_URL}/api/auth/email-otp/request`, {
-        user_id: challenge.user_id,
-      });
+      const { data } = await axios.post(
+        `${API_URL}/api/auth/email-otp/request`,
+        {
+          user_id: challenge.user_id,
+        },
+      );
       setChallenge({ ...challenge, challenge_token: data.challenge_token });
-      setCode('');
+      setCode("");
       setCooldown(60);
-      toast.success('New code issued. Ask the master-admin for it.');
+      toast.success("New code issued. Ask the master-admin for it.");
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to issue a new code');
+      toast.error(err.response?.data?.detail || "Failed to issue a new code");
     } finally {
       setResending(false);
     }
@@ -190,7 +203,7 @@ const Login = () => {
                 <div className="space-y-5">
                   <div>
                     <label className="block text-xs font-semibold uppercase tracking-wider text-[#71717A] mb-2">
-                      {t('email')}
+                      {t("email")}
                     </label>
                     <input
                       type="email"
@@ -204,11 +217,11 @@ const Login = () => {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold uppercase tracking-wider text-[#71717A] mb-2">
-                      {t('password')}
+                      {t("password")}
                     </label>
                     <div className="relative">
                       <input
-                        type={showPassword ? 'text' : 'password'}
+                        type={showPassword ? "text" : "password"}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="input w-full pr-12"
@@ -222,7 +235,11 @@ const Login = () => {
                         className="absolute right-4 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#18181B]"
                         data-testid="toggle-password-btn"
                       >
-                        {showPassword ? <EyeSlash size={20} /> : <Eye size={20} />}
+                        {showPassword ? (
+                          <EyeSlash size={20} />
+                        ) : (
+                          <Eye size={20} />
+                        )}
                       </button>
                     </div>
                   </div>
@@ -235,11 +252,11 @@ const Login = () => {
                     {loading ? (
                       <span className="flex items-center justify-center gap-2">
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        {t('loading')}
+                        {t("loading")}
                       </span>
                     ) : (
                       <span className="flex items-center justify-center gap-2">
-                        {t('loginButton')}
+                        {t("loginButton")}
                         <ArrowRight size={18} />
                       </span>
                     )}
@@ -261,23 +278,42 @@ const Login = () => {
               >
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center flex-shrink-0">
-                    {challenge.challenge === 'totp' ? (
-                      <ShieldCheck size={22} className="text-amber-600" weight="duotone" />
+                    {challenge.challenge === "totp" ? (
+                      <ShieldCheck
+                        size={22}
+                        className="text-amber-600"
+                        weight="duotone"
+                      />
                     ) : (
-                      <EnvelopeSimple size={22} className="text-amber-600" weight="duotone" />
+                      <EnvelopeSimple
+                        size={22}
+                        className="text-amber-600"
+                        weight="duotone"
+                      />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-[#18181B]">
-                      {challenge.challenge === 'totp'
-                        ? 'Two-factor authentication'
-                        : 'Verification required'}
+                      {challenge.challenge === "totp"
+                        ? "Two-factor authentication"
+                        : "Verification required"}
                     </div>
                     <div className="text-xs text-[#71717A] mt-0.5">
-                      {challenge.challenge === 'totp' ? (
-                        <>Open Google Authenticator and enter the 6-digit code for <strong>{challenge.user_email}</strong>.</>
+                      {challenge.challenge === "totp" ? (
+                        <>
+                          Open Google Authenticator and enter the 6-digit code
+                          for <strong>{challenge.user_email}</strong>.
+                        </>
                       ) : (
-                        <>A code was issued for <strong>{challenge.user_email}</strong>. Ask the master-admin (<code className="bg-[#F4F4F5] px-1 rounded">{challenge.recipient_masked}</code>) for the 6-digit code.</>
+                        <>
+                          A code was issued for{" "}
+                          <strong>{challenge.user_email}</strong>. Ask the
+                          master-admin (
+                          <code className="bg-[#F4F4F5] px-1 rounded">
+                            {challenge.recipient_masked}
+                          </code>
+                          ) for the 6-digit code.
+                        </>
                       )}
                     </div>
                   </div>
@@ -294,7 +330,9 @@ const Login = () => {
                     pattern="[0-9]*"
                     maxLength={6}
                     value={code}
-                    onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    onChange={(e) =>
+                      setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
                     className="input w-full text-center tracking-[0.5em] text-2xl font-bold"
                     placeholder="000000"
                     data-testid="login-otp-input"
@@ -308,19 +346,22 @@ const Login = () => {
                   data-testid="login-otp-verify"
                   className="btn-primary w-full py-3"
                 >
-                  {verifying ? 'Verifying…' : 'Verify and continue'}
+                  {verifying ? "Verifying…" : "Verify and continue"}
                 </button>
 
                 <div className="flex items-center justify-between text-xs">
                   <button
                     type="button"
-                    onClick={() => { setChallenge(null); setCode(''); }}
+                    onClick={() => {
+                      setChallenge(null);
+                      setCode("");
+                    }}
                     className="inline-flex items-center gap-1 text-[#71717A] hover:text-[#18181B]"
                     data-testid="login-otp-back"
                   >
                     <ArrowLeft size={14} /> Back
                   </button>
-                  {challenge.challenge === 'email_otp' && (
+                  {challenge.challenge === "email_otp" && (
                     <button
                       type="button"
                       onClick={handleResend}
@@ -329,7 +370,7 @@ const Login = () => {
                       data-testid="login-otp-resend"
                     >
                       <ArrowsClockwise size={14} />
-                      {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
+                      {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
                     </button>
                   )}
                 </div>

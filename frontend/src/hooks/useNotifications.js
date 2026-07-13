@@ -1,20 +1,20 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { io } from 'socket.io-client';
+import { useState, useEffect, useCallback, useRef } from "react";
+import { io } from "socket.io-client";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 // Sound files mapping
 const SOUNDS = {
-  lead: '/sounds/lead.mp3',
-  shipment: '/sounds/shipment.mp3',
-  alert: '/sounds/alert.mp3',
-  payment: '/sounds/payment.mp3',
-  success: '/sounds/success.mp3',
+  lead: "/sounds/lead.mp3",
+  shipment: "/sounds/shipment.mp3",
+  alert: "/sounds/alert.mp3",
+  payment: "/sounds/payment.mp3",
+  success: "/sounds/success.mp3",
 };
 
 /**
  * useNotifications hook
- * 
+ *
  * @param {Object} options
  * @param {string} options.userId - User ID for socket connection
  * @param {string} options.role - User role for socket connection
@@ -23,7 +23,7 @@ const SOUNDS = {
  */
 export function useNotifications(options = {}) {
   const { userId, role, soundEnabled = true, onNotification } = options;
-  
+
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [connected, setConnected] = useState(false);
@@ -33,21 +33,21 @@ export function useNotifications(options = {}) {
   // Play notification sound
   const playSound = useCallback((soundKey) => {
     const soundUrl = SOUNDS[soundKey] || SOUNDS.alert;
-    
+
     try {
       if (audioRef.current) {
         audioRef.current.pause();
       }
-      
+
       const audio = new Audio(soundUrl);
       audioRef.current = audio;
-      
+
       audio.volume = 0.5;
       audio.play().catch((err) => {
-        console.warn('Could not play notification sound:', err);
+        console.warn("Could not play notification sound:", err);
       });
     } catch (err) {
-      console.warn('Error playing sound:', err);
+      console.warn("Error playing sound:", err);
     }
   }, []);
 
@@ -58,7 +58,7 @@ export function useNotifications(options = {}) {
     const socket = io(`${API_URL}/notifications`, {
       auth: { userId, role },
       query: { userId, role },
-      transports: ['websocket', 'polling'],
+      transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
@@ -66,19 +66,19 @@ export function useNotifications(options = {}) {
 
     socketRef.current = socket;
 
-    socket.on('connect', () => {
-      console.log('Notification socket connected');
+    socket.on("connect", () => {
+      console.log("Notification socket connected");
       setConnected(true);
     });
 
-    socket.on('disconnect', () => {
-      console.log('Notification socket disconnected');
+    socket.on("disconnect", () => {
+      console.log("Notification socket disconnected");
       setConnected(false);
     });
 
-    socket.on('notification', (payload) => {
-      console.log('Received notification:', payload);
-      
+    socket.on("notification", (payload) => {
+      console.log("Received notification:", payload);
+
       setNotifications((prev) => [payload, ...prev]);
       setUnreadCount((prev) => prev + 1);
 
@@ -93,7 +93,7 @@ export function useNotifications(options = {}) {
       }
     });
 
-    socket.on('play-sound', (payload) => {
+    socket.on("play-sound", (payload) => {
       if (soundEnabled) {
         playSound(payload.soundKey);
       }
@@ -108,54 +108,50 @@ export function useNotifications(options = {}) {
   // Mark notification as read
   const markAsRead = useCallback(async (notificationId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       await fetch(`${API_URL}/api/notifications/${notificationId}/read`, {
-        method: 'PATCH',
+        method: "PATCH",
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
       });
 
       setNotifications((prev) =>
-        prev.map((n) =>
-          n.id === notificationId ? { ...n, isRead: true } : n
-        )
+        prev.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n)),
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (err) {
-      console.error('Failed to mark notification as read:', err);
+      console.error("Failed to mark notification as read:", err);
     }
   }, []);
 
   // Mark all as read
   const markAllAsRead = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       await fetch(`${API_URL}/api/notifications/read-all`, {
-        method: 'PATCH',
+        method: "PATCH",
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
       });
 
-      setNotifications((prev) =>
-        prev.map((n) => ({ ...n, isRead: true }))
-      );
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
       setUnreadCount(0);
     } catch (err) {
-      console.error('Failed to mark all as read:', err);
+      console.error("Failed to mark all as read:", err);
     }
   }, []);
 
   // Fetch initial notifications
   const fetchNotifications = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const res = await fetch(`${API_URL}/api/notifications/me`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       });
 
@@ -165,7 +161,7 @@ export function useNotifications(options = {}) {
         setUnreadCount(data.unreadCount || 0);
       }
     } catch (err) {
-      console.error('Failed to fetch notifications:', err);
+      console.error("Failed to fetch notifications:", err);
     }
   }, []);
 
@@ -178,22 +174,22 @@ export function useNotifications(options = {}) {
   // Test notification (for development)
   const sendTestNotification = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       await fetch(`${API_URL}/api/notifications/test`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          type: 'test.notification',
-          title: '🧪 Тестове сповіщення',
-          message: 'Це тестове сповіщення для перевірки системи',
-          soundKey: 'alert',
+          type: "test.notification",
+          title: "🧪 Тестове сповіщення",
+          message: "Це тестове сповіщення для перевірки системи",
+          soundKey: "alert",
         }),
       });
     } catch (err) {
-      console.error('Failed to send test notification:', err);
+      console.error("Failed to send test notification:", err);
     }
   }, []);
 

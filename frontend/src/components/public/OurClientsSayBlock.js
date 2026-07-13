@@ -1,24 +1,25 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { ArrowUpRight, Star } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { ArrowUpRight, Star } from "lucide-react";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 const FALLBACK_TESTIMONIALS = [
   {
-    name: 'Georgi',
-    text:
-      'I really liked the approach — everything was clear, transparent, and without “surprises.” The car was chosen to fit my budget and wishes, and they were constantly in touch. I’m already recommending it to my friends!',
+    name: "Georgi",
+    text: "I really liked the approach — everything was clear, transparent, and without “surprises.” The car was chosen to fit my budget and wishes, and they were constantly in touch. I’m already recommending it to my friends!",
   },
   {
-    name: 'Dimitar',
-    text:
-      'I bought a car from an auction — the team really knows their stuff. They explained all the nuances, helped me win the bid, and organized delivery. The result — top value for money.',
+    name: "Dimitar",
+    text: "I bought a car from an auction — the team really knows their stuff. They explained all the nuances, helped me win the bid, and organized delivery. The result — top value for money.",
   },
 ];
 
 const GoogleBadge = ({ rating, count }) => (
-  <div className="inline-flex items-center gap-3 bg-black/60 border border-[#1E1E1E] rounded-md px-4 py-3" data-testid="google-badge">
+  <div
+    className="inline-flex items-center gap-3 bg-black/60 border border-[#1E1E1E] rounded-md px-4 py-3"
+    data-testid="google-badge"
+  >
     {/* Inline Google "G" logo */}
     <svg width="28" height="28" viewBox="0 0 48 48" aria-hidden="true">
       <path
@@ -40,14 +41,24 @@ const GoogleBadge = ({ rating, count }) => (
     </svg>
     <div className="leading-tight">
       <div className="flex items-center gap-2">
-        <span className="text-white text-[18px] font-bold" data-testid="google-rating">{rating}</span>
+        <span
+          className="text-white text-[18px] font-bold"
+          data-testid="google-rating"
+        >
+          {rating}
+        </span>
         <div className="flex items-center gap-0.5 text-[#FEAE00]">
           {[0, 1, 2, 3, 4].map((s) => (
             <Star key={s} size={12} fill="#FEAE00" strokeWidth={0} />
           ))}
         </div>
       </div>
-      <div className="text-[11px] text-[#9A9A9A] uppercase tracking-wider" data-testid="google-count">{count} Google reviews</div>
+      <div
+        className="text-[11px] text-[#9A9A9A] uppercase tracking-wider"
+        data-testid="google-count"
+      >
+        {count} Google reviews
+      </div>
     </div>
   </div>
 );
@@ -66,28 +77,41 @@ export default function OurClientsSayBlock() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await axios.get(`${API_URL}/api/public/google-reviews`, { timeout: 12000 });
+        const r = await axios.get(`${API_URL}/api/public/google-reviews`, {
+          timeout: 12000,
+        });
         if (cancelled) return;
         const data = r.data || {};
         if (data.enabled === false) return;
-        if (typeof data.rating === 'number' && data.rating > 0) setRating(data.rating);
-        if (typeof data.count === 'number' && data.count > 0) setCount(data.count);
+        if (typeof data.rating === "number" && data.rating > 0)
+          setRating(data.rating);
+        if (typeof data.count === "number" && data.count > 0)
+          setCount(data.count);
         const liveItems = Array.isArray(data.reviews) ? data.reviews : [];
         if (liveItems.length) {
-          setItems(liveItems.map((x) => ({
-            name: x.author_name || 'Customer',
-            text: x.text || '',
-            avatar: x.author_avatar_url || '',
-            rating: x.rating,
-          })));
+          setItems(
+            liveItems.map((x) => ({
+              name: x.author_name || "Customer",
+              text: x.text || "",
+              avatar: x.author_avatar_url || "",
+              rating: x.rating,
+            })),
+          );
         }
-      } catch (_) { /* swallow — keep fallback */ }
+      } catch (_) {
+        /* swallow — keep fallback */
+      }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
-    <section className="bg-black py-24 relative overflow-hidden" data-testid="our-clients-say-section">
+    <section
+      className="bg-black py-24 relative overflow-hidden"
+      data-testid="our-clients-say-section"
+    >
       {/* Centered ghost number 460+ */}
       <div
         aria-hidden="true"
@@ -96,9 +120,9 @@ export default function OurClientsSayBlock() {
         <span
           className="font-black leading-none"
           style={{
-            fontSize: 'clamp(180px, 26vw, 420px)',
-            color: 'rgba(255,255,255,0.025)',
-            letterSpacing: '-0.03em',
+            fontSize: "clamp(180px, 26vw, 420px)",
+            color: "rgba(255,255,255,0.025)",
+            letterSpacing: "-0.03em",
           }}
         >
           460+
@@ -110,18 +134,22 @@ export default function OurClientsSayBlock() {
         <div className="relative flex flex-col items-center mb-16">
           <h2
             className="font-bold uppercase text-[#FEAE00] text-center leading-none"
-            style={{ fontSize: 'clamp(34px, 4.2vw, 64px)' }}
+            style={{ fontSize: "clamp(34px, 4.2vw, 64px)" }}
           >
             Our Clients Say
           </h2>
           <div className="lg:absolute lg:right-0 lg:top-3 flex items-stretch gap-3 mt-6 lg:mt-0 max-w-[380px]">
-            <span className="text-[#FEAE00] text-[28px] leading-none font-light select-none">[</span>
+            <span className="text-[#FEAE00] text-[28px] leading-none font-light select-none">
+              [
+            </span>
             <p className="text-[12px] md:text-[13px] uppercase tracking-[0.06em] leading-snug">
               <span className="text-[#FEAE00]">Satisfied clients</span>
               <br />
               <span className="text-white">are our priority</span>
             </p>
-            <span className="text-[#FEAE00] text-[28px] leading-none font-light select-none">]</span>
+            <span className="text-[#FEAE00] text-[28px] leading-none font-light select-none">
+              ]
+            </span>
           </div>
         </div>
 
@@ -131,7 +159,7 @@ export default function OurClientsSayBlock() {
           <div className="flex items-end gap-6">
             <h3
               className="font-bold uppercase text-[#FEAE00] leading-[1.02] flex-1"
-              style={{ fontSize: 'clamp(26px, 2.6vw, 40px)' }}
+              style={{ fontSize: "clamp(26px, 2.6vw, 40px)" }}
             >
               What customers say
               <br />
@@ -162,13 +190,17 @@ export default function OurClientsSayBlock() {
                 ) : (
                   <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#3A3A3A] to-[#1D1D1B] border border-[#2A2A2A] flex items-center justify-center">
                     <span className="text-[#FEAE00] font-bold text-[16px]">
-                      {(t.name || 'C').charAt(0)}
+                      {(t.name || "C").charAt(0)}
                     </span>
                   </div>
                 )}
-                <span className="text-[20px] font-bold text-[#FEAE00]">{t.name}</span>
+                <span className="text-[20px] font-bold text-[#FEAE00]">
+                  {t.name}
+                </span>
               </div>
-              <p className="text-[15px] md:text-[16px] text-[#C8C8C8] leading-relaxed">{t.text}</p>
+              <p className="text-[15px] md:text-[16px] text-[#C8C8C8] leading-relaxed">
+                {t.text}
+              </p>
             </div>
           ))}
         </div>
@@ -179,7 +211,7 @@ export default function OurClientsSayBlock() {
             <span
               key={i}
               className={`rounded-full ${
-                i === 0 ? 'w-3 h-3 bg-[#FEAE00]' : 'w-2 h-2 bg-[#FEAE00]/30'
+                i === 0 ? "w-3 h-3 bg-[#FEAE00]" : "w-2 h-2 bg-[#FEAE00]/30"
               }`}
             />
           ))}

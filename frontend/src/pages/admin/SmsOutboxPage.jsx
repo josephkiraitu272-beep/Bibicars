@@ -10,9 +10,9 @@
  *   GET  /api/admin/sms-outbox?limit=200&event=&status=
  *   POST /api/admin/notifications/sms/test  { to, message }
  */
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import axios from 'axios';
-import { toast } from 'sonner';
+import React, { useEffect, useState, useCallback, useMemo } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import {
   Smartphone,
   RefreshCw,
@@ -23,53 +23,83 @@ import {
   X,
   Send,
   Info,
-} from 'lucide-react';
+} from "lucide-react";
 
-import WhiteSelect from '../../components/ui/WhiteSelect';
-import { useLang } from '../../i18n/LanguageContext';
+import WhiteSelect from "../../components/ui/WhiteSelect";
+import { useLang } from "../../i18n/LanguageContext";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 const authHeaders = () => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem("token");
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
 const STATUS_STYLE = {
-  sent:    { label: 'sent',    color: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: CheckCircle2 },
-  dry_run: { label: 'dry-run', color: 'bg-amber-50   text-amber-700   ring-amber-200',   icon: Eye },
-  failed:  { label: 'failed',  color: 'bg-rose-50    text-rose-700    ring-rose-200',    icon: XCircle },
-  queued:  { label: 'queued',  color: 'bg-zinc-100   text-zinc-700    ring-zinc-200',    icon: Smartphone },
+  sent: {
+    label: "sent",
+    color: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    icon: CheckCircle2,
+  },
+  dry_run: {
+    label: "dry-run",
+    color: "bg-amber-50   text-amber-700   ring-amber-200",
+    icon: Eye,
+  },
+  failed: {
+    label: "failed",
+    color: "bg-rose-50    text-rose-700    ring-rose-200",
+    icon: XCircle,
+  },
+  queued: {
+    label: "queued",
+    color: "bg-zinc-100   text-zinc-700    ring-zinc-200",
+    icon: Smartphone,
+  },
 };
 
 // Provider hints resolved at render-time via t() so the help text follows the active locale.
 const PROVIDER_STYLE = {
-  textbelt:      { label: 'textbelt (paid)',  hintKey: null,                chip: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
-  textbelt_free: { label: 'textbelt (free)',  hintKey: 'outboxSmsFreeDesc', chip: 'bg-sky-50 text-sky-700 ring-sky-200' },
-  dry_run:       { label: 'dry_run',          hintKey: 'outboxSmsDisabled', chip: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  textbelt: {
+    label: "textbelt (paid)",
+    hintKey: null,
+    chip: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  },
+  textbelt_free: {
+    label: "textbelt (free)",
+    hintKey: "outboxSmsFreeDesc",
+    chip: "bg-sky-50 text-sky-700 ring-sky-200",
+  },
+  dry_run: {
+    label: "dry_run",
+    hintKey: "outboxSmsDisabled",
+    chip: "bg-amber-50 text-amber-700 ring-amber-200",
+  },
 };
 
 export default function SmsOutboxPage({ embedded = false }) {
   const { t } = useLang();
   const [items, setItems] = useState([]);
-  const [provider, setProvider] = useState('dry_run');
+  const [provider, setProvider] = useState("dry_run");
   const [loading, setLoading] = useState(true);
-  const [filterEvent, setFilterEvent] = useState('');
+  const [filterEvent, setFilterEvent] = useState("");
   const [selected, setSelected] = useState(null);
 
   // Test SMS form state
-  const [testPhone, setTestPhone] = useState('');
-  const [testMsg, setTestMsg] = useState('BIBI Cars: SMS test ✓');
+  const [testPhone, setTestPhone] = useState("");
+  const [testMsg, setTestMsg] = useState("BIBI Cars: SMS test ✓");
   const [sending, setSending] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await axios.get(`${API_URL}/api/admin/sms-outbox?limit=200`, { headers: authHeaders() });
+      const r = await axios.get(`${API_URL}/api/admin/sms-outbox?limit=200`, {
+        headers: authHeaders(),
+      });
       setItems(r.data?.items || []);
-      setProvider(r.data?.provider || 'dry_run');
+      setProvider(r.data?.provider || "dry_run");
     } catch {
-      toast.error('Failed to load SMS outbox');
+      toast.error("Failed to load SMS outbox");
     } finally {
       setLoading(false);
     }
@@ -89,38 +119,38 @@ export default function SmsOutboxPage({ embedded = false }) {
   const pStyle = PROVIDER_STYLE[provider] || PROVIDER_STYLE.dry_run;
 
   const sendTest = async () => {
-    const phone = (testPhone || '').trim();
+    const phone = (testPhone || "").trim();
     if (!phone) {
-      toast.error(t('outboxEnterPhone'));
+      toast.error(t("outboxEnterPhone"));
       return;
     }
     setSending(true);
     try {
       const r = await axios.post(
         `${API_URL}/api/admin/notifications/sms/test`,
-        { to: phone, message: testMsg || 'BIBI Cars: SMS test' },
+        { to: phone, message: testMsg || "BIBI Cars: SMS test" },
         { headers: authHeaders() },
       );
       const mode = r.data?.mode || provider;
       const ok = r.data?.success;
       const err = r.data?.outbox?.provider_error || r.data?.error;
       if (ok) {
-        toast.success(t('outboxSmsSent').replace('{mode}', mode));
-      } else if (mode === 'dry_run') {
-        toast.info(t('outboxSmsDryRun'));
+        toast.success(t("outboxSmsSent").replace("{mode}", mode));
+      } else if (mode === "dry_run") {
+        toast.info(t("outboxSmsDryRun"));
       } else {
-        toast.error(t('outboxSendError').replace('{err}', err || 'unknown'));
+        toast.error(t("outboxSendError").replace("{err}", err || "unknown"));
       }
       await load();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'SMS test failed');
+      toast.error(e.response?.data?.detail || "SMS test failed");
     } finally {
       setSending(false);
     }
   };
 
   return (
-    <div className={embedded ? '' : 'p-6 max-w-[1280px] mx-auto'}>
+    <div className={embedded ? "" : "p-6 max-w-[1280px] mx-auto"}>
       {/* ─── Test SMS panel ─── */}
       <div className="bg-white border border-[#E4E4E7] rounded-2xl overflow-hidden mb-4">
         <div className="px-4 sm:px-5 py-4 border-b border-[#F4F4F5] flex items-center gap-3">
@@ -133,7 +163,9 @@ export default function SmsOutboxPage({ embedded = false }) {
             </h2>
             <p className="text-[12px] text-[#71717A] mt-0.5 flex items-center gap-1.5 flex-wrap">
               <span>Provider:</span>
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ${pStyle.chip}`}>
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ${pStyle.chip}`}
+              >
                 {pStyle.label}
               </span>
               {pStyle.hintKey && (
@@ -179,8 +211,8 @@ export default function SmsOutboxPage({ embedded = false }) {
             className="h-10 px-4 rounded-xl bg-[#18181B] hover:bg-[#27272A] active:bg-black text-white text-[13px] font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
             data-testid="sms-test-send"
           >
-            <Send className={`w-3.5 h-3.5 ${sending ? 'animate-pulse' : ''}`} />
-            {sending ? 'Sending…' : 'Send test'}
+            <Send className={`w-3.5 h-3.5 ${sending ? "animate-pulse" : ""}`} />
+            {sending ? "Sending…" : "Send test"}
           </button>
         </div>
       </div>
@@ -204,7 +236,10 @@ export default function SmsOutboxPage({ embedded = false }) {
               aria-label="Refresh"
               className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-[#18181B] hover:bg-[#27272A] active:bg-black text-white disabled:opacity-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-black/15 shrink-0 transition-colors"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} strokeWidth={2.5} />
+              <RefreshCw
+                className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
+                strokeWidth={2.5}
+              />
             </button>
           </div>
 
@@ -217,20 +252,28 @@ export default function SmsOutboxPage({ embedded = false }) {
                 data-testid="sms-filter-event"
               >
                 <option value="">All events</option>
-                {events.map((e) => <option key={e} value={e}>{e}</option>)}
+                {events.map((e) => (
+                  <option key={e} value={e}>
+                    {e}
+                  </option>
+                ))}
               </WhiteSelect>
             </div>
             {filterEvent && (
               <button
                 type="button"
-                onClick={() => setFilterEvent('')}
+                onClick={() => setFilterEvent("")}
                 className="inline-flex items-center gap-1 text-[11.5px] text-[#71717A] hover:text-[#18181B]"
               >
                 <X className="w-3 h-3" /> clear
               </button>
             )}
             <span className="ml-auto text-[11.5px] text-[#71717A]">
-              {filtered.length}{items.length !== filtered.length ? ` / ${items.length}` : ''} events
+              {filtered.length}
+              {items.length !== filtered.length
+                ? ` / ${items.length}`
+                : ""}{" "}
+              events
             </span>
           </div>
         </div>
@@ -242,7 +285,9 @@ export default function SmsOutboxPage({ embedded = false }) {
               <tr>
                 <th className="text-left px-5 py-2.5 font-semibold">Status</th>
                 <th className="text-left px-5 py-2.5 font-semibold">Event</th>
-                <th className="text-left px-5 py-2.5 font-semibold">Recipient</th>
+                <th className="text-left px-5 py-2.5 font-semibold">
+                  Recipient
+                </th>
                 <th className="text-left px-5 py-2.5 font-semibold">Message</th>
                 <th className="text-left px-5 py-2.5 font-semibold">Time</th>
                 <th />
@@ -251,36 +296,51 @@ export default function SmsOutboxPage({ embedded = false }) {
             <tbody>
               {filtered.length === 0 && !loading ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-[#A1A1AA] text-[13px]">
+                  <td
+                    colSpan={6}
+                    className="text-center py-12 text-[#A1A1AA] text-[13px]"
+                  >
                     SMS outbox empty — no events have been triggered yet.
                   </td>
                 </tr>
-              ) : filtered.map((e) => {
-                const s = STATUS_STYLE[e.status] || STATUS_STYLE.queued;
-                const Icon = s.icon;
-                return (
-                  <tr
-                    key={e.id}
-                    onClick={() => setSelected(e)}
-                    className="border-t border-[#F4F4F5] hover:bg-[#FAFAFA] cursor-pointer"
-                  >
-                    <td className="px-5 py-3">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ${s.color}`}>
-                        <Icon className="w-3 h-3" /> {s.label}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-[12.5px] text-[#3F3F46] font-medium">{e.event}</td>
-                    <td className="px-5 py-3 text-[13px] text-[#3F3F46]">{e.to}</td>
-                    <td className="px-5 py-3 text-[13px] text-[#18181B] truncate max-w-[420px]">{e.message}</td>
-                    <td className="px-5 py-3 text-[11.5px] text-[#71717A] tabular-nums">
-                      {e.created_at ? new Date(e.created_at).toLocaleString() : '—'}
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <Eye className="w-4 h-4 text-[#A1A1AA] inline" />
-                    </td>
-                  </tr>
-                );
-              })}
+              ) : (
+                filtered.map((e) => {
+                  const s = STATUS_STYLE[e.status] || STATUS_STYLE.queued;
+                  const Icon = s.icon;
+                  return (
+                    <tr
+                      key={e.id}
+                      onClick={() => setSelected(e)}
+                      className="border-t border-[#F4F4F5] hover:bg-[#FAFAFA] cursor-pointer"
+                    >
+                      <td className="px-5 py-3">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ${s.color}`}
+                        >
+                          <Icon className="w-3 h-3" /> {s.label}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-[12.5px] text-[#3F3F46] font-medium">
+                        {e.event}
+                      </td>
+                      <td className="px-5 py-3 text-[13px] text-[#3F3F46]">
+                        {e.to}
+                      </td>
+                      <td className="px-5 py-3 text-[13px] text-[#18181B] truncate max-w-[420px]">
+                        {e.message}
+                      </td>
+                      <td className="px-5 py-3 text-[11.5px] text-[#71717A] tabular-nums">
+                        {e.created_at
+                          ? new Date(e.created_at).toLocaleString()
+                          : "—"}
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <Eye className="w-4 h-4 text-[#A1A1AA] inline" />
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -291,39 +351,49 @@ export default function SmsOutboxPage({ embedded = false }) {
             <div className="px-4 py-10 text-center text-[#A1A1AA] text-[13px]">
               SMS outbox empty.
             </div>
-          ) : filtered.map((e) => {
-            const s = STATUS_STYLE[e.status] || STATUS_STYLE.queued;
-            const Icon = s.icon;
-            return (
-              <button
-                key={e.id}
-                type="button"
-                onClick={() => setSelected(e)}
-                className="w-full text-left px-4 py-3 hover:bg-[#FAFAFA] focus:outline-none focus-visible:bg-[#FAFAFA]"
-              >
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-semibold ring-1 ${s.color}`}>
-                    <Icon className="w-3 h-3" /> {s.label}
-                  </span>
-                  <span className="text-[10.5px] text-[#71717A] tabular-nums">
-                    {e.created_at ? new Date(e.created_at).toLocaleString() : '—'}
-                  </span>
-                </div>
-                <p className="text-[13.5px] text-[#18181B] font-semibold leading-tight truncate">
-                  {e.message || e.event}
-                </p>
-                <p className="text-[12px] text-[#71717A] mt-0.5 truncate">
-                  → {e.to} <span className="text-[#D4D4D8] mx-1">·</span> {e.event}
-                </p>
-              </button>
-            );
-          })}
+          ) : (
+            filtered.map((e) => {
+              const s = STATUS_STYLE[e.status] || STATUS_STYLE.queued;
+              const Icon = s.icon;
+              return (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => setSelected(e)}
+                  className="w-full text-left px-4 py-3 hover:bg-[#FAFAFA] focus:outline-none focus-visible:bg-[#FAFAFA]"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-semibold ring-1 ${s.color}`}
+                    >
+                      <Icon className="w-3 h-3" /> {s.label}
+                    </span>
+                    <span className="text-[10.5px] text-[#71717A] tabular-nums">
+                      {e.created_at
+                        ? new Date(e.created_at).toLocaleString()
+                        : "—"}
+                    </span>
+                  </div>
+                  <p className="text-[13.5px] text-[#18181B] font-semibold leading-tight truncate">
+                    {e.message || e.event}
+                  </p>
+                  <p className="text-[12px] text-[#71717A] mt-0.5 truncate">
+                    → {e.to} <span className="text-[#D4D4D8] mx-1">·</span>{" "}
+                    {e.event}
+                  </p>
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
 
       {/* ─── Drawer ─── */}
       {selected && (
-        <div className="fixed inset-0 z-40 flex" onClick={() => setSelected(null)}>
+        <div
+          className="fixed inset-0 z-40 flex"
+          onClick={() => setSelected(null)}
+        >
           <div className="flex-1 bg-zinc-900/40" />
           <aside
             className="w-full max-w-2xl bg-white shadow-2xl overflow-y-auto"
@@ -331,11 +401,15 @@ export default function SmsOutboxPage({ embedded = false }) {
           >
             <div className="sticky top-0 bg-white border-b border-[#E4E4E7] px-5 py-4 flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[11px] text-[#A1A1AA] truncate">{selected.id}</p>
+                <p className="text-[11px] text-[#A1A1AA] truncate">
+                  {selected.id}
+                </p>
                 <h2 className="font-semibold text-[#18181B] mt-0.5 leading-tight">
                   → {selected.to}
                 </h2>
-                <p className="text-[12px] text-[#71717A] mt-0.5">{selected.event} · {selected.provider}</p>
+                <p className="text-[12px] text-[#71717A] mt-0.5">
+                  {selected.event} · {selected.provider}
+                </p>
               </div>
               <button
                 type="button"

@@ -1,114 +1,95 @@
-/**
- * Breadcrumb — навигационный путь "Section › Subsection › Current page".
- *
- * Usage:
- *   <Breadcrumb
- *     items={[
- *       { label: 'Team Dashboard', to: '/team' },
- *       { label: 'Managers', to: '/team/managers' },
- *       { label: 'John Doe' },           // last item — current page (not a link)
- *     ]}
- *   />
- *
- * Каждый item:
- *   - label: string                    — отображаемый текст
- *   - to?: string                      — если указан, render как Link
- *   - icon?: React.ComponentType       — опциональная иконка слева
- *
- * Последний item рендерится без ссылки (текущая страница). На мобиле длинные
- * крошки сжимаются: показываются только первый и последний, средние под "…".
- */
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { CaretRight, DotsThree } from '@phosphor-icons/react';
+import * as React from "react";
+import { Slot } from "@radix-ui/react-slot";
+import { ChevronRight, MoreHorizontal } from "lucide-react";
 
-const Breadcrumb = ({ items = [], className = '', testId = 'breadcrumb' }) => {
-  const [expanded, setExpanded] = useState(false);
+import { cn } from "@/lib/utils";
 
-  if (!Array.isArray(items) || items.length === 0) return null;
+const Breadcrumb = React.forwardRef(({ ...props }, ref) => (
+  <nav ref={ref} aria-label="breadcrumb" {...props} />
+));
+Breadcrumb.displayName = "Breadcrumb";
 
-  // Mobile collapsing: when >3 items, show first + "…" + last on mobile
-  const shouldCollapse = items.length > 3;
-  // We'll handle this with CSS — on mobile hide middle items
-  // For simplicity, fall back to: if user clicks "…" we expand
+const BreadcrumbList = React.forwardRef(({ className, ...props }, ref) => (
+  <ol
+    ref={ref}
+    className={cn(
+      "flex flex-wrap items-center gap-1.5 break-words text-sm text-muted-foreground sm:gap-2.5",
+      className,
+    )}
+    {...props}
+  />
+));
+BreadcrumbList.displayName = "BreadcrumbList";
 
-  return (
-    <nav
-      aria-label="Breadcrumb"
-      className={`flex items-center gap-1 text-sm flex-wrap ${className}`}
-      data-testid={testId}
-    >
-      {items.map((item, idx) => {
-        const isLast = idx === items.length - 1;
-        const isFirst = idx === 0;
-        const isMiddle = !isFirst && !isLast;
+const BreadcrumbItem = React.forwardRef(({ className, ...props }, ref) => (
+  <li
+    ref={ref}
+    className={cn("inline-flex items-center gap-1.5", className)}
+    {...props}
+  />
+));
+BreadcrumbItem.displayName = "BreadcrumbItem";
 
-        // On mobile, hide middle items unless expanded
-        const hideOnMobile = shouldCollapse && isMiddle && !expanded;
+const BreadcrumbLink = React.forwardRef(
+  ({ asChild, className, ...props }, ref) => {
+    const Comp = asChild ? Slot : "a";
 
-        const Icon = item.icon;
-        const labelEl = (
-          <span className={`inline-flex items-center gap-1 ${isLast ? 'text-[#18181B] font-semibold' : 'text-[#71717A]'} truncate max-w-[160px] sm:max-w-[240px]`}>
-            {Icon && <Icon size={14} weight="duotone" />}
-            <span className="truncate">{item.label}</span>
-          </span>
-        );
+    return (
+      <Comp
+        ref={ref}
+        className={cn("transition-colors hover:text-foreground", className)}
+        {...props}
+      />
+    );
+  },
+);
+BreadcrumbLink.displayName = "BreadcrumbLink";
 
-        return (
-          <React.Fragment key={`bc-${idx}`}>
-            {/* Separator before this item (except first) */}
-            {!isFirst && (
-              <span
-                className={`text-[#A1A1AA] flex-shrink-0 ${hideOnMobile ? 'hidden sm:inline-flex' : 'inline-flex'}`}
-                aria-hidden="true"
-              >
-                <CaretRight size={14} weight="bold" />
-              </span>
-            )}
+const BreadcrumbPage = React.forwardRef(({ className, ...props }, ref) => (
+  <span
+    ref={ref}
+    role="link"
+    aria-disabled="true"
+    aria-current="page"
+    className={cn("font-normal text-foreground", className)}
+    {...props}
+  />
+));
+BreadcrumbPage.displayName = "BreadcrumbPage";
 
-            {/* Show "..." collapsed middle indicator on mobile only when collapsed */}
-            {shouldCollapse && !expanded && idx === 1 && (
-              <button
-                type="button"
-                onClick={() => setExpanded(true)}
-                className="inline-flex sm:hidden items-center px-1 py-0.5 rounded hover:bg-[#F4F4F5] text-[#71717A] flex-shrink-0"
-                aria-label="Show full path"
-                data-testid={`${testId}-expand`}
-              >
-                <DotsThree size={16} weight="bold" />
-              </button>
-            )}
-            {shouldCollapse && !expanded && idx === 1 && (
-              <span className="text-[#A1A1AA] inline-flex sm:hidden flex-shrink-0" aria-hidden="true">
-                <CaretRight size={14} weight="bold" />
-              </span>
-            )}
+const BreadcrumbSeparator = ({ children, className, ...props }) => (
+  <li
+    role="presentation"
+    aria-hidden="true"
+    className={cn("[&>svg]:w-3.5 [&>svg]:h-3.5", className)}
+    {...props}
+  >
+    {children ?? <ChevronRight />}
+  </li>
+);
+BreadcrumbSeparator.displayName = "BreadcrumbSeparator";
 
-            {/* Item itself */}
-            <span className={hideOnMobile ? 'hidden sm:inline-flex' : 'inline-flex'}>
-              {!isLast && item.to ? (
-                <Link
-                  to={item.to}
-                  data-testid={`${testId}-link-${idx}`}
-                  className="inline-flex items-center px-1.5 py-1 -my-1 rounded-md hover:bg-[#F4F4F5] hover:text-[#18181B] transition-colors"
-                >
-                  {labelEl}
-                </Link>
-              ) : (
-                <span
-                  data-testid={`${testId}-current`}
-                  aria-current={isLast ? 'page' : undefined}
-                  className="inline-flex items-center px-1.5 py-1 -my-1"
-                >
-                  {labelEl}
-                </span>
-              )}
-            </span>
-          </React.Fragment>
-        );
-      })}
-    </nav>
-  );
+const BreadcrumbEllipsis = ({ className, ...props }) => (
+  <span
+    role="presentation"
+    aria-hidden="true"
+    className={cn("flex h-9 w-9 items-center justify-center", className)}
+    {...props}
+  >
+    <MoreHorizontal className="h-4 w-4" />
+    <span className="sr-only">More</span>
+  </span>
+);
+BreadcrumbEllipsis.displayName = "BreadcrumbElipssis";
+
+export {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+  BreadcrumbEllipsis,
 };
 
 export default Breadcrumb;

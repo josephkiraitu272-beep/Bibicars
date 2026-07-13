@@ -1,21 +1,21 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
-import axios from 'axios';
-import { Link } from 'react-router-dom';
-import { Car, Bike } from 'lucide-react';
-import { Clock, ArrowRight } from '@phosphor-icons/react';
-import MobileHeader from './MobileHeader';
-import MobileMenu from './MobileMenu';
-import ShareModal from '../../components/public/ShareModal';
-import { CAR_BRANDS, MODELS_BY_BRAND } from '../../data/cars';
-import { useGetInTouch } from '../../components/public/GetInTouchModal';
-import { usePolicyModal } from '../../components/public/PolicyModal';
-import { useLang } from '../../i18n';
-import { renderKpiWithRolling } from '../../components/RollingNumber';
-import { useTiltParallax } from '../../components/useTiltParallax';
-import AnimatedHeading from '../../components/AnimatedHeading';
-import { optimizeImage, ImageSize } from '../../lib/optimizeImage';
+import React, { useEffect, useState, useRef, useMemo } from "react";
+import axios from "axios";
+import { Link } from "react-router-dom";
+import { Car, Bike } from "lucide-react";
+import { Clock, ArrowRight } from "@phosphor-icons/react";
+import MobileHeader from "./MobileHeader";
+import MobileMenu from "./MobileMenu";
+import ShareModal from "../../components/public/ShareModal";
+import { CAR_BRANDS, MODELS_BY_BRAND } from "../../data/cars";
+import { useGetInTouch } from "../../components/public/GetInTouchModal";
+import { usePolicyModal } from "../../components/public/PolicyModal";
+import { useLang } from "../../i18n";
+import { renderKpiWithRolling } from "../../components/RollingNumber";
+import { useTiltParallax } from "../../components/useTiltParallax";
+import AnimatedHeading from "../../components/AnimatedHeading";
+import { optimizeImage, ImageSize } from "../../lib/optimizeImage";
 
-const API = process.env.REACT_APP_BACKEND_URL || '';
+const API = "https://backend-production-ae6d.up.railway.app";
 
 /**
  * MobileHomePage — mobile version of the BIBI Cars homepage matching the
@@ -36,246 +36,267 @@ const API = process.env.REACT_APP_BACKEND_URL || '';
  * 12. Footer (viber community, contacts, socials)
  */
 
-const FALLBACK_PHONES = ['+359 875 313 158', '+359 897 884 804'];
+const FALLBACK_PHONES = ["+359 875 313 158", "+359 897 884 804"];
 
 const FALLBACK_HERO = {
   en: {
-    eyebrow: 'america | Korea',
-    title_line1: 'From auction',
-    title_line2: 'to keys',
-    title_line3: 'in your hands',
-    kpi1: '/ Over 5,000 cars',
-    kpi2: '/ Real-time bids',
-    kpi3: '/ 500+ happy clients',
+    eyebrow: "america | Korea",
+    title_line1: "From auction",
+    title_line2: "to keys",
+    title_line3: "in your hands",
+    kpi1: "/ Over 5,000 cars",
+    kpi2: "/ Real-time bids",
+    kpi3: "/ 500+ happy clients",
   },
   bg: {
-    eyebrow: 'америка | Корея',
-    title_line1: 'От търг',
-    title_line2: 'до ключове',
-    title_line3: 'във Вашите ръце',
-    kpi1: '/ Над 5,000 автомобила',
-    kpi2: '/ Наддавания на живо',
-    kpi3: '/ 500+ доволни клиенти',
+    eyebrow: "америка | Корея",
+    title_line1: "От търг",
+    title_line2: "до ключове",
+    title_line3: "във Вашите ръце",
+    kpi1: "/ Над 5,000 автомобила",
+    kpi2: "/ Наддавания на живо",
+    kpi3: "/ 500+ доволни клиенти",
   },
 };
 
 const FALLBACK_FAQ = {
   en: [
-    { question: 'How to choose and buy a car from America?' },
-    { question: 'Where do you ship to?' },
-    { question: 'How long will it take for my order to arrive?' },
-    { question: 'How do I change or cancel my order?' },
-    { question: 'How can I track my order?' },
+    { question: "How to choose and buy a car from America?" },
+    { question: "Where do you ship to?" },
+    { question: "How long will it take for my order to arrive?" },
+    { question: "How do I change or cancel my order?" },
+    { question: "How can I track my order?" },
   ],
   bg: [
-    { question: 'Как да изберете и купите автомобил от Америка?' },
-    { question: 'Къде доставяте?' },
-    { question: 'Колко време ще отнеме доставката на моята поръчка?' },
-    { question: 'Как мога да променя или анулирам поръчката си?' },
-    { question: 'Как мога да проследя поръчката си?' },
+    { question: "Как да изберете и купите автомобил от Америка?" },
+    { question: "Къде доставяте?" },
+    { question: "Колко време ще отнеме доставката на моята поръчка?" },
+    { question: "Как мога да променя или анулирам поръчката си?" },
+    { question: "Как мога да проследя поръчката си?" },
   ],
 };
 
 const FALLBACK_REVIEWS = {
   en: [
-    { name: 'Georgi', rating: 5, text: 'Loved the approach — clear, transparent, no surprises. The car matched my budget and they were always in touch.' },
-    { name: 'Dimitar', rating: 5, text: 'Bought a car from auction — they really know their stuff. Great value for money.' },
+    {
+      name: "Georgi",
+      rating: 5,
+      text: "Loved the approach — clear, transparent, no surprises. The car matched my budget and they were always in touch.",
+    },
+    {
+      name: "Dimitar",
+      rating: 5,
+      text: "Bought a car from auction — they really know their stuff. Great value for money.",
+    },
   ],
   bg: [
-    { name: 'Георги', rating: 5, text: 'Хареса ми подходът — ясен, прозрачен, без изненади. Колата отговаряше на бюджета и винаги бяха на разположение.' },
-    { name: 'Димитър', rating: 5, text: 'Купих автомобил от аукцион — наистина си разбират от работата. Страхотно съотношение цена/качество.' },
+    {
+      name: "Георги",
+      rating: 5,
+      text: "Хареса ми подходът — ясен, прозрачен, без изненади. Колата отговаряше на бюджета и винаги бяха на разположение.",
+    },
+    {
+      name: "Димитър",
+      rating: 5,
+      text: "Купих автомобил от аукцион — наистина си разбират от работата. Страхотно съотношение цена/качество.",
+    },
   ],
 };
 
 const I18N = {
   en: {
-    searchForCars: 'Search for cars',
-    fromAmericaAndKorea: 'from America and Korea',
-    searchForCarsFromAmericaKorea: 'Search for cars from America and Korea',
-    mostPopularBrands: 'Most popular brands',
-    otherBrandsPlus: 'Other brands +',
-    hideBrandsMinus: 'Hide brands −',
-    topVehiclesDeals: 'Top vehicles deals',
-    ofTheWeek: 'of the week',
-    thousandsOfListings: 'Thousands of listings.',
-    onlyBestMakeCut: 'Only the best make the cut.',
-    updatedWeekly: 'Updated weekly',
-    wantToDrive: 'Want to drive',
-    yourDreamCar: 'your dream car?',
-    fillOutApplication: 'Fill out the application and we will find the best offer for you',
-    contactUs: 'Contact us',
-    faqTitle: 'FAQ',
-    phoneNumber: 'Phone number:',
-    getInTouch: 'Get in touch',
-    address: 'Address:',
-    workingHours: 'Working hours',
-    workingHoursDefault: 'Mon - Fri, 10.00 - 19.00',
-    registrationAddress: 'Registration address:',
-    registrationAddressDefault: 'Republic of Bulgaria, 1415, Sofia, Cherni Vrah Blvd., 230',
-    socialMedia: 'Social media:',
-    joinOurGroupHottest: 'Join our group and get the hottest offers',
-    navCatalog: 'CATALOG',
-    navCalculator: 'CALCULATOR',
-    navAboutUs: 'ABOUT US',
-    navBlog: 'BLOG',
-    legalConditions: 'CONDITIONS',
-    legalPrivacy: 'PRIVACY POLICY',
-    legalCookies: 'COOKIES',
-    allRightReserved: 'All right reserved. BIBI CARS',
-    vehicleType: 'Vehicle type',
-    motorbike: 'Motorbike',
-    sedan: 'Sedan',
-    suv: 'SUV',
-    pickup: 'Pick-up',
-    van: 'Van',
+    searchForCars: "Search for cars",
+    fromAmericaAndKorea: "from America and Korea",
+    searchForCarsFromAmericaKorea: "Search for cars from America and Korea",
+    mostPopularBrands: "Most popular brands",
+    otherBrandsPlus: "Other brands +",
+    hideBrandsMinus: "Hide brands −",
+    topVehiclesDeals: "Top vehicles deals",
+    ofTheWeek: "of the week",
+    thousandsOfListings: "Thousands of listings.",
+    onlyBestMakeCut: "Only the best make the cut.",
+    updatedWeekly: "Updated weekly",
+    wantToDrive: "Want to drive",
+    yourDreamCar: "your dream car?",
+    fillOutApplication:
+      "Fill out the application and we will find the best offer for you",
+    contactUs: "Contact us",
+    faqTitle: "FAQ",
+    phoneNumber: "Phone number:",
+    getInTouch: "Get in touch",
+    address: "Address:",
+    workingHours: "Working hours",
+    workingHoursDefault: "Mon - Fri, 10.00 - 19.00",
+    registrationAddress: "Registration address:",
+    registrationAddressDefault:
+      "Republic of Bulgaria, 1415, Sofia, Cherni Vrah Blvd., 230",
+    socialMedia: "Social media:",
+    joinOurGroupHottest: "Join our group and get the hottest offers",
+    navCatalog: "CATALOG",
+    navCalculator: "CALCULATOR",
+    navAboutUs: "ABOUT US",
+    navBlog: "BLOG",
+    legalConditions: "CONDITIONS",
+    legalPrivacy: "PRIVACY POLICY",
+    legalCookies: "COOKIES",
+    allRightReserved: "All right reserved. BIBI CARS",
+    vehicleType: "Vehicle type",
+    motorbike: "Motorbike",
+    sedan: "Sedan",
+    suv: "SUV",
+    pickup: "Pick-up",
+    van: "Van",
     // Hero filter form
-    carSearch: 'Car Search',
-    brand: 'Brand',
-    model: 'Model',
-    year: 'Year',
-    allBrands: 'All brands',
-    allModels: 'All models',
-    fromShort: 'From',
-    toShort: 'To',
-    findCar: 'Find a car',
-    searchBrand: 'Search brand...',
-    noBrandsFound: 'No brands found',
+    carSearch: "Car Search",
+    brand: "Brand",
+    model: "Model",
+    year: "Year",
+    allBrands: "All brands",
+    allModels: "All models",
+    fromShort: "From",
+    toShort: "To",
+    findCar: "Find a car",
+    searchBrand: "Search brand...",
+    noBrandsFound: "No brands found",
     // Filter chips / pricing
-    priceRange: 'Price range',
-    proposalsLabel: 'Proposals',
+    priceRange: "Price range",
+    proposalsLabel: "Proposals",
     // Top deals
-    moreVehiclesPlus: 'More vehicles +',
-    lessVehiclesMinus: 'Less vehicles −',
-    moreDetails: 'More details',
-    tradingDate: 'Trading date',
-    purchasePriceLabel: 'Purchase price',
-    mileageLabel: 'Mileage',
-    engineLabel: 'Engine',
-    driveLabel: 'Drive',
-    estimatedFinal: 'Estimated final',
-    costToBulgaria: 'cost to Bulgaria:',
-    driveAllWheel: 'All-wheel',
-    enginePetrol: 'Petrol',
-    engineDiesel: 'Diesel',
-    engineHybrid: 'Hybrid',
-    engineElectric: 'Electric',
+    moreVehiclesPlus: "More vehicles +",
+    lessVehiclesMinus: "Less vehicles −",
+    moreDetails: "More details",
+    tradingDate: "Trading date",
+    purchasePriceLabel: "Purchase price",
+    mileageLabel: "Mileage",
+    engineLabel: "Engine",
+    driveLabel: "Drive",
+    estimatedFinal: "Estimated final",
+    costToBulgaria: "cost to Bulgaria:",
+    driveAllWheel: "All-wheel",
+    enginePetrol: "Petrol",
+    engineDiesel: "Diesel",
+    engineHybrid: "Hybrid",
+    engineElectric: "Electric",
     // Calculator block
-    calculateCarYourself: 'Calculate a car yourself',
-    withPriceGuarantee: 'with a price guarantee',
-    fromUsaKorea: 'From the USA and Korea',
-    searchByVin: 'Search by VIN or lot number',
-    calculate: 'Calculate',
-    allCatalogPlus: 'All catalog +',
+    calculateCarYourself: "Calculate a car yourself",
+    withPriceGuarantee: "with a price guarantee",
+    fromUsaKorea: "From the USA and Korea",
+    searchByVin: "Search by VIN or lot number",
+    calculate: "Calculate",
+    allCatalogPlus: "All catalog +",
     // Bracketed bilingual subtitles
-    ourClientsReceive: 'Our clients receive',
-    theBestService: 'the best service',
-    satisfiedClients: 'Satisfied clients',
-    areOurPriority: 'are our priority',
-    beforeAndAfter: 'Before and after',
-    ourClientsSay: 'Our clients say',
-    whatCustomersSay: 'What customers say',
-    whenTheyWorkWithUs: 'when they work with us',
-    googleReviews: 'Google reviews',
-    websiteDesignBy: 'Website design - O.la',
-    websiteMadeWith: 'Website made with Eva-X',
+    ourClientsReceive: "Our clients receive",
+    theBestService: "the best service",
+    satisfiedClients: "Satisfied clients",
+    areOurPriority: "are our priority",
+    beforeAndAfter: "Before and after",
+    ourClientsSay: "Our clients say",
+    whatCustomersSay: "What customers say",
+    whenTheyWorkWithUs: "when they work with us",
+    googleReviews: "Google reviews",
+    websiteDesignBy: "Website design - O.la",
+    websiteMadeWith: "Website made with Eva-X",
   },
   bg: {
-    searchForCars: 'Търсене на автомобили',
-    fromAmericaAndKorea: 'от Америка и Корея',
-    searchForCarsFromAmericaKorea: 'Търсене на автомобили от Америка и Корея',
-    mostPopularBrands: 'Най-популярни марки',
-    otherBrandsPlus: 'Други марки +',
-    hideBrandsMinus: 'Скрий марките −',
-    topVehiclesDeals: 'Топ автомобилни оферти',
-    ofTheWeek: 'на седмицата',
-    thousandsOfListings: 'Хиляди обяви.',
-    onlyBestMakeCut: 'Само най-добрите преминават.',
-    updatedWeekly: 'Актуализирано седмично',
-    wantToDrive: 'Искате да карате',
-    yourDreamCar: 'колата на мечтите си?',
-    fillOutApplication: 'Попълнете формуляра и ние ще намерим най-добрата оферта за вас',
-    contactUs: 'Свържете се с нас',
-    faqTitle: 'Често задавани въпроси',
-    phoneNumber: 'Телефонен номер:',
-    getInTouch: 'Свържете се с нас',
-    address: 'Адрес:',
-    workingHours: 'Работно време',
-    workingHoursDefault: 'Пон - Пет, 10.00 - 19.00',
-    registrationAddress: 'Адрес на регистрация:',
-    registrationAddressDefault: 'Република България, 1415, София, бул. Черни връх, 230',
-    socialMedia: 'Социални мрежи:',
-    joinOurGroupHottest: 'Присъединете се към нашата група и получете най-горещите оферти',
-    navCatalog: 'КАТАЛОГ',
-    navCalculator: 'КАЛКУЛАТОР',
-    navAboutUs: 'ЗА НАС',
-    navBlog: 'БЛОГ',
-    legalConditions: 'УСЛОВИЯ',
-    legalPrivacy: 'ПОЛИТИКА ЗА ПОВЕРИТЕЛНОСТ',
-    legalCookies: 'БИСКВИТКИ',
-    allRightReserved: 'Всички права запазени. BIBI CARS',
-    vehicleType: 'Тип автомобил',
-    motorbike: 'Мотоциклет',
-    sedan: 'Седан',
-    suv: 'Джип',
-    pickup: 'Пикап',
-    van: 'Ван',
+    searchForCars: "Търсене на автомобили",
+    fromAmericaAndKorea: "от Америка и Корея",
+    searchForCarsFromAmericaKorea: "Търсене на автомобили от Америка и Корея",
+    mostPopularBrands: "Най-популярни марки",
+    otherBrandsPlus: "Други марки +",
+    hideBrandsMinus: "Скрий марките −",
+    topVehiclesDeals: "Топ автомобилни оферти",
+    ofTheWeek: "на седмицата",
+    thousandsOfListings: "Хиляди обяви.",
+    onlyBestMakeCut: "Само най-добрите преминават.",
+    updatedWeekly: "Актуализирано седмично",
+    wantToDrive: "Искате да карате",
+    yourDreamCar: "колата на мечтите си?",
+    fillOutApplication:
+      "Попълнете формуляра и ние ще намерим най-добрата оферта за вас",
+    contactUs: "Свържете се с нас",
+    faqTitle: "Често задавани въпроси",
+    phoneNumber: "Телефонен номер:",
+    getInTouch: "Свържете се с нас",
+    address: "Адрес:",
+    workingHours: "Работно време",
+    workingHoursDefault: "Пон - Пет, 10.00 - 19.00",
+    registrationAddress: "Адрес на регистрация:",
+    registrationAddressDefault:
+      "Република България, 1415, София, бул. Черни връх, 230",
+    socialMedia: "Социални мрежи:",
+    joinOurGroupHottest:
+      "Присъединете се към нашата група и получете най-горещите оферти",
+    navCatalog: "КАТАЛОГ",
+    navCalculator: "КАЛКУЛАТОР",
+    navAboutUs: "ЗА НАС",
+    navBlog: "БЛОГ",
+    legalConditions: "УСЛОВИЯ",
+    legalPrivacy: "ПОЛИТИКА ЗА ПОВЕРИТЕЛНОСТ",
+    legalCookies: "БИСКВИТКИ",
+    allRightReserved: "Всички права запазени. BIBI CARS",
+    vehicleType: "Тип автомобил",
+    motorbike: "Мотоциклет",
+    sedan: "Седан",
+    suv: "Джип",
+    pickup: "Пикап",
+    van: "Ван",
     // Hero filter form
-    carSearch: 'Търсене на автомобил',
-    brand: 'Марка',
-    model: 'Модел',
-    year: 'Година',
-    allBrands: 'Всички марки',
-    allModels: 'Всички модели',
-    fromShort: 'От',
-    toShort: 'До',
-    findCar: 'Намери автомобил',
-    searchBrand: 'Търси марка...',
-    noBrandsFound: 'Няма намерени марки',
+    carSearch: "Търсене на автомобил",
+    brand: "Марка",
+    model: "Модел",
+    year: "Година",
+    allBrands: "Всички марки",
+    allModels: "Всички модели",
+    fromShort: "От",
+    toShort: "До",
+    findCar: "Намери автомобил",
+    searchBrand: "Търси марка...",
+    noBrandsFound: "Няма намерени марки",
     // Filter chips / pricing
-    priceRange: 'Ценови диапазон',
-    proposalsLabel: 'Оферти',
+    priceRange: "Ценови диапазон",
+    proposalsLabel: "Оферти",
     // Top deals
-    moreVehiclesPlus: 'Още автомобили +',
-    lessVehiclesMinus: 'По-малко автомобили −',
-    moreDetails: 'Повече детайли',
-    tradingDate: 'Дата на търг',
-    purchasePriceLabel: 'Покупна цена',
-    mileageLabel: 'Пробег',
-    engineLabel: 'Двигател',
-    driveLabel: 'Задвижване',
-    estimatedFinal: 'Прогнозна крайна',
-    costToBulgaria: 'цена до България:',
-    driveAllWheel: 'Всички колела',
-    enginePetrol: 'Бензин',
-    engineDiesel: 'Дизел',
-    engineHybrid: 'Хибрид',
-    engineElectric: 'Електрически',
+    moreVehiclesPlus: "Още автомобили +",
+    lessVehiclesMinus: "По-малко автомобили −",
+    moreDetails: "Повече детайли",
+    tradingDate: "Дата на търг",
+    purchasePriceLabel: "Покупна цена",
+    mileageLabel: "Пробег",
+    engineLabel: "Двигател",
+    driveLabel: "Задвижване",
+    estimatedFinal: "Прогнозна крайна",
+    costToBulgaria: "цена до България:",
+    driveAllWheel: "Всички колела",
+    enginePetrol: "Бензин",
+    engineDiesel: "Дизел",
+    engineHybrid: "Хибрид",
+    engineElectric: "Електрически",
     // Calculator block
-    calculateCarYourself: 'Изчислете автомобила сами',
-    withPriceGuarantee: 'с гарантирана цена',
-    fromUsaKorea: 'От САЩ и Корея',
-    searchByVin: 'Търсене по VIN или лот номер',
-    calculate: 'Изчисли',
-    allCatalogPlus: 'Целият каталог +',
+    calculateCarYourself: "Изчислете автомобила сами",
+    withPriceGuarantee: "с гарантирана цена",
+    fromUsaKorea: "От САЩ и Корея",
+    searchByVin: "Търсене по VIN или лот номер",
+    calculate: "Изчисли",
+    allCatalogPlus: "Целият каталог +",
     // Bracketed bilingual subtitles
-    ourClientsReceive: 'Нашите клиенти получават',
-    theBestService: 'най-добрата услуга',
-    satisfiedClients: 'Доволни клиенти',
-    areOurPriority: 'са наш приоритет',
-    beforeAndAfter: 'Преди и след',
-    ourClientsSay: 'Какво казват нашите клиенти',
-    whatCustomersSay: 'Какво казват клиентите',
-    whenTheyWorkWithUs: 'когато работят с нас',
-    googleReviews: 'отзива в Google',
-    websiteDesignBy: 'Дизайн на сайта - O.la',
-    websiteMadeWith: 'Сайтът е създаден с Eva-X',
+    ourClientsReceive: "Нашите клиенти получават",
+    theBestService: "най-добрата услуга",
+    satisfiedClients: "Доволни клиенти",
+    areOurPriority: "са наш приоритет",
+    beforeAndAfter: "Преди и след",
+    ourClientsSay: "Какво казват нашите клиенти",
+    whatCustomersSay: "Какво казват клиентите",
+    whenTheyWorkWithUs: "когато работят с нас",
+    googleReviews: "отзива в Google",
+    websiteDesignBy: "Дизайн на сайта - O.la",
+    websiteMadeWith: "Сайтът е създаден с Eva-X",
   },
 };
 
-const fmtLang = (val, lang = 'en') => {
-  if (val == null) return '';
-  if (typeof val === 'string') return val;
-  return val[lang] || val.en || val.bg || '';
+const fmtLang = (val, lang = "en") => {
+  if (val == null) return "";
+  if (typeof val === "string") return val;
+  return val[lang] || val.en || val.bg || "";
 };
 
 /**
@@ -287,7 +308,7 @@ const fmtLang = (val, lang = 'en') => {
  * markers like "V8 Bi-Turbo", "Triple-Motor EV" stay as-is).
  */
 function translateEngine(value, t) {
-  if (!value || !t) return value || '';
+  if (!value || !t) return value || "";
   // Replace whole words case-insensitively
   return value
     .replace(/\bPatrol\b/gi, t.enginePetrol)
@@ -298,7 +319,7 @@ function translateEngine(value, t) {
     .replace(/\bElectric\b/gi, t.engineElectric);
 }
 function translateDrive(value, t) {
-  if (!value || !t) return value || '';
+  if (!value || !t) return value || "";
   return value
     .replace(/\bAll-wheel\b/gi, t.driveAllWheel)
     .replace(/\bAll wheel\b/gi, t.driveAllWheel);
@@ -308,10 +329,10 @@ export default function MobileHomePage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [siteInfo, setSiteInfo] = useState(null);
   const [openFaq, setOpenFaq] = useState(null);
-  const [filterBrand, setFilterBrand] = useState('');
-  const [filterModel, setFilterModel] = useState('');
-  const [yearFrom, setYearFrom] = useState('');
-  const [yearTo, setYearTo] = useState('');
+  const [filterBrand, setFilterBrand] = useState("");
+  const [filterModel, setFilterModel] = useState("");
+  const [yearFrom, setYearFrom] = useState("");
+  const [yearTo, setYearTo] = useState("");
   const [reviewIdx, setReviewIdx] = useState(0);
   const [beforeAfterIdx, setBeforeAfterIdx] = useState(0);
   const { lang, changeLang } = useLang();
@@ -332,37 +353,49 @@ export default function MobileHomePage() {
   }, []);
 
   // Derived
-  const phones = siteInfo?.header?.phones || siteInfo?.footer?.contacts?.phones || FALLBACK_PHONES;
-  const langKey = (lang || 'en').toLowerCase().startsWith('bg') ? 'bg' : 'en';
+  const phones =
+    siteInfo?.header?.phones ||
+    siteInfo?.footer?.contacts?.phones ||
+    FALLBACK_PHONES;
+  const langKey = (lang || "en").toLowerCase().startsWith("bg") ? "bg" : "en";
   // Localized address fallback — if admin hasn't supplied a BG list, fall
   // back to the canonical BG translation so the menu drawer never shows
   // mixed-locale content.
   const _ctxContacts = siteInfo?.footer?.contacts || {};
   const _langAddrList = _ctxContacts[`addresses_${langKey}`];
   const _plainAddrList = _ctxContacts.addresses;
-  const addresses = (Array.isArray(_langAddrList) && _langAddrList.length > 0)
-    ? _langAddrList
-    : (langKey === 'bg'
+  const addresses =
+    Array.isArray(_langAddrList) && _langAddrList.length > 0
+      ? _langAddrList
+      : langKey === "bg"
         ? [
-            'България, София, Драгалевци, бул. Витоша № 230',
-            'България, София, бул. България № 81',
+            "България, София, Драгалевци, бул. Витоша № 230",
+            "България, София, бул. България № 81",
           ]
-        : (Array.isArray(_plainAddrList) && _plainAddrList.length > 0
-            ? _plainAddrList
-            : [
-                'Bulgaria, Sofia, Dragalevtsi, Vitosha Blvd. No. 230',
-                'Bulgaria, Sofia, Bulgaria Blvd., No. 81',
-              ]));
+        : Array.isArray(_plainAddrList) && _plainAddrList.length > 0
+          ? _plainAddrList
+          : [
+              "Bulgaria, Sofia, Dragalevtsi, Vitosha Blvd. No. 230",
+              "Bulgaria, Sofia, Bulgaria Blvd., No. 81",
+            ];
   const socials = siteInfo?.footer?.socials || {};
   const t = I18N[langKey] || I18N.en;
   const fallbackHero = FALLBACK_HERO[langKey] || FALLBACK_HERO.en;
   const fallbackFaq = FALLBACK_FAQ[langKey] || FALLBACK_FAQ.en;
   const fallbackReviews = FALLBACK_REVIEWS[langKey] || FALLBACK_REVIEWS.en;
   const hero = siteInfo?.hero || {};
-  const heroEyebrow = fmtLang(hero[`eyebrow_${langKey}`] || hero.eyebrow, langKey) || fallbackHero.eyebrow;
-  const heroL1 = fmtLang(hero[`title_line1_${langKey}`] || hero.title_line1, langKey) || fallbackHero.title_line1;
-  const heroL2 = fmtLang(hero[`title_line2_${langKey}`] || hero.title_line2, langKey) || fallbackHero.title_line2;
-  const heroL3 = fmtLang(hero[`title_line3_${langKey}`] || hero.title_line3, langKey) || fallbackHero.title_line3;
+  const heroEyebrow =
+    fmtLang(hero[`eyebrow_${langKey}`] || hero.eyebrow, langKey) ||
+    fallbackHero.eyebrow;
+  const heroL1 =
+    fmtLang(hero[`title_line1_${langKey}`] || hero.title_line1, langKey) ||
+    fallbackHero.title_line1;
+  const heroL2 =
+    fmtLang(hero[`title_line2_${langKey}`] || hero.title_line2, langKey) ||
+    fallbackHero.title_line2;
+  const heroL3 =
+    fmtLang(hero[`title_line3_${langKey}`] || hero.title_line3, langKey) ||
+    fallbackHero.title_line3;
   // Hero image priority on mobile:
   //   1) hero.image_url_mobile  (admin-uploaded mobile-format variant)
   //   2) hero.image_url         (only when admin opted into web/mobile sync)
@@ -371,57 +404,75 @@ export default function MobileHomePage() {
     const m = hero.image_url_mobile;
     if (m) return m;
     if (hero.sync_mobile_with_web && hero.image_url) return hero.image_url;
-    return '/mobile/image-103@2x.png';
+    return "/mobile/image-103@2x.png";
   })();
-  const kpi1 = fmtLang(hero[`kpi1_${langKey}`] || hero.kpi1, langKey) || fallbackHero.kpi1;
-  const kpi2 = fmtLang(hero[`kpi2_${langKey}`] || hero.kpi2, langKey) || fallbackHero.kpi2;
-  const kpi3 = fmtLang(hero[`kpi3_${langKey}`] || hero.kpi3, langKey) || fallbackHero.kpi3;
+  const kpi1 =
+    fmtLang(hero[`kpi1_${langKey}`] || hero.kpi1, langKey) || fallbackHero.kpi1;
+  const kpi2 =
+    fmtLang(hero[`kpi2_${langKey}`] || hero.kpi2, langKey) || fallbackHero.kpi2;
+  const kpi3 =
+    fmtLang(hero[`kpi3_${langKey}`] || hero.kpi3, langKey) || fallbackHero.kpi3;
 
   // FAQ
   const faqEnabled = siteInfo?.faq?.enabled !== false;
-  const faqItems = (siteInfo?.faq?.items || []).filter((i) => i?.enabled !== false);
+  const faqItems = (siteInfo?.faq?.items || []).filter(
+    (i) => i?.enabled !== false,
+  );
   const faqList = faqItems.length
     ? faqItems.map((it, i) => ({
         id: it.id || `faq-${i}`,
         question: fmtLang(it[`question_${langKey}`] || it.question, langKey),
         answer: fmtLang(it[`answer_${langKey}`] || it.answer, langKey),
       }))
-    : fallbackFaq.map((f, i) => ({ id: `f-${i}`, question: f.question, answer: '' }));
+    : fallbackFaq.map((f, i) => ({
+        id: `f-${i}`,
+        question: f.question,
+        answer: "",
+      }));
 
   // Reviews
   const reviewsEnabled = siteInfo?.reviews?.enabled !== false;
-  const reviewItems = (siteInfo?.reviews?.items || []).filter((r) => r?.enabled !== false);
+  const reviewItems = (siteInfo?.reviews?.items || []).filter(
+    (r) => r?.enabled !== false,
+  );
   const reviews = reviewItems.length
     ? reviewItems.map((r) => ({
         // Prefer locale-specific name (e.g. cyrillic "Георги" on BG) so the
         // review card matches the surrounding language. Falls back to the
         // canonical EN-spelled `name` when no localised variant exists.
-        name: (langKey === 'bg' ? (r.name_bg || r.name) : (r.name_en || r.name)) || '',
+        name:
+          (langKey === "bg" ? r.name_bg || r.name : r.name_en || r.name) || "",
         rating: r.rating || 5,
         text: fmtLang(r[`text_${langKey}`] || r.text, langKey),
-        image_url: r.image_url || '',
+        image_url: r.image_url || "",
       }))
     : fallbackReviews;
 
   // Before & after
   const baEnabled = siteInfo?.before_after?.enabled !== false;
-  const baItems = (siteInfo?.before_after?.items || []).filter((i) => i?.enabled !== false);
+  const baItems = (siteInfo?.before_after?.items || []).filter(
+    (i) => i?.enabled !== false,
+  );
 
   const googleRating = siteInfo?.reviews?.google_rating ?? 4.9;
   const googleReviewsCount = siteInfo?.reviews?.google_reviews_count ?? 31;
 
   const viberCommunity = siteInfo?.footer?.viber_community || {};
-  const viberLabel = fmtLang(viberCommunity[`label_${langKey}`] || viberCommunity.label, langKey) || t.joinOurGroupHottest;
-  const viberUrl = viberCommunity.url || 'viber://chat?number=%2B359875313158';
+  const viberLabel =
+    fmtLang(
+      viberCommunity[`label_${langKey}`] || viberCommunity.label,
+      langKey,
+    ) || t.joinOurGroupHottest;
+  const viberUrl = viberCommunity.url || "viber://chat?number=%2B359875313158";
 
   // Helpers
   const onFindCar = () => {
     const params = new URLSearchParams();
-    if (filterBrand) params.set('make', filterBrand);
-    if (filterModel) params.set('model', filterModel);
-    if (yearFrom) params.set('year_min', yearFrom);
-    if (yearTo) params.set('year_max', yearTo);
-    window.location.href = `/catalog${params.toString() ? `?${params}` : ''}`;
+    if (filterBrand) params.set("make", filterBrand);
+    if (filterModel) params.set("model", filterModel);
+    if (yearFrom) params.set("year_min", yearFrom);
+    if (yearTo) params.set("year_max", yearTo);
+    window.location.href = `/catalog${params.toString() ? `?${params}` : ""}`;
   };
 
   return (
@@ -429,9 +480,9 @@ export default function MobileHomePage() {
       className="bg-black text-white min-h-screen"
       style={{
         fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
-        overflowX: 'hidden',
-        width: '100%',
-        maxWidth: '100vw',
+        overflowX: "hidden",
+        width: "100%",
+        maxWidth: "100vw",
       }}
     >
       <MobileHeader phones={phones} onMenuOpen={() => setMenuOpen(true)} />
@@ -454,9 +505,9 @@ export default function MobileHomePage() {
             fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
             fontWeight: 500,
             fontSize: 12,
-            lineHeight: '12px',
-            letterSpacing: '0.18em',
-            width: 'fit-content',
+            lineHeight: "12px",
+            letterSpacing: "0.18em",
+            width: "fit-content",
             height: 12,
           }}
         >
@@ -473,36 +524,36 @@ export default function MobileHomePage() {
               fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
               fontWeight: 700,
               fontSize: 40,
-              lineHeight: '40px',
-              letterSpacing: '0',
+              lineHeight: "40px",
+              letterSpacing: "0",
             }}
           />
           <AnimatedHeading
             as="div"
             text={heroL2}
             className="uppercase text-white"
-            baseDelay={(heroL1 || '').replace(/\s/g, '').length * 28}
+            baseDelay={(heroL1 || "").replace(/\s/g, "").length * 28}
             style={{
               fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
               fontWeight: 700,
               fontSize: 32,
-              lineHeight: '32px',
+              lineHeight: "32px",
               marginTop: 4,
-              letterSpacing: '0',
+              letterSpacing: "0",
             }}
           />
           <AnimatedHeading
             as="div"
             text={heroL3}
             className="uppercase text-[#FEAE00]"
-            baseDelay={(heroL1 + heroL2 || '').replace(/\s/g, '').length * 28}
+            baseDelay={(heroL1 + heroL2 || "").replace(/\s/g, "").length * 28}
             style={{
               fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
               fontWeight: 700,
               fontSize: 40,
-              lineHeight: '40px',
+              lineHeight: "40px",
               marginTop: 4,
-              letterSpacing: '0',
+              letterSpacing: "0",
             }}
           />
         </div>
@@ -512,17 +563,17 @@ export default function MobileHomePage() {
         <div
           className="mt-6 px-4"
           style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr 1fr',
-            alignItems: 'center',
-            justifyItems: 'center',
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr",
+            alignItems: "center",
+            justifyItems: "center",
             gap: 8,
           }}
         >
           {[
-            { val: kpi1, align: 'flex-start', roll: true },
-            { val: kpi2, align: 'center' },
-            { val: kpi3, align: 'flex-end' },
+            { val: kpi1, align: "flex-start", roll: true },
+            { val: kpi2, align: "center" },
+            { val: kpi3, align: "flex-end" },
           ].map((k, i) => (
             <div
               key={i}
@@ -532,18 +583,18 @@ export default function MobileHomePage() {
                 fontWeight: 600,
                 // Adaptive font size — shrinks slightly on very narrow screens
                 // and for long localized strings (BG/UK can be ~2x longer than EN).
-                fontSize: 'clamp(9.5px, 2.6vw, 11px)',
+                fontSize: "clamp(9.5px, 2.6vw, 11px)",
                 lineHeight: 1.25,
                 letterSpacing: 0,
-                textTransform: 'none',
-                width: '100%',
+                textTransform: "none",
+                width: "100%",
                 minWidth: 0,
                 // Allow soft wrap inside each cell instead of overflowing — keeps
                 // grid layout intact when localized text is longer than EN.
-                whiteSpace: 'normal',
-                overflowWrap: 'anywhere',
-                wordBreak: 'normal',
-                textAlign: i === 0 ? 'left' : i === 1 ? 'center' : 'right',
+                whiteSpace: "normal",
+                overflowWrap: "anywhere",
+                wordBreak: "normal",
+                textAlign: i === 0 ? "left" : i === 1 ? "center" : "right",
               }}
             >
               {k.roll ? renderKpiWithRolling(k.val) : k.val}
@@ -552,27 +603,34 @@ export default function MobileHomePage() {
         </div>
 
         {/* Hero image — FULL WIDTH within the viewport (no horizontal padding). */}
-        <div className="mt-7 w-full" style={{ lineHeight: 0, overflow: 'hidden' }}>
+        <div
+          className="mt-7 w-full"
+          style={{ lineHeight: 0, overflow: "hidden" }}
+        >
           <img
-            src={heroImageUrl?.startsWith('/') ? heroImageUrl : optimizeImage(heroImageUrl, ImageSize.hero)}
+            src={
+              heroImageUrl?.startsWith("/")
+                ? heroImageUrl
+                : optimizeImage(heroImageUrl, ImageSize.hero)
+            }
             alt=""
             style={{
-              width: '100%',
-              maxWidth: '100%',
-              aspectRatio: '361 / 326',
-              objectFit: 'cover',
-              display: 'block',
+              width: "100%",
+              maxWidth: "100%",
+              aspectRatio: "361 / 326",
+              objectFit: "cover",
+              display: "block",
               border: 0,
               outline: 0,
-              clipPath: 'inset(0 0 5px 0)',
+              clipPath: "inset(0 0 5px 0)",
               marginBottom: -5,
-              backgroundColor: '#000',
+              backgroundColor: "#000",
             }}
             loading="eager"
             decoding="async"
             fetchPriority="high"
             onError={(e) => {
-              e.currentTarget.src = '/mobile/image-103@2x.png';
+              e.currentTarget.src = "/mobile/image-103@2x.png";
             }}
           />
         </div>
@@ -710,11 +768,11 @@ export default function MobileHomePage() {
         <div
           data-testid="mobile-dream-car-cta"
           style={{
-            position: 'relative',
-            width: '100%',
-            aspectRatio: '360 / 583',
-            overflow: 'hidden',
-            background: '#000',
+            position: "relative",
+            width: "100%",
+            aspectRatio: "360 / 583",
+            overflow: "hidden",
+            background: "#000",
           }}
         >
           {/* Background photo — sits in the top 334 px of the 583 px card */}
@@ -722,17 +780,19 @@ export default function MobileHomePage() {
             src="/mobile/young-woman-with-salesman-carshowroom-1@2x.png"
             alt=""
             style={{
-              position: 'absolute',
+              position: "absolute",
               top: 0,
               left: 0,
-              width: '100%',
+              width: "100%",
               // 334 / 583 of the card height → reproduces the original 360 × 334 photo
-              height: 'calc(100% * (334 / 583))',
-              objectFit: 'cover',
-              display: 'block',
+              height: "calc(100% * (334 / 583))",
+              objectFit: "cover",
+              display: "block",
             }}
             loading="lazy"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
           />
 
           {/* BIBI logo — 77 × 26.25, top 203 of a 583‑px frame */}
@@ -741,12 +801,12 @@ export default function MobileHomePage() {
             alt="BIBI"
             data-testid="mobile-dream-car-cta-logo"
             style={{
-              position: 'absolute',
-              top: 'calc(100% * (203 / 583))',
-              left: 'calc(100% * (139 / 360))',
-              width: 'calc(100% * (77 / 360))',
-              height: 'auto',
-              aspectRatio: '77 / 26.25',
+              position: "absolute",
+              top: "calc(100% * (203 / 583))",
+              left: "calc(100% * (139 / 360))",
+              width: "calc(100% * (77 / 360))",
+              height: "auto",
+              aspectRatio: "77 / 26.25",
               zIndex: 2,
             }}
           />
@@ -757,17 +817,21 @@ export default function MobileHomePage() {
           <h2
             data-testid="mobile-dream-car-cta-title"
             style={{
-              position: 'absolute',
-              top: 'calc(100% * (263 / 583))',
-              left: 'calc(100% * (56 / 360))',          /* slightly wider gutter for BG */
-              right: 'calc(100% * (49 / 360))',
+              position: "absolute",
+              top: "calc(100% * (263 / 583))",
+              left: "calc(100% * (56 / 360))" /* slightly wider gutter for BG */,
+              right: "calc(100% * (49 / 360))",
               margin: 0,
-              fontFamily: "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
+              fontFamily:
+                "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
               fontWeight: 700,
-              fontSize: lang === 'bg' ? 19 : 24,         /* "колата на мечтите си?" is 20% wider than "your dream car?" — drop one size step in BG */
-              lineHeight: lang === 'bg' ? '24px' : '24px',
-              textTransform: 'uppercase',
-              textAlign: 'center',
+              fontSize:
+                lang === "bg"
+                  ? 19
+                  : 24 /* "колата на мечтите си?" is 20% wider than "your dream car?" — drop one size step in BG */,
+              lineHeight: lang === "bg" ? "24px" : "24px",
+              textTransform: "uppercase",
+              textAlign: "center",
               letterSpacing: 0,
               zIndex: 2,
             }}
@@ -775,13 +839,21 @@ export default function MobileHomePage() {
             <AnimatedHeading
               as="span"
               text={t.wantToDrive}
-              style={{ color: '#FEAE00', display: 'block', whiteSpace: 'nowrap' }}
+              style={{
+                color: "#FEAE00",
+                display: "block",
+                whiteSpace: "nowrap",
+              }}
             />
             <AnimatedHeading
               as="span"
               text={t.yourDreamCar}
-              baseDelay={(t.wantToDrive || '').replace(/\s/g, '').length * 28}
-              style={{ color: '#FFFFFF', display: 'block', whiteSpace: 'nowrap' }}
+              baseDelay={(t.wantToDrive || "").replace(/\s/g, "").length * 28}
+              style={{
+                color: "#FFFFFF",
+                display: "block",
+                whiteSpace: "nowrap",
+              }}
             />
           </h2>
 
@@ -792,18 +864,19 @@ export default function MobileHomePage() {
           <p
             data-testid="mobile-dream-car-cta-subtitle"
             style={{
-              position: 'absolute',
-              top: 'calc(100% * (398 / 583))',
-              left: 'calc(100% * (18 / 360))',
-              right: 'calc(100% * (18 / 360))',
+              position: "absolute",
+              top: "calc(100% * (398 / 583))",
+              left: "calc(100% * (18 / 360))",
+              right: "calc(100% * (18 / 360))",
               margin: 0,
-              fontFamily: "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
+              fontFamily:
+                "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
               fontWeight: 700,
               fontSize: 16,
-              lineHeight: '20px',
+              lineHeight: "20px",
               letterSpacing: 0,
-              color: '#FFFFFF',
-              textAlign: 'center',
+              color: "#FFFFFF",
+              textAlign: "center",
               zIndex: 2,
             }}
           >
@@ -817,40 +890,45 @@ export default function MobileHomePage() {
           <button
             type="button"
             onClick={() => {
-              if (typeof openGetInTouch === 'function') openGetInTouch();
-              else window.location.href = '/contacts#reach-out';
+              if (typeof openGetInTouch === "function") openGetInTouch();
+              else window.location.href = "/contacts#reach-out";
             }}
             data-testid="mobile-dream-car-cta-button"
             style={{
-              position: 'absolute',
-              top: 'calc(100% * (477 / 583))',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: 'calc(100% * (294 / 360))',
+              position: "absolute",
+              top: "calc(100% * (477 / 583))",
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "calc(100% * (294 / 360))",
               maxWidth: 294,
               height: 45,
-              background: '#FEAE00',
-              color: '#000',
-              border: 'none',
+              background: "#FEAE00",
+              color: "#000",
+              border: "none",
               borderRadius: 4,
-              fontFamily: "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
+              fontFamily:
+                "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
               fontWeight: 500,
               fontSize: 14,
-              lineHeight: '14px',
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              textAlign: 'center',
-              textDecoration: 'none',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              lineHeight: "14px",
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              textAlign: "center",
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
               zIndex: 2,
-              boxSizing: 'border-box',
-              transition: 'filter 150ms ease',
-              cursor: 'pointer',
+              boxSizing: "border-box",
+              transition: "filter 150ms ease",
+              cursor: "pointer",
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.filter = 'brightness(1.1)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.filter = 'none'; }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.filter = "brightness(1.1)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.filter = "none";
+            }}
           >
             {t.contactUs}
           </button>
@@ -873,11 +951,11 @@ export default function MobileHomePage() {
         <section
           data-testid="mobile-faq"
           style={{
-            position: 'relative',
-            width: '100%',
-            background: '#000',
-            color: '#fff',
-            overflow: 'visible',
+            position: "relative",
+            width: "100%",
+            background: "#000",
+            color: "#fff",
+            overflow: "visible",
           }}
         >
           {/* FAQ title — centred horizontally, top 46 */}
@@ -886,19 +964,20 @@ export default function MobileHomePage() {
             data-testid="mobile-faq-title"
             text={t.faqTitle}
             style={{
-              position: 'absolute',
+              position: "absolute",
               top: 46,
               left: 0,
               right: 0,
               margin: 0,
-              textAlign: 'center',
-              fontFamily: "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
+              textAlign: "center",
+              fontFamily:
+                "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
               fontWeight: 700,
               fontSize: 24,
-              lineHeight: '24px',
+              lineHeight: "24px",
               letterSpacing: 0,
-              color: '#FEAE00',
-              textTransform: 'uppercase',
+              color: "#FEAE00",
+              textTransform: "uppercase",
             }}
           />
 
@@ -908,15 +987,15 @@ export default function MobileHomePage() {
           <div
             data-testid="mobile-faq-list"
             style={{
-              position: 'relative',
+              position: "relative",
               paddingTop: 124,
-              paddingLeft: 12,                    /* user spec: 12 L/R on welcome mobile */
+              paddingLeft: 12 /* user spec: 12 L/R on welcome mobile */,
               paddingRight: 12,
               paddingBottom: 69,
-              boxSizing: 'border-box',
+              boxSizing: "border-box",
             }}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 29 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 29 }}>
               {faqList.map((it, i) => {
                 const isOpen = openFaq === it.id;
                 return (
@@ -926,28 +1005,29 @@ export default function MobileHomePage() {
                       onClick={() => setOpenFaq(isOpen ? null : it.id)}
                       data-testid={`mobile-faq-toggle-${i}`}
                       style={{
-                        width: '100%',
-                        background: 'transparent',
-                        border: 'none',
+                        width: "100%",
+                        background: "transparent",
+                        border: "none",
                         padding: 0,
                         margin: 0,
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
+                        textAlign: "left",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "flex-start",
+                        justifyContent: "space-between",
                         gap: 12,
                       }}
                     >
                       <span
                         style={{
-                          flex: '1 1 auto',
-                          fontFamily: "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
+                          flex: "1 1 auto",
+                          fontFamily:
+                            "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
                           fontWeight: 500,
                           fontSize: 14,
-                          lineHeight: '17px',
+                          lineHeight: "17px",
                           letterSpacing: 0,
-                          color: '#FFFFFF',
+                          color: "#FFFFFF",
                         }}
                       >
                         {i + 1}/ {it.question}
@@ -955,20 +1035,31 @@ export default function MobileHomePage() {
                       <span
                         aria-hidden
                         style={{
-                          flex: '0 0 auto',
+                          flex: "0 0 auto",
                           width: 18,
                           height: 18,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#FFFFFF',
-                          transform: isOpen ? 'rotate(45deg)' : 'none',
-                          transition: 'transform 200ms ease',
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#FFFFFF",
+                          transform: isOpen ? "rotate(45deg)" : "none",
+                          transition: "transform 200ms ease",
                           marginTop: 0,
                         }}
                       >
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                          <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 14 14"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M7 1v12M1 7h12"
+                            stroke="currentColor"
+                            strokeWidth="1.4"
+                            strokeLinecap="round"
+                          />
                         </svg>
                       </span>
                     </button>
@@ -977,11 +1068,12 @@ export default function MobileHomePage() {
                         style={{
                           marginTop: 10,
                           paddingRight: 30,
-                          fontFamily: "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
+                          fontFamily:
+                            "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
                           fontWeight: 400,
                           fontSize: 13,
-                          lineHeight: '20px',
-                          color: 'rgba(255,255,255,0.8)',
+                          lineHeight: "20px",
+                          color: "rgba(255,255,255,0.8)",
                         }}
                         dangerouslySetInnerHTML={{ __html: it.answer }}
                       />
@@ -1008,13 +1100,14 @@ export default function MobileHomePage() {
       <footer
         data-testid="mobile-footer"
         style={{
-          position: 'relative',
-          width: '100%',
+          position: "relative",
+          width: "100%",
           height: 1219,
-          background: '#000',
-          color: '#FFFFFF',
-          fontFamily: "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
-          overflow: 'hidden',
+          background: "#000",
+          color: "#FFFFFF",
+          fontFamily:
+            "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
+          overflow: "hidden",
         }}
       >
         {/* 1 — LOGO BIBI — 133 × 46, left 16, top 53 */}
@@ -1023,12 +1116,12 @@ export default function MobileHomePage() {
           alt="BIBI Cars"
           data-testid="footer-logo"
           style={{
-            position: 'absolute',
+            position: "absolute",
             left: 16,
             top: 53,
             width: 133,
             height: 46,
-            objectFit: 'contain',
+            objectFit: "contain",
           }}
         />
 
@@ -1039,36 +1132,43 @@ export default function MobileHomePage() {
         <div
           data-testid="footer-phone-block"
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: 141,
             left: 0,
             right: 0,
-            textAlign: 'center',
+            textAlign: "center",
           }}
         >
           <div
             style={{
               fontWeight: 500,
               fontSize: 12,
-              lineHeight: '14px',
-              color: '#FFFFFF',
+              lineHeight: "14px",
+              color: "#FFFFFF",
               letterSpacing: 0,
             }}
           >
             {t.phoneNumber}
           </div>
-          <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div
+            style={{
+              marginTop: 16,
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+            }}
+          >
             {phones.map((p, i) => (
               <a
                 key={i}
-                href={`tel:${p.replace(/\s+/g, '')}`}
+                href={`tel:${p.replace(/\s+/g, "")}`}
                 data-testid={`footer-phone-${i}`}
                 style={{
                   fontWeight: 500,
                   fontSize: 18,
-                  lineHeight: '22px',
-                  color: '#FEAE00',
-                  textDecoration: 'none',
+                  lineHeight: "22px",
+                  color: "#FEAE00",
+                  textDecoration: "none",
                 }}
               >
                 {p}
@@ -1085,31 +1185,38 @@ export default function MobileHomePage() {
           data-testid="footer-get-in-touch"
           onClick={() => openGetInTouch()}
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: 267,
             left: 16,
             right: 16,
-            width: 'auto',
+            width: "auto",
             height: 45,
-            background: 'transparent',
-            color: '#FEAE00',
-            border: '1px solid #FEAE00',
+            background: "transparent",
+            color: "#FEAE00",
+            border: "1px solid #FEAE00",
             borderRadius: 4,
-            padding: '10px 32px',
-            boxSizing: 'border-box',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontFamily: "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
+            padding: "10px 32px",
+            boxSizing: "border-box",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontFamily:
+              "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
             fontWeight: 500,
             fontSize: 14,
-            lineHeight: '17px',
-            letterSpacing: '0.02em',
-            cursor: 'pointer',
-            transition: 'background 150ms ease, color 150ms ease',
+            lineHeight: "17px",
+            letterSpacing: "0.02em",
+            cursor: "pointer",
+            transition: "background 150ms ease, color 150ms ease",
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#FEAE00'; e.currentTarget.style.color = '#000'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#FEAE00'; }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "#FEAE00";
+            e.currentTarget.style.color = "#000";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "transparent";
+            e.currentTarget.style.color = "#FEAE00";
+          }}
         >
           {t.getInTouch}
         </button>
@@ -1120,7 +1227,7 @@ export default function MobileHomePage() {
         <div
           data-testid="footer-address-block"
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: 386.6,
             left: 16,
             right: 16,
@@ -1130,8 +1237,8 @@ export default function MobileHomePage() {
             style={{
               fontWeight: 500,
               fontSize: 12,
-              lineHeight: '14px',
-              color: '#FFFFFF',
+              lineHeight: "14px",
+              color: "#FFFFFF",
             }}
           >
             {t.address}
@@ -1141,12 +1248,14 @@ export default function MobileHomePage() {
               marginTop: 16,
               fontWeight: 500,
               fontSize: 18,
-              lineHeight: '24px',
-              color: '#FEAE00',
+              lineHeight: "24px",
+              color: "#FEAE00",
             }}
           >
             {addresses.map((a, i) => (
-              <div key={i} style={{ marginTop: i === 0 ? 0 : 8 }}>{a}</div>
+              <div key={i} style={{ marginTop: i === 0 ? 0 : 8 }}>
+                {a}
+              </div>
             ))}
           </div>
         </div>
@@ -1157,21 +1266,23 @@ export default function MobileHomePage() {
         <div
           data-testid="footer-working-hours"
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: 514.6,
             left: 16,
             right: 16,
             fontWeight: 500,
             fontSize: 14,
-            lineHeight: '18px',
-            color: '#949494',
+            lineHeight: "18px",
+            color: "#949494",
           }}
         >
-          ( {t.workingHours}: {(lang === 'bg'
-              ? siteInfo?.footer?.contacts?.working_hours_bg
-              : siteInfo?.footer?.contacts?.working_hours)
-              || siteInfo?.footer?.contacts?.working_hours
-              || t.workingHoursDefault} )
+          ( {t.workingHours}:{" "}
+          {(lang === "bg"
+            ? siteInfo?.footer?.contacts?.working_hours_bg
+            : siteInfo?.footer?.contacts?.working_hours) ||
+            siteInfo?.footer?.contacts?.working_hours ||
+            t.workingHoursDefault}{" "}
+          )
         </div>
 
         {/* 5b — REGISTRATION ADDRESS — gray #949494, H-Medium 14, 2 logical
@@ -1180,23 +1291,23 @@ export default function MobileHomePage() {
         <div
           data-testid="footer-registration-address"
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: 542.6,
             left: 16,
             right: 16,
             fontWeight: 500,
             fontSize: 14,
-            lineHeight: '18px',
-            color: '#949494',
+            lineHeight: "18px",
+            color: "#949494",
           }}
         >
           <div>{t.registrationAddress}</div>
           <div>
-            {(lang === 'bg'
+            {(lang === "bg"
               ? siteInfo?.footer?.contacts?.registration_address_bg
-              : siteInfo?.footer?.contacts?.registration_address)
-              || siteInfo?.footer?.contacts?.registration_address
-              || t.registrationAddressDefault}
+              : siteInfo?.footer?.contacts?.registration_address) ||
+              siteInfo?.footer?.contacts?.registration_address ||
+              t.registrationAddressDefault}
           </div>
         </div>
 
@@ -1205,12 +1316,12 @@ export default function MobileHomePage() {
         <div
           aria-hidden
           style={{
-            position: 'absolute',
+            position: "absolute",
             left: 16,
             right: 16,
             top: 627.6,
             height: 1,
-            background: '#3a3a38',
+            background: "#3a3a38",
           }}
         />
 
@@ -1219,41 +1330,41 @@ export default function MobileHomePage() {
         <div
           data-testid="footer-join-our-group"
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: 652.6,
             left: 16,
             maxWidth: 196,
-            display: 'flex',
-            flexDirection: 'column',
+            display: "flex",
+            flexDirection: "column",
             gap: 14,
-            alignItems: 'flex-start',
+            alignItems: "flex-start",
           }}
         >
           <span
             style={{
               fontWeight: 500,
               fontSize: 12,
-              lineHeight: '15px',
-              color: '#FFFFFF',
+              lineHeight: "15px",
+              color: "#FFFFFF",
               letterSpacing: 0,
             }}
           >
             {viberLabel}
           </span>
           <a
-            href={viberCommunity?.url || 'viber://chat?number=%2B359875313158'}
+            href={viberCommunity?.url || "viber://chat?number=%2B359875313158"}
             target="_blank"
             rel="noreferrer noopener"
             aria-label="Viber community"
             data-testid="footer-viber-link"
-            style={{ display: 'inline-flex' }}
+            style={{ display: "inline-flex" }}
           >
             <img
               src="/figma/basil-viber-outline.svg"
               alt=""
               width={42}
               height={42}
-              style={{ display: 'block' }}
+              style={{ display: "block" }}
             />
           </a>
         </div>
@@ -1264,55 +1375,80 @@ export default function MobileHomePage() {
         <div
           data-testid="footer-social-media"
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: 652.6,
             right: 16,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-start',
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-start",
           }}
         >
           <span
             style={{
               fontWeight: 500,
               fontSize: 12,
-              lineHeight: '14px',
-              color: '#FFFFFF',
+              lineHeight: "14px",
+              color: "#FFFFFF",
               letterSpacing: 0,
             }}
           >
             {t.socialMedia}
           </span>
-          <div style={{ marginTop: 32, display: 'flex', alignItems: 'center', gap: 22 }}>
+          <div
+            style={{
+              marginTop: 32,
+              display: "flex",
+              alignItems: "center",
+              gap: 22,
+            }}
+          >
             <a
-              href={socials?.instagram?.url || '#'}
+              href={socials?.instagram?.url || "#"}
               target="_blank"
               rel="noreferrer noopener"
               aria-label="Instagram"
               data-testid="footer-social-instagram"
-              style={{ display: 'inline-flex' }}
+              style={{ display: "inline-flex" }}
             >
-              <img src="/figma/ri-instagram-line.svg" alt="" width={32} height={32} style={{ display: 'block' }} />
+              <img
+                src="/figma/ri-instagram-line.svg"
+                alt=""
+                width={32}
+                height={32}
+                style={{ display: "block" }}
+              />
             </a>
             <a
-              href={socials?.facebook?.url || '#'}
+              href={socials?.facebook?.url || "#"}
               target="_blank"
               rel="noreferrer noopener"
               aria-label="Facebook"
               data-testid="footer-social-facebook"
-              style={{ display: 'inline-flex' }}
+              style={{ display: "inline-flex" }}
             >
-              <img src="/figma/ic-twotone-facebook.svg" alt="" width={32} height={32} style={{ display: 'block' }} />
+              <img
+                src="/figma/ic-twotone-facebook.svg"
+                alt=""
+                width={32}
+                height={32}
+                style={{ display: "block" }}
+              />
             </a>
             <a
-              href={socials?.telegram?.url || '#'}
+              href={socials?.telegram?.url || "#"}
               target="_blank"
               rel="noreferrer noopener"
               aria-label="Telegram"
               data-testid="footer-social-telegram"
-              style={{ display: 'inline-flex' }}
+              style={{ display: "inline-flex" }}
             >
-              <img src="/figma/ic-round-telegram.svg" alt="" width={32} height={32} style={{ display: 'block' }} />
+              <img
+                src="/figma/ic-round-telegram.svg"
+                alt=""
+                width={32}
+                height={32}
+                style={{ display: "block" }}
+              />
             </a>
           </div>
         </div>
@@ -1322,37 +1458,41 @@ export default function MobileHomePage() {
         <nav
           data-testid="footer-nav"
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: 792.6,
             left: 41,
             right: 41,
-            display: 'flex',
-            flexDirection: 'column',
+            display: "flex",
+            flexDirection: "column",
             gap: 24,
-            alignItems: 'center',
+            alignItems: "center",
           }}
         >
           {[
-            { label: t.navCatalog,    href: '/catalog' },
-            { label: t.navCalculator, href: '/calculator' },
-            { label: t.navAboutUs,    href: '/about' },
-            { label: t.navBlog,       href: '/blog' },
+            { label: t.navCatalog, href: "/catalog" },
+            { label: t.navCalculator, href: "/calculator" },
+            { label: t.navAboutUs, href: "/about" },
+            { label: t.navBlog, href: "/blog" },
           ].map((it) => (
             <a
               key={it.label}
               href={it.href}
-              data-testid={`footer-nav-${it.label.toLowerCase().replace(' ', '-')}`}
+              data-testid={`footer-nav-${it.label.toLowerCase().replace(" ", "-")}`}
               style={{
                 fontWeight: 400,
                 fontSize: 16,
-                lineHeight: '20px',
-                letterSpacing: '0.04em',
-                color: '#FFFFFF',
-                textDecoration: 'none',
-                transition: 'color 150ms ease',
+                lineHeight: "20px",
+                letterSpacing: "0.04em",
+                color: "#FFFFFF",
+                textDecoration: "none",
+                transition: "color 150ms ease",
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = '#FEAE00'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = '#FFFFFF'; }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "#FEAE00";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = "#FFFFFF";
+              }}
             >
               {it.label}
             </a>
@@ -1365,19 +1505,19 @@ export default function MobileHomePage() {
         <div
           data-testid="footer-legal-row"
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: 1006.48,
             left: 16,
             right: 16,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
           }}
         >
           {[
-            { label: t.legalConditions, key: 'conditions' },
-            { label: t.legalPrivacy,    key: 'privacy' },
-            { label: t.legalCookies,    key: 'cookies' },
+            { label: t.legalConditions, key: "conditions" },
+            { label: t.legalPrivacy, key: "privacy" },
+            { label: t.legalCookies, key: "cookies" },
           ].map((it) => (
             <button
               key={it.key}
@@ -1385,23 +1525,31 @@ export default function MobileHomePage() {
               data-testid={`footer-policy-${it.key}`}
               onClick={() => openPolicy(it.key)}
               style={{
-                background: 'transparent',
-                border: 'none',
+                background: "transparent",
+                border: "none",
                 padding: 0,
                 margin: 0,
-                cursor: 'pointer',
-                fontFamily: "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
+                cursor: "pointer",
+                fontFamily:
+                  "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif",
                 fontWeight: 500,
-                fontSize: lang === 'bg' ? 11 : 12,        /* BG "ПОЛИТИКА ЗА ПОВЕРИТЕЛНОСТ" is ~25% wider — drop one step so 3 pills fit the 328 px row */
-                lineHeight: '14px',
-                letterSpacing: lang === 'bg' ? '0.02em' : '0.04em',
-                color: '#FFFFFF',
-                textDecoration: 'none',
-                whiteSpace: 'nowrap',
-                transition: 'color 150ms ease',
+                fontSize:
+                  lang === "bg"
+                    ? 11
+                    : 12 /* BG "ПОЛИТИКА ЗА ПОВЕРИТЕЛНОСТ" is ~25% wider — drop one step so 3 pills fit the 328 px row */,
+                lineHeight: "14px",
+                letterSpacing: lang === "bg" ? "0.02em" : "0.04em",
+                color: "#FFFFFF",
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+                transition: "color 150ms ease",
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = '#FEAE00'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = '#FFFFFF'; }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "#FEAE00";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = "#FFFFFF";
+              }}
             >
               {it.label}
             </button>
@@ -1413,18 +1561,18 @@ export default function MobileHomePage() {
         <div
           data-testid="footer-vat-id"
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: 1041.601,
             left: 16,
             right: 16,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
             fontWeight: 500,
             fontSize: 10,
-            lineHeight: '14px',
-            letterSpacing: '0.04em',
-            color: '#5E5E5E',
+            lineHeight: "14px",
+            letterSpacing: "0.04em",
+            color: "#5E5E5E",
           }}
         >
           <span>VAT BG206637283</span>
@@ -1439,13 +1587,13 @@ export default function MobileHomePage() {
         <div
           data-testid="footer-website-credits"
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: 1136.06,
             left: 16,
             right: 16,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
             gap: 4,
           }}
         >
@@ -1457,15 +1605,19 @@ export default function MobileHomePage() {
             style={{
               fontWeight: 500,
               fontSize: 12,
-              lineHeight: '14px',
-              letterSpacing: '0.04em',
-              color: '#FFFFFF',
-              textDecoration: 'none',
-              whiteSpace: 'nowrap',
-              transition: 'color 150ms ease',
+              lineHeight: "14px",
+              letterSpacing: "0.04em",
+              color: "#FFFFFF",
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+              transition: "color 150ms ease",
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = '#FEAE00'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = '#FFFFFF'; }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "#FEAE00";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "#FFFFFF";
+            }}
           >
             / {t.websiteDesignBy} /
           </a>
@@ -1476,15 +1628,15 @@ export default function MobileHomePage() {
         <div
           data-testid="footer-copyright"
           style={{
-            position: 'absolute',
+            position: "absolute",
             bottom: 19,
             left: 72,
             right: 72,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
             gap: 7,
-            color: '#FFFFFF',
+            color: "#FFFFFF",
           }}
         >
           <img
@@ -1492,17 +1644,17 @@ export default function MobileHomePage() {
             alt=""
             width={18}
             height={18}
-            style={{ display: 'block' }}
+            style={{ display: "block" }}
             aria-hidden="true"
           />
           <span
             style={{
               fontWeight: 500,
               fontSize: 10,
-              lineHeight: '14px',
-              letterSpacing: '0.04em',
-              color: '#FFFFFF',
-              whiteSpace: 'nowrap',
+              lineHeight: "14px",
+              letterSpacing: "0.04em",
+              color: "#FFFFFF",
+              whiteSpace: "nowrap",
             }}
           >
             {new Date().getFullYear()}. {t.allRightReserved}
@@ -1521,7 +1673,15 @@ export default function MobileHomePage() {
 /*   • chevron 12×12 right-aligned (dropdown-style affordance)              */
 /* ─────────────────────────────────────────────────────────────────────── */
 
-function Field({ label, value, onChange, placeholder, type = 'text', inputMode, maxLength }) {
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  inputMode,
+  maxLength,
+}) {
   const FONT = "'Helvetica Neue', Helvetica, Arial, sans-serif";
   return (
     <label className="block">
@@ -1531,8 +1691,8 @@ function Field({ label, value, onChange, placeholder, type = 'text', inputMode, 
           fontFamily: FONT,
           fontSize: 14,
           fontWeight: 500,
-          lineHeight: '18px',
-          color: '#fff',
+          lineHeight: "18px",
+          color: "#fff",
           marginBottom: 6,
         }}
       >
@@ -1560,7 +1720,7 @@ function Field({ label, value, onChange, placeholder, type = 'text', inputMode, 
         <span
           aria-hidden
           className="absolute pointer-events-none text-white/80"
-          style={{ right: 14, top: '50%', transform: 'translateY(-50%)' }}
+          style={{ right: 14, top: "50%", transform: "translateY(-50%)" }}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <path
@@ -1607,28 +1767,66 @@ function Field({ label, value, onChange, placeholder, type = 'text', inputMode, 
 /* ─────────────────────────────────────────────────────────────────────── */
 
 const MOBILE_FEATURED_BRANDS = [
-  { slug: 'audi',    name: 'Audi',    src: '/mobile/pngwing-com-4-1@2x.png' },
-  { slug: 'bmw',     name: 'BMW',     src: '/mobile/pngwing-com-3-1@2x.png' },
-  { slug: 'jeep',    name: 'Jeep',    src: '/mobile/pngwing-com-5-1@2x.png' },
-  { slug: 'toyota',  name: 'Toyota',  src: '/mobile/pngwing-com-1-1@2x.png' },
-  { slug: 'ford',    name: 'Ford',    src: '/mobile/pngwing-com-6-2@2x.png' },
-  { slug: 'hyundai', name: 'Hyundai', src: '/mobile/pngwing-com-1@2x.png' },
+  { slug: "audi", name: "Audi", src: "/mobile/pngwing-com-4-1@2x.png" },
+  { slug: "bmw", name: "BMW", src: "/mobile/pngwing-com-3-1@2x.png" },
+  { slug: "jeep", name: "Jeep", src: "/mobile/pngwing-com-5-1@2x.png" },
+  { slug: "toyota", name: "Toyota", src: "/mobile/pngwing-com-1-1@2x.png" },
+  { slug: "ford", name: "Ford", src: "/mobile/pngwing-com-6-2@2x.png" },
+  { slug: "hyundai", name: "Hyundai", src: "/mobile/pngwing-com-1@2x.png" },
 ];
 
 const MOBILE_EXTRA_BRANDS = [
-  'acura','alfa-romeo','aston-martin','bentley','buick','cadillac',
-  'chevrolet','chrysler','dodge','ferrari','fiat','genesis','gmc',
-  'honda','hummer','infiniti','international','isuzu','jaguar','kia',
-  'lamborghini','land-rover','lexus','lincoln','lotus','maserati',
-  'mazda','mercedes','mg','mini','mitsubishi','nissan','polestar',
-  'pontiac','porsche','ram','rolls-royce','saab','smart','subaru',
-  'suzuki','tesla','volkswagen','volvo','yamaha',
+  "acura",
+  "alfa-romeo",
+  "aston-martin",
+  "bentley",
+  "buick",
+  "cadillac",
+  "chevrolet",
+  "chrysler",
+  "dodge",
+  "ferrari",
+  "fiat",
+  "genesis",
+  "gmc",
+  "honda",
+  "hummer",
+  "infiniti",
+  "international",
+  "isuzu",
+  "jaguar",
+  "kia",
+  "lamborghini",
+  "land-rover",
+  "lexus",
+  "lincoln",
+  "lotus",
+  "maserati",
+  "mazda",
+  "mercedes",
+  "mg",
+  "mini",
+  "mitsubishi",
+  "nissan",
+  "polestar",
+  "pontiac",
+  "porsche",
+  "ram",
+  "rolls-royce",
+  "saab",
+  "smart",
+  "subaru",
+  "suzuki",
+  "tesla",
+  "volkswagen",
+  "volvo",
+  "yamaha",
 ].map((slug) => ({
   slug,
   name: slug
-    .split('-')
+    .split("-")
     .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-    .join(' '),
+    .join(" "),
   src: `/figma/brands/${slug}.webp`,
 }));
 
@@ -1646,61 +1844,64 @@ function MobileSearchFromAmericaKorea({ t }) {
     <section
       data-testid="mobile-search-from-america-korea"
       style={{
-        backgroundColor: '#1d1d1b',
-        padding: '40px 12px 48px',             /* user spec: 12 L/R on welcome mobile */
-        boxSizing: 'border-box',
-        width: '100%',
+        backgroundColor: "#1d1d1b",
+        padding: "40px 12px 48px" /* user spec: 12 L/R on welcome mobile */,
+        boxSizing: "border-box",
+        width: "100%",
       }}
     >
       {/* Title — full‑width, centered, both lines amber */}
       <AnimatedHeading
         as="h2"
-        text={t?.searchForCarsFromAmericaKorea || 'Search for cars from America and Korea'}
+        text={
+          t?.searchForCarsFromAmericaKorea ||
+          "Search for cars from America and Korea"
+        }
         style={{
-          margin: '0 0 28px 0',
-          textAlign: 'center',
+          margin: "0 0 28px 0",
+          textAlign: "center",
           fontFamily: FONT,
           fontWeight: 700,
           fontSize: 24,
-          lineHeight: '120%',
+          lineHeight: "120%",
           letterSpacing: 0,
-          textTransform: 'uppercase',
-          color: '#FEAE00',
-          width: '100%',
+          textTransform: "uppercase",
+          color: "#FEAE00",
+          width: "100%",
         }}
       />
 
       {/* Black card */}
       <div
         style={{
-          backgroundColor: '#000',
-          border: '1px solid #1c1c1c',
+          backgroundColor: "#000",
+          border: "1px solid #1c1c1c",
           borderRadius: 6,
-          padding: '26px 16px 24px',
+          padding: "26px 16px 24px",
         }}
       >
         {/* Subtitle — H Regular 14 */}
         <div
           style={{
-            textAlign: 'center',
+            textAlign: "center",
             fontFamily: FONT,
             fontWeight: 400,
             fontSize: 14,
-            lineHeight: '99.9%',
-            color: '#FFFFFF',
-            textTransform: 'uppercase',
+            lineHeight: "99.9%",
+            color: "#FFFFFF",
+            textTransform: "uppercase",
             marginBottom: 22,
           }}
         >
-          {t?.mostPopularBrands || 'Most popular brands'}
+          {t?.mostPopularBrands || "Most popular brands"}
         </div>
 
         {/* Brand grid (3 cols, dividers via outer top+left and per-cell bottom+right) */}
         <div
           className="grid grid-cols-3"
           style={{
-            borderTop: '1px solid #1c1c1c',
-            borderLeft: '1px solid #1c1c1c',
+            borderTop: "1px solid #1c1c1c",
+            borderLeft: "1px solid #1c1c1c",
           }}
         >
           {BRANDS_TO_SHOW.map((b) => (
@@ -1716,10 +1917,10 @@ function MobileSearchFromAmericaKorea({ t }) {
               aria-label={b.name}
               style={{
                 height: 78,
-                borderRight: '1px solid #1c1c1c',
-                borderBottom: '1px solid #1c1c1c',
+                borderRight: "1px solid #1c1c1c",
+                borderBottom: "1px solid #1c1c1c",
                 padding: 10,
-                boxSizing: 'border-box',
+                boxSizing: "border-box",
               }}
             >
               <img
@@ -1727,26 +1928,26 @@ function MobileSearchFromAmericaKorea({ t }) {
                 alt={b.name}
                 style={{
                   maxHeight: 44,
-                  maxWidth: '100%',
-                  width: 'auto',
-                  height: 'auto',
-                  objectFit: 'contain',
+                  maxWidth: "100%",
+                  width: "auto",
+                  height: "auto",
+                  objectFit: "contain",
                 }}
                 loading="lazy"
                 onError={(e) => {
-                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.style.display = "none";
                   if (e.currentTarget.nextSibling) {
-                    e.currentTarget.nextSibling.style.display = 'inline';
+                    e.currentTarget.nextSibling.style.display = "inline";
                   }
                 }}
               />
               <span
                 style={{
-                  display: 'none',
+                  display: "none",
                   fontFamily: FONT,
                   fontSize: 12,
-                  color: '#fff',
-                  textTransform: 'uppercase',
+                  color: "#fff",
+                  textTransform: "uppercase",
                 }}
               >
                 {b.name}
@@ -1757,26 +1958,26 @@ function MobileSearchFromAmericaKorea({ t }) {
       </div>
 
       {/* Other brands + → links to the full catalog (single-action, no toggle). */}
-      <div style={{ marginTop: 22, display: 'flex', justifyContent: 'center' }}>
+      <div style={{ marginTop: 22, display: "flex", justifyContent: "center" }}>
         <a
           href="/catalog"
           data-testid="mobile-other-brands"
           style={{
-            background: 'transparent',
-            border: 'none',
-            padding: '4px 8px',
-            cursor: 'pointer',
+            background: "transparent",
+            border: "none",
+            padding: "4px 8px",
+            cursor: "pointer",
             fontFamily: FONT,
             fontWeight: 500,
             fontSize: 14,
-            lineHeight: '99.9%',
-            color: '#FEAE00',
-            textTransform: 'uppercase',
-            textDecoration: 'underline',
+            lineHeight: "99.9%",
+            color: "#FEAE00",
+            textTransform: "uppercase",
+            textDecoration: "underline",
             textUnderlineOffset: 3,
           }}
         >
-          {t?.otherBrandsPlus || 'Other brands +'}
+          {t?.otherBrandsPlus || "Other brands +"}
         </a>
       </div>
     </section>
@@ -1819,18 +2020,48 @@ function MobileSearchFromAmericaKorea({ t }) {
  * the Calculator's vehCardActive style).
  */
 const VEHICLE_TYPES = [
-  { id: 'motorbike', kind: 'mask', src: '/figma/calc/veh-motorbike.png', label: 'Motorbike', apiType: 'motorbike' },
-  { id: 'sedan',     kind: 'mask', src: '/figma/calc/veh-sedan.png',     label: 'Sedan',     apiType: 'sedan' },
-  { id: 'suv',       kind: 'mask', src: '/figma/calc/veh-suv.png',       label: 'SUV',       apiType: 'suv' },
-  { id: 'pickup',    kind: 'mask', src: '/figma/calc/veh-pickup.png',    label: 'Pick-up',   apiType: 'pickup' },
-  { id: 'van',       kind: 'mask', src: '/figma/calc/veh-van.png',       label: 'Van',       apiType: 'van' },
+  {
+    id: "motorbike",
+    kind: "mask",
+    src: "/figma/calc/veh-motorbike.png",
+    label: "Motorbike",
+    apiType: "motorbike",
+  },
+  {
+    id: "sedan",
+    kind: "mask",
+    src: "/figma/calc/veh-sedan.png",
+    label: "Sedan",
+    apiType: "sedan",
+  },
+  {
+    id: "suv",
+    kind: "mask",
+    src: "/figma/calc/veh-suv.png",
+    label: "SUV",
+    apiType: "suv",
+  },
+  {
+    id: "pickup",
+    kind: "mask",
+    src: "/figma/calc/veh-pickup.png",
+    label: "Pick-up",
+    apiType: "pickup",
+  },
+  {
+    id: "van",
+    kind: "mask",
+    src: "/figma/calc/veh-van.png",
+    label: "Van",
+    apiType: "van",
+  },
 ];
 
 const PRICE_TABS = [
-  { id: 'all',    label: 'ALL',    min: null,  max: null  },
-  { id: '10-15k', label: '10-15K', min: 10000, max: 15000 },
-  { id: '15-25k', label: '15-25K', min: 15000, max: 25000 },
-  { id: '30-50k', label: '30-50K', min: 30000, max: 50000 },
+  { id: "all", label: "ALL", min: null, max: null },
+  { id: "10-15k", label: "10-15K", min: 10000, max: 15000 },
+  { id: "15-25k", label: "15-25K", min: 15000, max: 25000 },
+  { id: "30-50k", label: "30-50K", min: 30000, max: 50000 },
 ];
 
 const DEALS_PAGE_SIZE = 24;
@@ -1840,9 +2071,9 @@ function MobileTopVehicleDeals({ t }) {
   const FONT = "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif";
   /* Default selection matches calculator's first non-trivial vehicle (sedan)
    * so the icons read coherently across Welcome → Calculator. */
-  const [vehicleType, setVehicleType] = useState('sedan');
+  const [vehicleType, setVehicleType] = useState("sedan");
   // Default tab: 'all' → no price filter → counter shows full catalogue.
-  const [priceTab, setPriceTab] = useState('all');
+  const [priceTab, setPriceTab] = useState("all");
   const [idx, setIdx] = useState(0);
   const [favorited, setFavorited] = useState({});
   const [compared, setCompared] = useState({});
@@ -1873,24 +2104,27 @@ function MobileTopVehicleDeals({ t }) {
   const normalize = (v) => {
     const imgArr = Array.isArray(v.images) ? v.images.filter(Boolean) : [];
     const km = Number.isFinite(v.odometer)
-      ? `${Number(v.odometer).toLocaleString()} ${(v.odometer_unit || 'km').toUpperCase()}`
-      : '—';
-    const bidCur = (v.current_bid_currency || 'USD').toUpperCase();
-    const bidSym = bidCur === 'USD' ? '$' : bidCur === 'EUR' ? '€' : '';
+      ? `${Number(v.odometer).toLocaleString()} ${(v.odometer_unit || "km").toUpperCase()}`
+      : "—";
+    const bidCur = (v.current_bid_currency || "USD").toUpperCase();
+    const bidSym = bidCur === "USD" ? "$" : bidCur === "EUR" ? "€" : "";
     const purchase = Number.isFinite(Number(v.current_bid))
-      ? `${bidSym}${Number(v.current_bid).toLocaleString('en-US')}${bidSym ? '' : ' ' + bidCur}`
-      : (v.price ? String(v.price) : '—');
+      ? `${bidSym}${Number(v.current_bid).toLocaleString("en-US")}${bidSym ? "" : " " + bidCur}`
+      : v.price
+        ? String(v.price)
+        : "—";
     return {
       id: v.vin || v.lot_number,
       vin: v.vin,
-      name: v.title || `${v.year || ''} ${v.make || ''} ${v.model || ''}`.trim(),
-      img: imgArr[0] || '/mobile/image-15@2x.png',
-      tradingDate: v.lot_number ? `Lot ${v.lot_number}` : (v.auction_name || ''),
+      name:
+        v.title || `${v.year || ""} ${v.make || ""} ${v.model || ""}`.trim(),
+      img: imgArr[0] || "/mobile/image-15@2x.png",
+      tradingDate: v.lot_number ? `Lot ${v.lot_number}` : v.auction_name || "",
       timer: v.sale_date || null,
       purchasePrice: purchase,
       mileage: km,
-      engine: v.engine || '—',
-      drive: (v.drivetrain || '—').toString(),
+      engine: v.engine || "—",
+      drive: (v.drivetrain || "—").toString(),
       finalCost: null,
     };
   };
@@ -1898,7 +2132,8 @@ function MobileTopVehicleDeals({ t }) {
   // Build query params from current filter state. skip→page offset.
   const buildParams = (skip = 0) => {
     const params = { limit: DEALS_PAGE_SIZE, skip };
-    if (activeVehicleType?.apiType) params.vehicle_type = activeVehicleType.apiType;
+    if (activeVehicleType?.apiType)
+      params.vehicle_type = activeVehicleType.apiType;
     if (activeTab.min != null) params.price_min = activeTab.min;
     if (activeTab.max != null) params.price_max = activeTab.max;
     return params;
@@ -1921,7 +2156,9 @@ function MobileTopVehicleDeals({ t }) {
         });
         if (cancelled || fetchTokenRef.current !== token) return;
         const arr = Array.isArray(r.data?.data) ? r.data.data : [];
-        const total = Number.isFinite(r.data?.total) ? Number(r.data.total) : arr.length;
+        const total = Number.isFinite(r.data?.total)
+          ? Number(r.data.total)
+          : arr.length;
         setLiveCars(arr.map(normalize));
         setLiveTotal(total);
         setHasMore(arr.length < total);
@@ -1934,7 +2171,9 @@ function MobileTopVehicleDeals({ t }) {
         if (!cancelled && fetchTokenRef.current === token) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehicleType, priceTab]);
 
@@ -1953,7 +2192,9 @@ function MobileTopVehicleDeals({ t }) {
       });
       if (fetchTokenRef.current !== token) return;
       const arr = Array.isArray(r.data?.data) ? r.data.data : [];
-      const total = Number.isFinite(r.data?.total) ? Number(r.data.total) : liveTotal;
+      const total = Number.isFinite(r.data?.total)
+        ? Number(r.data.total)
+        : liveTotal;
       setLiveCars((prev) => {
         const seen = new Set(prev.map((p) => p.id));
         return [...prev, ...arr.map(normalize).filter((c) => !seen.has(c.id))];
@@ -1979,9 +2220,8 @@ function MobileTopVehicleDeals({ t }) {
   const safeIdx = loadedCount ? Math.min(idx, loadedCount - 1) : 0;
   const current = visible[safeIdx];
   const proposals = total;
-  const counter = total > 0
-    ? `${String(safeIdx + 1).padStart(2, '0')}/${total}`
-    : '00/00';
+  const counter =
+    total > 0 ? `${String(safeIdx + 1).padStart(2, "0")}/${total}` : "00/00";
 
   // Trigger lazy paging when approaching the loaded-tail edge.
   useEffect(() => {
@@ -1992,12 +2232,13 @@ function MobileTopVehicleDeals({ t }) {
   }, [idx, loadedCount, hasMore, loading]);
 
   const goPrev = () => setIdx((v) => Math.max(0, v - 1));
-  const goNext = () => setIdx((v) => {
-    if (!loadedCount) return 0;
-    if (v + 1 < loadedCount) return v + 1;
-    if (!hasMore) return loadedCount - 1; // hold at last
-    return v; // wait for prefetch
-  });
+  const goNext = () =>
+    setIdx((v) => {
+      if (!loadedCount) return 0;
+      if (v + 1 < loadedCount) return v + 1;
+      if (!hasMore) return loadedCount - 1; // hold at last
+      return v; // wait for prefetch
+    });
 
   // Apply BIBI tilt-parallax to the single visible deal card. Lives on the
   // carousel scope so it gets re-attached when the user swipes to a new
@@ -2020,7 +2261,8 @@ function MobileTopVehicleDeals({ t }) {
     const dy = t.clientY - touchRef.current.y;
     touchRef.current.active = false;
     if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
-      if (dx < 0) goNext(); else goPrev();
+      if (dx < 0) goNext();
+      else goPrev();
     }
   };
 
@@ -2030,36 +2272,39 @@ function MobileTopVehicleDeals({ t }) {
     <section
       data-testid="mobile-top-vehicles-deals"
       style={{
-        backgroundColor: '#000',
+        backgroundColor: "#000",
         /* user spec: bottom +10 px → 48 → 58 */
-        padding: '40px 12px 58px',
+        padding: "40px 12px 58px",
         fontFamily: FONT,
-        color: '#fff',
+        color: "#fff",
       }}
     >
       {/* 1 — Title */}
-      <div style={{ textAlign: 'center', marginBottom: 24 }}>
+      <div style={{ textAlign: "center", marginBottom: 24 }}>
         <h2
           style={{
             margin: 0,
             fontFamily: FONT,
             fontWeight: 700,
             fontSize: 24,
-            lineHeight: '120%',
+            lineHeight: "120%",
             letterSpacing: 0,
-            textTransform: 'uppercase',
+            textTransform: "uppercase",
           }}
         >
           <AnimatedHeading
             as="span"
-            text={t?.topVehiclesDeals || 'Top vehicles deals'}
-            style={{ color: '#FEAE00', display: 'block' }}
+            text={t?.topVehiclesDeals || "Top vehicles deals"}
+            style={{ color: "#FEAE00", display: "block" }}
           />
           <AnimatedHeading
             as="span"
-            text={t?.ofTheWeek || 'of the week'}
-            baseDelay={(t?.topVehiclesDeals || 'Top vehicles deals').replace(/\s/g, '').length * 28}
-            style={{ color: '#FFFFFF', display: 'block', marginTop: 4 }}
+            text={t?.ofTheWeek || "of the week"}
+            baseDelay={
+              (t?.topVehiclesDeals || "Top vehicles deals").replace(/\s/g, "")
+                .length * 28
+            }
+            style={{ color: "#FFFFFF", display: "block", marginTop: 4 }}
           />
         </h2>
       </div>
@@ -2067,34 +2312,40 @@ function MobileTopVehicleDeals({ t }) {
       {/* 2 — Subtitle (Mazzard H Medium 16, 258×57) */}
       <div
         style={{
-          textAlign: 'center',
+          textAlign: "center",
           /* user spec: +10 px breathing room between subtitle and sort row */
-          margin: '0 auto 38px',
+          margin: "0 auto 38px",
           width: 258,
-          maxWidth: '100%',
+          maxWidth: "100%",
           fontFamily: FONT,
           fontWeight: 500,
           fontSize: 16,
-          lineHeight: '20px',
-          textTransform: 'uppercase',
+          lineHeight: "20px",
+          textTransform: "uppercase",
           letterSpacing: 0,
         }}
       >
-        <span style={{ color: '#FEAE00' }}>{t?.thousandsOfListings || 'Thousands of listings.'}</span>
+        <span style={{ color: "#FEAE00" }}>
+          {t?.thousandsOfListings || "Thousands of listings."}
+        </span>
         <br />
-        <span style={{ color: '#FFFFFF' }}>{t?.onlyBestMakeCut || 'Only the best make the cut.'}</span>
+        <span style={{ color: "#FFFFFF" }}>
+          {t?.onlyBestMakeCut || "Only the best make the cut."}
+        </span>
         <br />
-        <span style={{ color: '#FFFFFF' }}>{t?.updatedWeekly || 'Updated weekly'}</span>
+        <span style={{ color: "#FFFFFF" }}>
+          {t?.updatedWeekly || "Updated weekly"}
+        </span>
       </div>
 
       {/* 3 — Vehicle-type filter row (294×24) — same icons as web (lucide-react) */}
       <div
         style={{
-          borderTop: '1px solid #2a2a28',
-          borderBottom: '1px solid #2a2a28',
+          borderTop: "1px solid #2a2a28",
+          borderBottom: "1px solid #2a2a28",
           /* user spec: +10 px breathing room between icons and the grey
              divider below (top 14, bottom 14+10=24) */
-          padding: '14px 0 24px',
+          padding: "14px 0 24px",
           marginBottom: 18,
         }}
       >
@@ -2102,11 +2353,11 @@ function MobileTopVehicleDeals({ t }) {
           role="tablist"
           aria-label={t?.vehicleType || "Vehicle type"}
           style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            maxWidth: 336,                       /* 5 buttons × 44 + 4 gaps × 12 = 268 (fits within 336) */
-            margin: '0 auto',
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            maxWidth: 336 /* 5 buttons × 44 + 4 gaps × 12 = 268 (fits within 336) */,
+            margin: "0 auto",
             height: 36,
           }}
         >
@@ -2114,8 +2365,8 @@ function MobileTopVehicleDeals({ t }) {
             const active = vehicleType === v.id;
             /* Active style — amber bg + black icon (calculator parity).
              * Inactive — transparent bg + white icon. */
-            const fg = active ? '#000000' : '#FFFFFF';
-            const bg = active ? '#FEAE00' : 'transparent';
+            const fg = active ? "#000000" : "#FFFFFF";
+            const bg = active ? "#FEAE00" : "transparent";
             return (
               <button
                 key={v.id}
@@ -2127,38 +2378,38 @@ function MobileTopVehicleDeals({ t }) {
                 data-testid={`mobile-deals-type-${v.id}`}
                 style={{
                   background: bg,
-                  border: 'none',
+                  border: "none",
                   padding: 0,
-                  cursor: 'pointer',
-                  width: 44,                              /* a bit wider so the rounded pill is comfortable */
+                  cursor: "pointer",
+                  width: 44 /* a bit wider so the rounded pill is comfortable */,
                   height: 36,
                   borderRadius: 6,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   color: fg,
-                  transition: 'background-color 150ms ease, color 150ms ease',
+                  transition: "background-color 150ms ease, color 150ms ease",
                 }}
               >
-                {v.kind === 'lucide' ? (
+                {v.kind === "lucide" ? (
                   <v.Icon size={22} strokeWidth={1.6} />
                 ) : (
                   <span
                     aria-hidden="true"
                     style={{
-                      display: 'inline-block',
+                      display: "inline-block",
                       width: 24,
                       height: 24,
                       backgroundColor: fg,
                       WebkitMaskImage: `url(${v.src})`,
                       maskImage: `url(${v.src})`,
-                      WebkitMaskRepeat: 'no-repeat',
-                      maskRepeat: 'no-repeat',
-                      WebkitMaskPosition: 'center',
-                      maskPosition: 'center',
-                      WebkitMaskSize: 'contain',
-                      maskSize: 'contain',
-                      transition: 'background-color 150ms ease',
+                      WebkitMaskRepeat: "no-repeat",
+                      maskRepeat: "no-repeat",
+                      WebkitMaskPosition: "center",
+                      maskPosition: "center",
+                      WebkitMaskSize: "contain",
+                      maskSize: "contain",
+                      transition: "background-color 150ms ease",
                     }}
                   />
                 )}
@@ -2173,9 +2424,9 @@ function MobileTopVehicleDeals({ t }) {
         role="tablist"
         aria-label={t?.priceRange || "Price range"}
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
           gap: 8,
           /* user spec: match the bottom gap (28 px to card) — expand
              UPWARD so the price-range tabs sit visually centred between
@@ -2185,12 +2436,19 @@ function MobileTopVehicleDeals({ t }) {
           fontFamily: FONT,
           fontWeight: 400,
           fontSize: 12,
-          lineHeight: '12px',
-          letterSpacing: '0.04em',
-          textTransform: 'uppercase',
+          lineHeight: "12px",
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'nowrap' }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            flexWrap: "nowrap",
+          }}
+        >
           {PRICE_TABS.map((tab) => {
             const active = priceTab === tab.id;
             return (
@@ -2202,18 +2460,18 @@ function MobileTopVehicleDeals({ t }) {
                 onClick={() => setPriceTab(tab.id)}
                 data-testid={`mobile-deals-price-${tab.id}`}
                 style={{
-                  background: 'transparent',
-                  border: 'none',
+                  background: "transparent",
+                  border: "none",
                   padding: 0,
-                  cursor: 'pointer',
+                  cursor: "pointer",
                   fontFamily: FONT,
                   fontWeight: active ? 500 : 400,
                   fontSize: 12,
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                  color: active ? '#FEAE00' : '#FFFFFF',
-                  whiteSpace: 'nowrap',
-                  transition: 'color 150ms ease',
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  color: active ? "#FEAE00" : "#FFFFFF",
+                  whiteSpace: "nowrap",
+                  transition: "color 150ms ease",
                 }}
               >
                 {tab.label}
@@ -2221,324 +2479,453 @@ function MobileTopVehicleDeals({ t }) {
             );
           })}
         </div>
-        <span style={{ color: '#FFFFFF', whiteSpace: 'nowrap' }}>{t?.proposalsLabel || 'Proposals'} - {proposals}</span>
+        <span style={{ color: "#FFFFFF", whiteSpace: "nowrap" }}>
+          {t?.proposalsLabel || "Proposals"} - {proposals}
+        </span>
       </div>
 
       {/* 5 — Vehicle card (with real touch swipe).
           While the API request is in flight (`current` is undefined), we
           render a neutral skeleton — never the legacy Lucid/BMW mock. */}
-      <div ref={carouselScopeRef} className="tilt-scope-mobile" style={{ width: '100%' }}>
-      {!current ? (
-        <div style={{
-          backgroundColor: '#1d1d1b', borderRadius: 8, height: 420,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#71717A', fontSize: 13, letterSpacing: '0.06em',
-        }}>
-          {t?.loadingLabel || 'Loading vehicles…'}
-        </div>
-      ) : (
-      <article
-        data-tilt-card
-        data-testid={`mobile-deal-${current.id}`}
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
-        style={{
-          backgroundColor: '#1d1d1b',
-          borderRadius: 8,
-          overflow: 'hidden',
-          /* user spec: 12 top / 12 left / 12 right, 24 bottom — doubles the
+      <div
+        ref={carouselScopeRef}
+        className="tilt-scope-mobile"
+        style={{ width: "100%" }}
+      >
+        {!current ? (
+          <div
+            style={{
+              backgroundColor: "#1d1d1b",
+              borderRadius: 8,
+              height: 420,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#71717A",
+              fontSize: 13,
+              letterSpacing: "0.06em",
+            }}
+          >
+            {t?.loadingLabel || "Loading vehicles…"}
+          </div>
+        ) : (
+          <article
+            data-tilt-card
+            data-testid={`mobile-deal-${current.id}`}
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
+            style={{
+              backgroundColor: "#1d1d1b",
+              borderRadius: 8,
+              overflow: "hidden",
+              /* user spec: 12 top / 12 left / 12 right, 24 bottom — doubles the
              breathing room between the MORE DETAILS button and the bottom
              edge of the card */
-          padding: '12px 12px 24px',
-          width: '100%',
-          maxWidth: 336.5,
-          margin: '0 auto',
-          touchAction: 'pan-y',
-        }}
-      >
-        {/* Image with overlays — square corners (no inner rounding, per spec) */}
-        <div
-          style={{
-            position: 'relative',
-            width: '100%',
-            aspectRatio: '312 / 220',
-            overflow: 'hidden',
-            borderRadius: 0,
-            backgroundColor: '#0a0a0a',
-          }}
-        >
-          <img
-            src={optimizeImage(current.img, ImageSize.cardMobile)}
-            alt={current.name}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            loading="lazy"
-            decoding="async"
-            onError={(e) => { e.currentTarget.src = '/mobile/image-15@2x.png'; }}
-          />
+              padding: "12px 12px 24px",
+              width: "100%",
+              maxWidth: 336.5,
+              margin: "0 auto",
+              touchAction: "pan-y",
+            }}
+          >
+            {/* Image with overlays — square corners (no inner rounding, per spec) */}
+            <div
+              style={{
+                position: "relative",
+                width: "100%",
+                aspectRatio: "312 / 220",
+                overflow: "hidden",
+                borderRadius: 0,
+                backgroundColor: "#0a0a0a",
+              }}
+            >
+              <img
+                src={optimizeImage(current.img, ImageSize.cardMobile)}
+                alt={current.name}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  display: "block",
+                }}
+                loading="lazy"
+                decoding="async"
+                onError={(e) => {
+                  e.currentTarget.src = "/mobile/image-15@2x.png";
+                }}
+              />
 
-          {/* Trading date chip — aligned LEFT, parallel to the timer chip below.
+              {/* Trading date chip — aligned LEFT, parallel to the timer chip below.
               Both chips share the same `left: 12px` and width 160px, so they
               line up geometrically (one at top, one at bottom of the image). */}
-          <div
-            style={{
-              position: 'absolute',
-              top: 12,
-              left: 12,
-              width: 160,
-              height: 20,
-              padding: '0 8px',
-              boxSizing: 'border-box',
-              background: 'rgba(255,255,255,0.7)',
-              backdropFilter: 'blur(2px)',
-              WebkitBackdropFilter: 'blur(2px)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontFamily: FONT,
-              fontWeight: 500,
-              fontSize: 12,
-              lineHeight: '14px',
-              color: '#0B0B0B',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {t.tradingDate} - {current.tradingDate}
-          </div>
+              <div
+                style={{
+                  position: "absolute",
+                  top: 12,
+                  left: 12,
+                  width: 160,
+                  height: 20,
+                  padding: "0 8px",
+                  boxSizing: "border-box",
+                  background: "rgba(255,255,255,0.7)",
+                  backdropFilter: "blur(2px)",
+                  WebkitBackdropFilter: "blur(2px)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: FONT,
+                  fontWeight: 500,
+                  fontSize: 12,
+                  lineHeight: "14px",
+                  color: "#0B0B0B",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {t.tradingDate} - {current.tradingDate}
+              </div>
 
-          {/* Timer chip — Figma spec: 138 × 32, #FEAE00CC, SQUARE corners,
+              {/* Timer chip — Figma spec: 138 × 32, #FEAE00CC, SQUARE corners,
               new clock icon (iconoir-clock.png 18 × 18).  Width is FIXED. */}
-          <div
-            style={{
-              position: 'absolute',
-              left: 12,
-              bottom: 12,
-              width: 138,
-              height: 32,
-              padding: '0 12px',
-              boxSizing: 'border-box',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              background: '#FEAE00CC',
-              color: '#000',
-              fontFamily: FONT,
-              fontWeight: 500,
-              fontSize: 14,
-              lineHeight: 1,
-              borderRadius: 0,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <img src="/single-car/iconoir-clock.png" alt="" width={18} height={18} style={{ display: 'block', flex: '0 0 auto' }} />
-            {current.timer || '—'}
-          </div>
+              <div
+                style={{
+                  position: "absolute",
+                  left: 12,
+                  bottom: 12,
+                  width: 138,
+                  height: 32,
+                  padding: "0 12px",
+                  boxSizing: "border-box",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  background: "#FEAE00CC",
+                  color: "#000",
+                  fontFamily: FONT,
+                  fontWeight: 500,
+                  fontSize: 14,
+                  lineHeight: 1,
+                  borderRadius: 0,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <img
+                  src="/single-car/iconoir-clock.png"
+                  alt=""
+                  width={18}
+                  height={18}
+                  style={{ display: "block", flex: "0 0 auto" }}
+                />
+                {current.timer || "—"}
+              </div>
 
-          {/* Round action buttons (bottom-right) — exact Figma SVGs.
+              {/* Round action buttons (bottom-right) — exact Figma SVGs.
               The SVGs themselves include the 24×24 white outline ring + a
               16×16 inner glyph, so the button has NO additional border.
               Layout: SHARE → COMPARE → FAVORITE (parity with SingleCarPage). */}
-          <div style={{ position: 'absolute', right: 12, bottom: 12, display: 'flex', gap: 8, alignItems: 'center', height: 24 }}>
-            <button
-              type="button"
-              aria-label="Share"
-              onClick={() => setShareOpen(true)}
-              data-testid={`mobile-deal-share-${current.id}`}
-              style={{
-                width: 24,
-                height: 24,
-                padding: 0,
-                border: 'none',
-                background: 'transparent',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                opacity: 0.95,
-              }}
-            >
-              <img src="/figma/Frame-1707479189.svg" alt="" width={24} height={24} style={{ display: 'block' }} />
-            </button>
-            <button
-              type="button"
-              aria-label="Compare"
-              onClick={() => setCompared((s) => ({ ...s, [current.id]: !s[current.id] }))}
-              data-testid={`mobile-deal-compare-${current.id}`}
-              style={{
-                width: 24,
-                height: 24,
-                padding: 0,
-                border: 'none',
-                background: 'transparent',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                opacity: compared[current.id] ? 1 : 0.95,
-                filter: compared[current.id]
-                  ? 'drop-shadow(0 0 4px rgba(254,174,0,0.9))'
-                  : 'none',
-              }}
-            >
-              <img src="/figma/Frame-1707479176.svg" alt="" width={24} height={24} style={{ display: 'block' }} />
-            </button>
-            <button
-              type="button"
-              aria-label="Favorite"
-              onClick={() => setFavorited((s) => ({ ...s, [current.id]: !s[current.id] }))}
-              data-testid={`mobile-deal-favorite-${current.id}`}
-              style={{
-                width: 24,
-                height: 24,
-                padding: 0,
-                border: 'none',
-                background: 'transparent',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                opacity: favorited[current.id] ? 1 : 0.95,
-                filter: favorited[current.id]
-                  ? 'drop-shadow(0 0 4px rgba(254,174,0,0.9))'
-                  : 'none',
-              }}
-            >
-              <img src="/figma/Frame-1707479182.svg" alt="" width={24} height={24} style={{ display: 'block' }} />
-            </button>
-          </div>
-        </div>
+              <div
+                style={{
+                  position: "absolute",
+                  right: 12,
+                  bottom: 12,
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "center",
+                  height: 24,
+                }}
+              >
+                <button
+                  type="button"
+                  aria-label="Share"
+                  onClick={() => setShareOpen(true)}
+                  data-testid={`mobile-deal-share-${current.id}`}
+                  style={{
+                    width: 24,
+                    height: 24,
+                    padding: 0,
+                    border: "none",
+                    background: "transparent",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    opacity: 0.95,
+                  }}
+                >
+                  <img
+                    src="/figma/Frame-1707479189.svg"
+                    alt=""
+                    width={24}
+                    height={24}
+                    style={{ display: "block" }}
+                  />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Compare"
+                  onClick={() =>
+                    setCompared((s) => ({ ...s, [current.id]: !s[current.id] }))
+                  }
+                  data-testid={`mobile-deal-compare-${current.id}`}
+                  style={{
+                    width: 24,
+                    height: 24,
+                    padding: 0,
+                    border: "none",
+                    background: "transparent",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    opacity: compared[current.id] ? 1 : 0.95,
+                    filter: compared[current.id]
+                      ? "drop-shadow(0 0 4px rgba(254,174,0,0.9))"
+                      : "none",
+                  }}
+                >
+                  <img
+                    src="/figma/Frame-1707479176.svg"
+                    alt=""
+                    width={24}
+                    height={24}
+                    style={{ display: "block" }}
+                  />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Favorite"
+                  onClick={() =>
+                    setFavorited((s) => ({
+                      ...s,
+                      [current.id]: !s[current.id],
+                    }))
+                  }
+                  data-testid={`mobile-deal-favorite-${current.id}`}
+                  style={{
+                    width: 24,
+                    height: 24,
+                    padding: 0,
+                    border: "none",
+                    background: "transparent",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    opacity: favorited[current.id] ? 1 : 0.95,
+                    filter: favorited[current.id]
+                      ? "drop-shadow(0 0 4px rgba(254,174,0,0.9))"
+                      : "none",
+                  }}
+                >
+                  <img
+                    src="/figma/Frame-1707479182.svg"
+                    alt=""
+                    width={24}
+                    height={24}
+                    style={{ display: "block" }}
+                  />
+                </button>
+              </div>
+            </div>
 
-        {/* Title — Mazzard H Bold 14 (per Figma spec) */}
-        <h3
-          style={{
-            margin: '16px 0 14px',
-            fontFamily: FONT,
-            fontWeight: 700,
-            fontSize: 14,
-            lineHeight: '18px',
-            color: '#FFFFFF',
-          }}
-        >
-          {current.name}
-        </h3>
+            {/* Title — Mazzard H Bold 14 (per Figma spec) */}
+            <h3
+              style={{
+                margin: "16px 0 14px",
+                fontFamily: FONT,
+                fontWeight: 700,
+                fontSize: 14,
+                lineHeight: "18px",
+                color: "#FFFFFF",
+              }}
+            >
+              {current.name}
+            </h3>
 
-        {/* Spec block — Purchase price box (left) + spec rows (right).
+            {/* Spec block — Purchase price box (left) + spec rows (right).
             Typography per Figma:
               • "Purchase price" label    → H Medium 12px, white
               • Price value (orange)      → H Bold 12px
               • Spec keys (Mileage etc.)  → H Medium 12px, white
               • Spec values               → H Bold 12px, orange */}
-        <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
-          <div
-            style={{
-              flex: '1 1 0',
-              backgroundColor: '#000',
-              borderRadius: 4,
-              padding: '12px 14px',
-              minHeight: 88,
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-            }}
-          >
+            <div style={{ display: "flex", gap: 12, alignItems: "stretch" }}>
+              <div
+                style={{
+                  flex: "1 1 0",
+                  backgroundColor: "#000",
+                  borderRadius: 4,
+                  padding: "12px 14px",
+                  minHeight: 88,
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "center",
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: FONT,
+                    fontWeight: 500,
+                    fontSize: 12,
+                    lineHeight: "14px",
+                    color: "#FFFFFF",
+                    marginBottom: 6,
+                  }}
+                >
+                  {t.purchasePriceLabel}
+                </div>
+                <div
+                  style={{
+                    fontFamily: FONT,
+                    fontWeight: 700,
+                    fontSize: 12,
+                    lineHeight: "16px",
+                    color: "#FEAE00",
+                  }}
+                >
+                  {current.purchasePrice}
+                </div>
+              </div>
+
+              <dl
+                style={{
+                  flex: "1 1 0",
+                  margin: 0,
+                  display: "grid",
+                  gridTemplateColumns: "auto 1fr",
+                  gap: "6px 12px",
+                  alignContent: "center",
+                  fontFamily: FONT,
+                  fontSize: 12,
+                  lineHeight: "14px",
+                }}
+              >
+                <dt style={{ color: "#FFFFFF", fontWeight: 500 }}>
+                  {t.mileageLabel}
+                </dt>
+                <dd
+                  style={{
+                    margin: 0,
+                    color: "#FEAE00",
+                    fontWeight: 700,
+                    textAlign: "right",
+                  }}
+                >
+                  {current.mileage}
+                </dd>
+                <dt style={{ color: "#FFFFFF", fontWeight: 500 }}>
+                  {t.engineLabel}
+                </dt>
+                <dd
+                  style={{
+                    margin: 0,
+                    color: "#FEAE00",
+                    fontWeight: 700,
+                    textAlign: "right",
+                  }}
+                >
+                  {translateEngine(current.engine, t)}
+                </dd>
+                <dt style={{ color: "#FFFFFF", fontWeight: 500 }}>
+                  {t.driveLabel}
+                </dt>
+                <dd
+                  style={{
+                    margin: 0,
+                    color: "#FEAE00",
+                    fontWeight: 700,
+                    textAlign: "right",
+                  }}
+                >
+                  {translateDrive(current.drive, t)}
+                </dd>
+              </dl>
+            </div>
+
+            {/* Estimated final cost + MORE DETAILS button (162 × 45, H Medium 12px) */}
             <div
               style={{
-                fontFamily: FONT,
-                fontWeight: 500,
-                fontSize: 12,
-                lineHeight: '14px',
-                color: '#FFFFFF',
-                marginBottom: 6,
+                display: "flex",
+                gap: 12,
+                alignItems: "flex-end",
+                marginTop: 14,
               }}
             >
-              {t.purchasePriceLabel}
+              <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                <div
+                  style={{
+                    fontFamily: FONT,
+                    fontWeight: 500,
+                    fontSize: 12,
+                    lineHeight: "14px",
+                    color: "#949494",
+                  }}
+                >
+                  {t.estimatedFinal}
+                </div>
+                <div
+                  style={{
+                    fontFamily: FONT,
+                    fontWeight: 500,
+                    fontSize: 12,
+                    lineHeight: "14px",
+                    color: "#949494",
+                  }}
+                >
+                  {t.costToBulgaria}
+                </div>
+                <div
+                  style={{
+                    fontFamily: FONT,
+                    fontWeight: 700,
+                    fontSize: 12,
+                    lineHeight: "16px",
+                    color: "#FEAE00",
+                    marginTop: 6,
+                  }}
+                >
+                  {current.finalCost}
+                </div>
+              </div>
+              <button
+                type="button"
+                data-testid={`mobile-deal-more-${current.id}`}
+                onClick={() => {
+                  /* Navigate to the single-car page for the currently visible deal.
+                   * Falls back to the catalog if the deal stub has no VIN yet
+                   * (placeholder fixtures during development). */
+                  const targetVin = current.vin || current.id;
+                  window.location.href = targetVin
+                    ? `/cars/${encodeURIComponent(targetVin)}`
+                    : "/catalog";
+                }}
+                style={{
+                  flex: "0 0 auto",
+                  width: 162,
+                  height: 45,
+                  padding: "0 16px",
+                  border: "none",
+                  borderRadius: 4,
+                  background: "#FEAE00",
+                  color: "#000",
+                  fontFamily: FONT,
+                  fontWeight: 500,
+                  fontSize: 12,
+                  lineHeight: "14px",
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+              >
+                {t?.moreDetails || "More details"}
+                <ArrowRight size={14} weight="bold" />
+              </button>
             </div>
-            <div
-              style={{
-                fontFamily: FONT,
-                fontWeight: 700,
-                fontSize: 12,
-                lineHeight: '16px',
-                color: '#FEAE00',
-              }}
-            >
-              {current.purchasePrice}
-            </div>
-          </div>
-
-          <dl
-            style={{
-              flex: '1 1 0',
-              margin: 0,
-              display: 'grid',
-              gridTemplateColumns: 'auto 1fr',
-              gap: '6px 12px',
-              alignContent: 'center',
-              fontFamily: FONT,
-              fontSize: 12,
-              lineHeight: '14px',
-            }}
-          >
-            <dt style={{ color: '#FFFFFF', fontWeight: 500 }}>{t.mileageLabel}</dt>
-            <dd style={{ margin: 0, color: '#FEAE00', fontWeight: 700, textAlign: 'right' }}>{current.mileage}</dd>
-            <dt style={{ color: '#FFFFFF', fontWeight: 500 }}>{t.engineLabel}</dt>
-            <dd style={{ margin: 0, color: '#FEAE00', fontWeight: 700, textAlign: 'right' }}>{translateEngine(current.engine, t)}</dd>
-            <dt style={{ color: '#FFFFFF', fontWeight: 500 }}>{t.driveLabel}</dt>
-            <dd style={{ margin: 0, color: '#FEAE00', fontWeight: 700, textAlign: 'right' }}>{translateDrive(current.drive, t)}</dd>
-          </dl>
-        </div>
-
-        {/* Estimated final cost + MORE DETAILS button (162 × 45, H Medium 12px) */}
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginTop: 14 }}>
-          <div style={{ flex: '1 1 0', minWidth: 0 }}>
-            <div style={{ fontFamily: FONT, fontWeight: 500, fontSize: 12, lineHeight: '14px', color: '#949494' }}>
-              {t.estimatedFinal}
-            </div>
-            <div style={{ fontFamily: FONT, fontWeight: 500, fontSize: 12, lineHeight: '14px', color: '#949494' }}>
-              {t.costToBulgaria}
-            </div>
-            <div style={{ fontFamily: FONT, fontWeight: 700, fontSize: 12, lineHeight: '16px', color: '#FEAE00', marginTop: 6 }}>
-              {current.finalCost}
-            </div>
-          </div>
-          <button
-            type="button"
-            data-testid={`mobile-deal-more-${current.id}`}
-            onClick={() => {
-              /* Navigate to the single-car page for the currently visible deal.
-               * Falls back to the catalog if the deal stub has no VIN yet
-               * (placeholder fixtures during development). */
-              const targetVin = current.vin || current.id;
-              window.location.href = targetVin ? `/cars/${encodeURIComponent(targetVin)}` : '/catalog';
-            }}
-            style={{
-              flex: '0 0 auto',
-              width: 162,
-              height: 45,
-              padding: '0 16px',
-              border: 'none',
-              borderRadius: 4,
-              background: '#FEAE00',
-              color: '#000',
-              fontFamily: FONT,
-              fontWeight: 500,
-              fontSize: 12,
-              lineHeight: '14px',
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-            }}
-          >
-            {t?.moreDetails || 'More details'}
-            <ArrowRight size={14} weight="bold" />
-          </button>
-        </div>
-      </article>
-      )}
+          </article>
+        )}
       </div>
 
       {/* 6 — Pager (130×24) — counter follows real card count 1:1 */}
@@ -2546,9 +2933,9 @@ function MobileTopVehicleDeals({ t }) {
         style={{
           /* user spec: 40 px breathing room between the deal card and the pager */
           marginTop: 40,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
           gap: 16,
           height: 24,
         }}
@@ -2563,18 +2950,30 @@ function MobileTopVehicleDeals({ t }) {
             width: 32,
             height: 32,
             borderRadius: 999,
-            border: '1.5px solid #FEAE00',
-            background: 'transparent',
-            color: '#FEAE00',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: total <= 1 ? 'default' : 'pointer',
+            border: "1.5px solid #FEAE00",
+            background: "transparent",
+            color: "#FEAE00",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: total <= 1 ? "default" : "pointer",
             opacity: total <= 1 ? 0.4 : 1,
           }}
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M15 6l-6 6 6 6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         </button>
         <div
@@ -2582,10 +2981,10 @@ function MobileTopVehicleDeals({ t }) {
             fontFamily: FONT,
             fontWeight: 500,
             fontSize: 14,
-            color: '#FFFFFF',
+            color: "#FFFFFF",
             tabSize: 2,
             minWidth: 56,
-            textAlign: 'center',
+            textAlign: "center",
           }}
         >
           {counter}
@@ -2601,25 +3000,43 @@ function MobileTopVehicleDeals({ t }) {
             width: 32,
             height: 32,
             borderRadius: 999,
-            border: '1.5px solid #FEAE00',
-            background: '#FEAE00',
-            color: '#000',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: total <= 1 || safeIdx >= total - 1 ? 'default' : 'pointer',
+            border: "1.5px solid #FEAE00",
+            background: "#FEAE00",
+            color: "#000",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: total <= 1 || safeIdx >= total - 1 ? "default" : "pointer",
             opacity: total <= 1 || safeIdx >= total - 1 ? 0.4 : 1,
-            transition: 'opacity 150ms ease',
+            transition: "opacity 150ms ease",
           }}
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M9 6l6 6-6 6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         </button>
       </div>
 
       {/* 7 — MORE VEHICLES + (Mazzard H Medium 14) */}
-      <div style={{ marginTop: 40 /* symmetric to card↔pager gap */, display: 'flex', justifyContent: 'center' }}>
+      <div
+        style={{
+          marginTop: 40 /* symmetric to card↔pager gap */,
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
         <a
           href="/catalog"
           data-testid="mobile-deals-more-vehicles"
@@ -2627,15 +3044,15 @@ function MobileTopVehicleDeals({ t }) {
             fontFamily: FONT,
             fontWeight: 500,
             fontSize: 14,
-            lineHeight: '17px',
-            letterSpacing: '0.04em',
-            color: '#FEAE00',
-            textTransform: 'uppercase',
-            textDecoration: 'underline',
+            lineHeight: "17px",
+            letterSpacing: "0.04em",
+            color: "#FEAE00",
+            textTransform: "uppercase",
+            textDecoration: "underline",
             textUnderlineOffset: 3,
           }}
         >
-          {t?.moreVehiclesPlus || 'More vehicles +'}
+          {t?.moreVehiclesPlus || "More vehicles +"}
         </a>
       </div>
 
@@ -2645,19 +3062,18 @@ function MobileTopVehicleDeals({ t }) {
         <ShareModal
           open={shareOpen}
           onClose={() => setShareOpen(false)}
-          vin={String(current.vin || current.id || '')}
+          vin={String(current.vin || current.id || "")}
           snapshot={{
             title: current.name,
             image: current.img,
             price: current.purchasePrice,
-            auction_name: current.auction || 'BidMotors',
+            auction_name: current.auction || "BidMotors",
           }}
         />
       )}
     </section>
   );
 }
-
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /* MobileCarSearch                                                         */
@@ -2668,16 +3084,20 @@ function MobileTopVehicleDeals({ t }) {
 /*   • Section sized 360 × 621 (Figma): card never overlaps hero above.    */
 /* ─────────────────────────────────────────────────────────────────────── */
 function MobileCarSearch({
-  filterBrand, setFilterBrand,
-  filterModel, setFilterModel,
-  yearFrom, setYearFrom,
-  yearTo, setYearTo,
+  filterBrand,
+  setFilterBrand,
+  filterModel,
+  setFilterModel,
+  yearFrom,
+  setYearFrom,
+  yearTo,
+  setYearTo,
   onFindCar,
   t,
 }) {
   const FONT = "'Helvetica Neue', Helvetica, Arial, sans-serif";
   const [openWhich, setOpenWhich] = useState(null);
-  const [brandQuery, setBrandQuery] = useState('');
+  const [brandQuery, setBrandQuery] = useState("");
   const rootRef = useRef(null);
 
   const currentYear = new Date().getFullYear();
@@ -2689,13 +3109,18 @@ function MobileCarSearch({
 
   const brandOptions = useMemo(() => {
     const q = brandQuery.trim().toLowerCase();
-    const list = q ? CAR_BRANDS.filter((b) => b.toLowerCase().includes(q)) : CAR_BRANDS;
-    return [t?.allBrands || 'Any Brand', ...list];
+    const list = q
+      ? CAR_BRANDS.filter((b) => b.toLowerCase().includes(q))
+      : CAR_BRANDS;
+    return [t?.allBrands || "Any Brand", ...list];
   }, [brandQuery, t]);
 
   const modelOptions = useMemo(() => {
     if (!filterBrand) return [];
-    return [t?.allModels || 'Any model', ...(MODELS_BY_BRAND[filterBrand] || [])];
+    return [
+      t?.allModels || "Any model",
+      ...(MODELS_BY_BRAND[filterBrand] || []),
+    ];
   }, [filterBrand, t]);
 
   useEffect(() => {
@@ -2703,40 +3128,40 @@ function MobileCarSearch({
       if (!rootRef.current) return;
       if (!rootRef.current.contains(e.target)) setOpenWhich(null);
     };
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('touchstart', onDoc);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("touchstart", onDoc);
     return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('touchstart', onDoc);
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("touchstart", onDoc);
     };
   }, []);
 
   const pickBrand = (b) => {
-    setFilterBrand(b === 'Any Brand' || b === (t?.allBrands || '') ? '' : b);
-    setFilterModel('');
+    setFilterBrand(b === "Any Brand" || b === (t?.allBrands || "") ? "" : b);
+    setFilterModel("");
     setOpenWhich(null);
-    setBrandQuery('');
+    setBrandQuery("");
   };
   const pickModel = (m) => {
-    setFilterModel(m === 'Any model' || m === (t?.allModels || '') ? '' : m);
+    setFilterModel(m === "Any model" || m === (t?.allModels || "") ? "" : m);
     setOpenWhich(null);
   };
 
   const fieldStyleBase = {
-    width: '100%',
+    width: "100%",
     height: 48,
-    background: '#000',
-    border: '1px solid #2a2a28',
+    background: "#000",
+    border: "1px solid #2a2a28",
     borderRadius: 6,
-    color: '#fff',
+    color: "#fff",
     fontFamily: FONT,
     fontSize: 14,
-    padding: '0 14px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    cursor: 'pointer',
-    boxSizing: 'border-box',
+    padding: "0 14px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    cursor: "pointer",
+    boxSizing: "border-box",
   };
 
   return (
@@ -2744,110 +3169,212 @@ function MobileCarSearch({
       ref={rootRef}
       data-testid="mobile-car-search"
       className="flex justify-center"
-      style={{ minHeight: 621, paddingTop: 56, paddingBottom: 56, boxSizing: 'border-box' }}
+      style={{
+        minHeight: 621,
+        paddingTop: 56,
+        paddingBottom: 56,
+        boxSizing: "border-box",
+      }}
     >
-      <div style={{ width: 336, maxWidth: '100%' }}>     {/* 360 − 12 L − 12 R = 336 (user spec: 12 L/R) */}
+      <div style={{ width: 336, maxWidth: "100%" }}>
+        {" "}
+        {/* 360 − 12 L − 12 R = 336 (user spec: 12 L/R) */}
         <h3
           className="text-center uppercase"
           style={{
-            color: '#FEAE00',
+            color: "#FEAE00",
             fontFamily: FONT,
             fontWeight: 700,
             fontSize: 24,
-            lineHeight: '28px',
-            letterSpacing: '0.04em',
+            lineHeight: "28px",
+            letterSpacing: "0.04em",
             marginBottom: 28,
           }}
         >
-          {t?.carSearch || 'Car Search'}
+          {t?.carSearch || "Car Search"}
         </h3>
-
         {/* BRAND */}
-        <label style={{ display: 'block', color: '#fff', fontFamily: FONT, fontSize: 14, fontWeight: 500, marginBottom: 8 }}>
-          {t?.brand || 'Brand'}
+        <label
+          style={{
+            display: "block",
+            color: "#fff",
+            fontFamily: FONT,
+            fontSize: 14,
+            fontWeight: 500,
+            marginBottom: 8,
+          }}
+        >
+          {t?.brand || "Brand"}
         </label>
-        <div style={{ position: 'relative', marginBottom: 16 }}>
+        <div style={{ position: "relative", marginBottom: 16 }}>
           <button
             type="button"
             data-testid="mobile-brand-trigger"
-            onClick={() => setOpenWhich(openWhich === 'brand' ? null : 'brand')}
-            style={{ ...fieldStyleBase, borderColor: openWhich === 'brand' ? '#FEAE00' : '#2a2a28' }}
+            onClick={() => setOpenWhich(openWhich === "brand" ? null : "brand")}
+            style={{
+              ...fieldStyleBase,
+              borderColor: openWhich === "brand" ? "#FEAE00" : "#2a2a28",
+            }}
           >
-            <span style={{ color: filterBrand ? '#fff' : '#7a7a78' }}>{filterBrand || (t?.allBrands || 'All brands')}</span>
-            <Caret open={openWhich === 'brand'} />
+            <span style={{ color: filterBrand ? "#fff" : "#7a7a78" }}>
+              {filterBrand || t?.allBrands || "All brands"}
+            </span>
+            <Caret open={openWhich === "brand"} />
           </button>
 
-          {openWhich === 'brand' && (
+          {openWhich === "brand" && (
             <div
               data-testid="mobile-brand-panel"
               style={{
-                position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
-                background: '#0a0a0a', border: '1px solid #FEAE00', borderRadius: 6,
-                zIndex: 60, maxHeight: 280, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+                position: "absolute",
+                top: "calc(100% + 6px)",
+                left: 0,
+                right: 0,
+                background: "#0a0a0a",
+                border: "1px solid #FEAE00",
+                borderRadius: 6,
+                zIndex: 60,
+                maxHeight: 280,
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: '1px solid #2a2a28' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7" stroke="#7a7a78" strokeWidth="1.6" />
-                  <path d="M20 20l-3.5-3.5" stroke="#7a7a78" strokeWidth="1.6" strokeLinecap="round" />
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "10px 12px",
+                  borderBottom: "1px solid #2a2a28",
+                }}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <circle
+                    cx="11"
+                    cy="11"
+                    r="7"
+                    stroke="#7a7a78"
+                    strokeWidth="1.6"
+                  />
+                  <path
+                    d="M20 20l-3.5-3.5"
+                    stroke="#7a7a78"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                  />
                 </svg>
                 <input
                   data-testid="mobile-brand-search"
                   type="text"
                   value={brandQuery}
                   onChange={(e) => setBrandQuery(e.target.value)}
-                  placeholder={t?.searchBrand || 'Search brand...'}
-                  style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontFamily: FONT, fontSize: 16 /* >=16px prevents iOS auto-zoom */ }}
+                  placeholder={t?.searchBrand || "Search brand..."}
+                  style={{
+                    flex: 1,
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    color: "#fff",
+                    fontFamily: FONT,
+                    fontSize: 16 /* >=16px prevents iOS auto-zoom */,
+                  }}
                 />
               </div>
-              <div style={{ overflowY: 'auto', maxHeight: 230 }}>
+              <div style={{ overflowY: "auto", maxHeight: 230 }}>
                 {brandOptions.map((b) => (
                   <button
                     key={b}
                     type="button"
                     onClick={() => pickBrand(b)}
                     data-testid={`mobile-brand-option-${b}`}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 16px', background: 'transparent', border: 'none', color: '#fff', fontFamily: FONT, fontSize: 14, cursor: 'pointer' }}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "12px 16px",
+                      background: "transparent",
+                      border: "none",
+                      color: "#fff",
+                      fontFamily: FONT,
+                      fontSize: 14,
+                      cursor: "pointer",
+                    }}
                   >
                     {b}
                   </button>
                 ))}
                 {brandOptions.length === 1 && (
-                  <div style={{ padding: '12px 16px', color: '#7a7a78', fontFamily: FONT, fontSize: 13 }}>{t?.noBrandsFound || 'No brands found'}</div>
+                  <div
+                    style={{
+                      padding: "12px 16px",
+                      color: "#7a7a78",
+                      fontFamily: FONT,
+                      fontSize: 13,
+                    }}
+                  >
+                    {t?.noBrandsFound || "No brands found"}
+                  </div>
                 )}
               </div>
             </div>
           )}
         </div>
-
         {/* MODEL (locked until brand selected) */}
-        <label style={{ display: 'block', color: filterBrand ? '#fff' : '#5a5a58', fontFamily: FONT, fontSize: 14, fontWeight: 500, marginBottom: 8 }}>
-          {t?.model || 'Model'}
+        <label
+          style={{
+            display: "block",
+            color: filterBrand ? "#fff" : "#5a5a58",
+            fontFamily: FONT,
+            fontSize: 14,
+            fontWeight: 500,
+            marginBottom: 8,
+          }}
+        >
+          {t?.model || "Model"}
         </label>
-        <div style={{ position: 'relative', marginBottom: 16 }}>
+        <div style={{ position: "relative", marginBottom: 16 }}>
           <button
             type="button"
             data-testid="mobile-model-trigger"
             disabled={!filterBrand}
-            onClick={() => filterBrand && setOpenWhich(openWhich === 'model' ? null : 'model')}
+            onClick={() =>
+              filterBrand &&
+              setOpenWhich(openWhich === "model" ? null : "model")
+            }
             style={{
               ...fieldStyleBase,
-              cursor: filterBrand ? 'pointer' : 'not-allowed',
+              cursor: filterBrand ? "pointer" : "not-allowed",
               opacity: filterBrand ? 1 : 0.5,
-              borderColor: openWhich === 'model' ? '#FEAE00' : '#2a2a28',
+              borderColor: openWhich === "model" ? "#FEAE00" : "#2a2a28",
             }}
           >
-            <span style={{ color: filterModel ? '#fff' : '#7a7a78' }}>{filterModel || (t?.allModels || 'All models')}</span>
-            <Caret open={openWhich === 'model'} />
+            <span style={{ color: filterModel ? "#fff" : "#7a7a78" }}>
+              {filterModel || t?.allModels || "All models"}
+            </span>
+            <Caret open={openWhich === "model"} />
           </button>
 
-          {openWhich === 'model' && filterBrand && (
+          {openWhich === "model" && filterBrand && (
             <div
               data-testid="mobile-model-panel"
               style={{
-                position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
-                background: '#0a0a0a', border: '1px solid #FEAE00', borderRadius: 6,
-                zIndex: 60, maxHeight: 260, overflowY: 'auto',
+                position: "absolute",
+                top: "calc(100% + 6px)",
+                left: 0,
+                right: 0,
+                background: "#0a0a0a",
+                border: "1px solid #FEAE00",
+                borderRadius: 6,
+                zIndex: 60,
+                maxHeight: 260,
+                overflowY: "auto",
               }}
             >
               {modelOptions.map((m) => (
@@ -2856,7 +3383,18 @@ function MobileCarSearch({
                   type="button"
                   onClick={() => pickModel(m)}
                   data-testid={`mobile-model-option-${m}`}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 16px', background: 'transparent', border: 'none', color: '#fff', fontFamily: FONT, fontSize: 14, cursor: 'pointer' }}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "12px 16px",
+                    background: "transparent",
+                    border: "none",
+                    color: "#fff",
+                    fontFamily: FONT,
+                    fontSize: 14,
+                    cursor: "pointer",
+                  }}
                 >
                   {m}
                 </button>
@@ -2864,28 +3402,70 @@ function MobileCarSearch({
             </div>
           )}
         </div>
-
         {/* YEAR FROM */}
-        <label style={{ display: 'block', color: '#fff', fontFamily: FONT, fontSize: 14, fontWeight: 500, marginBottom: 8 }}>{t?.year || 'Year'}</label>
-        <YearSelect value={yearFrom} onChange={setYearFrom} placeholder={t?.fromShort || 'From'} years={YEARS} testid="mobile-year-from" />
-
+        <label
+          style={{
+            display: "block",
+            color: "#fff",
+            fontFamily: FONT,
+            fontSize: 14,
+            fontWeight: 500,
+            marginBottom: 8,
+          }}
+        >
+          {t?.year || "Year"}
+        </label>
+        <YearSelect
+          value={yearFrom}
+          onChange={setYearFrom}
+          placeholder={t?.fromShort || "From"}
+          years={YEARS}
+          testid="mobile-year-from"
+        />
         {/* YEAR TO */}
-        <label style={{ display: 'block', color: '#fff', fontFamily: FONT, fontSize: 14, fontWeight: 500, marginBottom: 8, marginTop: 16 }}>{t?.year || 'Year'}</label>
-        <YearSelect value={yearTo} onChange={setYearTo} placeholder={t?.toShort || 'To'} years={YEARS} testid="mobile-year-to" />
-
+        <label
+          style={{
+            display: "block",
+            color: "#fff",
+            fontFamily: FONT,
+            fontSize: 14,
+            fontWeight: 500,
+            marginBottom: 8,
+            marginTop: 16,
+          }}
+        >
+          {t?.year || "Year"}
+        </label>
+        <YearSelect
+          value={yearTo}
+          onChange={setYearTo}
+          placeholder={t?.toShort || "To"}
+          years={YEARS}
+          testid="mobile-year-to"
+        />
         {/* FIND A CAR */}
         <button
           type="button"
           onClick={onFindCar}
           data-testid="mobile-find-car"
           style={{
-            display: 'block', width: '100%', height: 45, marginTop: 28,
-            background: '#FEAE00', color: '#000', border: 'none', borderRadius: 4,
-            fontFamily: FONT, fontWeight: 600, fontSize: 14, letterSpacing: '0.06em',
-            textTransform: 'uppercase', cursor: 'pointer',
+            display: "block",
+            width: "100%",
+            height: 45,
+            marginTop: 28,
+            background: "#FEAE00",
+            color: "#000",
+            border: "none",
+            borderRadius: 4,
+            fontFamily: FONT,
+            fontWeight: 600,
+            fontSize: 14,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            cursor: "pointer",
           }}
         >
-          {t?.findCar || 'Find a car'}
+          {t?.findCar || "Find a car"}
         </button>
       </div>
     </section>
@@ -2894,9 +3474,24 @@ function MobileCarSearch({
 
 function Caret({ open }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-         style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 150ms' }}>
-      <path d="M6 9l6 6 6-6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      style={{
+        transform: open ? "rotate(180deg)" : "none",
+        transition: "transform 150ms",
+      }}
+    >
+      <path
+        d="M6 9l6 6 6-6"
+        stroke="#fff"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -2904,29 +3499,49 @@ function Caret({ open }) {
 function YearSelect({ value, onChange, placeholder, years, testid }) {
   const FONT = "'Helvetica Neue', Helvetica, Arial, sans-serif";
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: "relative" }}>
       <select
         data-testid={testid}
-        value={value || ''}
+        value={value || ""}
         onChange={(e) => onChange(e.target.value)}
         style={{
-          width: '100%', height: 48, background: '#000', border: '1px solid #2a2a28',
-          borderRadius: 6, color: value ? '#fff' : '#7a7a78',
-          fontFamily: FONT, fontSize: 16 /* >=16px prevents iOS auto-zoom on select */, padding: '0 36px 0 14px',
-          appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
-          cursor: 'pointer', boxSizing: 'border-box',
+          width: "100%",
+          height: 48,
+          background: "#000",
+          border: "1px solid #2a2a28",
+          borderRadius: 6,
+          color: value ? "#fff" : "#7a7a78",
+          fontFamily: FONT,
+          fontSize: 16 /* >=16px prevents iOS auto-zoom on select */,
+          padding: "0 36px 0 14px",
+          appearance: "none",
+          WebkitAppearance: "none",
+          MozAppearance: "none",
+          cursor: "pointer",
+          boxSizing: "border-box",
         }}
       >
         <option value="">{placeholder}</option>
-        {years.map((y) => (<option key={y} value={y}>{y}</option>))}
+        {years.map((y) => (
+          <option key={y} value={y}>
+            {y}
+          </option>
+        ))}
       </select>
-      <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+      <span
+        style={{
+          position: "absolute",
+          right: 14,
+          top: "50%",
+          transform: "translateY(-50%)",
+          pointerEvents: "none",
+        }}
+      >
         <Caret open={false} />
       </span>
     </div>
   );
 }
-
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /* MobileCalculateCar — "Calculate a car yourself / with a price guarantee" */
@@ -2943,8 +3558,9 @@ function YearSelect({ value, onChange, placeholder, years, testid }) {
 /* ─────────────────────────────────────────────────────────────────────── */
 function MobileCalculateCar({ t }) {
   const FONT = "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif";
-  const FONT_BTN = "'Helvetica Now Display', 'Helvetica Neue', Helvetica, Arial, sans-serif";
-  const [vin, setVin] = useState('');
+  const FONT_BTN =
+    "'Helvetica Now Display', 'Helvetica Neue', Helvetica, Arial, sans-serif";
+  const [vin, setVin] = useState("");
 
   const submit = (e) => {
     e?.preventDefault?.();
@@ -2952,7 +3568,7 @@ function MobileCalculateCar({ t }) {
     if (q) {
       window.location.href = `/calculator?vin=${encodeURIComponent(q)}`;
     } else {
-      window.location.href = '/calculator';
+      window.location.href = "/calculator";
     }
   };
 
@@ -2962,9 +3578,9 @@ function MobileCalculateCar({ t }) {
       style={{
         padding: 0,
         margin: 0,
-        boxSizing: 'border-box',
-        background: '#000',
-        width: '100%',
+        boxSizing: "border-box",
+        background: "#000",
+        width: "100%",
       }}
     >
       {/* ── Yellow outer frame — FULL VIEWPORT WIDTH (no black side margins)
@@ -2988,20 +3604,20 @@ function MobileCalculateCar({ t }) {
        * ──────────────────────────────────────────────────────────────── */}
       <div
         style={{
-          backgroundColor: '#FEAE00',
-          width: '100%',
-          boxSizing: 'border-box',
-          padding: '55px 13px',
-          display: 'flex',
-          flexDirection: 'column',
+          backgroundColor: "#FEAE00",
+          width: "100%",
+          boxSizing: "border-box",
+          padding: "55px 13px",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         {/* Hero image — full inner width, aspect 335 / 188 */}
         <div
           style={{
-            width: '100%',
-            aspectRatio: '335 / 188',
-            overflow: 'hidden',
+            width: "100%",
+            aspectRatio: "335 / 188",
+            overflow: "hidden",
             lineHeight: 0,
             flexShrink: 0,
           }}
@@ -3010,11 +3626,11 @@ function MobileCalculateCar({ t }) {
             src="/mobile/image-93@2x.png"
             alt="Ford pickup ready for delivery"
             style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              objectPosition: 'center',
-              display: 'block',
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              objectPosition: "center",
+              display: "block",
             }}
             loading="lazy"
           />
@@ -3023,21 +3639,21 @@ function MobileCalculateCar({ t }) {
         {/* Black inner card — full inner width, holds all calculator content */}
         <div
           style={{
-            backgroundColor: '#000',
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
+            backgroundColor: "#000",
+            width: "100%",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
             minHeight: 409,
           }}
         >
           {/* Title block — 39 px top padding, 30 px sides */}
           <div
             style={{
-              padding: '39px 30px 0',
-              textAlign: 'center',
-              width: '100%',
-              boxSizing: 'border-box',
+              padding: "39px 30px 0",
+              textAlign: "center",
+              width: "100%",
+              boxSizing: "border-box",
               flexShrink: 0,
             }}
           >
@@ -3047,22 +3663,26 @@ function MobileCalculateCar({ t }) {
                 fontFamily: FONT,
                 fontWeight: 700,
                 fontSize: 24,
-                lineHeight: '28px',
-                letterSpacing: '-0.005em',
+                lineHeight: "28px",
+                letterSpacing: "-0.005em",
               }}
             >
               <AnimatedHeading
                 as="span"
                 text={t?.calculateCarYourself || "Calculate a car yourself"}
-                style={{ color: '#FEAE00', display: 'block' }}
+                style={{ color: "#FEAE00", display: "block" }}
               />
               <AnimatedHeading
                 as="span"
                 text={t?.withPriceGuarantee || "with a price guarantee"}
-                baseDelay={(t?.calculateCarYourself || 'Calculate a car yourself').replace(/\s/g, '').length * 28}
+                baseDelay={
+                  (
+                    t?.calculateCarYourself || "Calculate a car yourself"
+                  ).replace(/\s/g, "").length * 28
+                }
                 style={{
-                  color: '#FFFFFF',
-                  display: 'block',
+                  color: "#FFFFFF",
+                  display: "block",
                   marginTop: 4,
                 }}
               />
@@ -3071,15 +3691,15 @@ function MobileCalculateCar({ t }) {
             {/* Subtitle — 19 px gap from title */}
             <p
               style={{
-                margin: '19px 0 0',
+                margin: "19px 0 0",
                 fontFamily: FONT,
                 fontWeight: 500,
                 fontSize: 14,
-                lineHeight: '18px',
-                color: '#FFFFFF',
+                lineHeight: "18px",
+                color: "#FFFFFF",
               }}
             >
-              {t?.fromUsaKorea || 'From the USA and Korea'}
+              {t?.fromUsaKorea || "From the USA and Korea"}
             </p>
           </div>
 
@@ -3089,18 +3709,18 @@ function MobileCalculateCar({ t }) {
           {/* Search input — 317 × 40, centered */}
           <div
             style={{
-              display: 'flex',
-              alignItems: 'center',
+              display: "flex",
+              alignItems: "center",
               gap: 10,
               width: 317,
               height: 40,
-              padding: '0 12px',
-              background: 'transparent',
-              border: '1px solid #3a3a36',
+              padding: "0 12px",
+              background: "transparent",
+              border: "1px solid #3a3a36",
               borderRadius: 6,
-              boxSizing: 'border-box',
+              boxSizing: "border-box",
               flexShrink: 0,
-              maxWidth: 'calc(100% - 18px)',
+              maxWidth: "calc(100% - 18px)",
             }}
           >
             {/* Icon — exact 24 × 24 */}
@@ -3112,7 +3732,13 @@ function MobileCalculateCar({ t }) {
               aria-hidden="true"
               style={{ flexShrink: 0 }}
             >
-              <circle cx="11" cy="11" r="7" stroke="#9a9a96" strokeWidth="1.7" />
+              <circle
+                cx="11"
+                cy="11"
+                r="7"
+                stroke="#9a9a96"
+                strokeWidth="1.7"
+              />
               <path
                 d="M20 20l-3.5-3.5"
                 stroke="#9a9a96"
@@ -3125,19 +3751,19 @@ function MobileCalculateCar({ t }) {
               type="text"
               value={vin}
               onChange={(e) => setVin(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && submit(e)}
+              onKeyDown={(e) => e.key === "Enter" && submit(e)}
               placeholder={t?.searchByVin || "Search by VIN or lot number"}
               style={{
                 flex: 1,
-                background: 'transparent',
-                border: 'none',
-                outline: 'none',
-                color: '#FFFFFF',
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                color: "#FFFFFF",
                 /* Helvetica Now Display Regular 14 px (placeholder spec) */
                 fontFamily: FONT_BTN,
                 fontWeight: 400,
                 fontSize: 14,
-                lineHeight: '21px',
+                lineHeight: "21px",
                 minWidth: 0,
               }}
             />
@@ -3152,25 +3778,25 @@ function MobileCalculateCar({ t }) {
             onClick={submit}
             data-testid="mobile-calc-submit"
             style={{
-              display: 'block',
+              display: "block",
               width: 294,
               height: 45,
-              maxWidth: 'calc(100% - 41px)',
-              background: '#FEAE00',
-              color: '#000',
-              border: 'none',
+              maxWidth: "calc(100% - 41px)",
+              background: "#FEAE00",
+              color: "#000",
+              border: "none",
               borderRadius: 6,
               fontFamily: FONT_BTN,
               fontWeight: 600,
               fontSize: 14,
-              lineHeight: '18px',
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              cursor: 'pointer',
+              lineHeight: "18px",
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              cursor: "pointer",
               flexShrink: 0,
             }}
           >
-            {t?.calculate || 'Calculate'}
+            {t?.calculate || "Calculate"}
           </button>
 
           {/* spacer — pushes ALL CATALOG towards the bottom */}
@@ -3179,10 +3805,10 @@ function MobileCalculateCar({ t }) {
           {/* ALL CATALOG + — centered, 30 px bottom padding */}
           <div
             style={{
-              padding: '0 0 30px',
-              textAlign: 'center',
-              width: '100%',
-              boxSizing: 'border-box',
+              padding: "0 0 30px",
+              textAlign: "center",
+              width: "100%",
+              boxSizing: "border-box",
               flexShrink: 0,
             }}
           >
@@ -3193,16 +3819,16 @@ function MobileCalculateCar({ t }) {
                 fontFamily: FONT,
                 fontWeight: 500,
                 fontSize: 14,
-                lineHeight: '18px',
-                color: '#FEAE00',
-                textTransform: 'uppercase',
-                textDecoration: 'underline',
+                lineHeight: "18px",
+                color: "#FEAE00",
+                textTransform: "uppercase",
+                textDecoration: "underline",
                 textUnderlineOffset: 4,
-                textDecorationThickness: '1px',
-                letterSpacing: '0.06em',
+                textDecorationThickness: "1px",
+                letterSpacing: "0.06em",
               }}
             >
-              {t?.allCatalogPlus || 'All catalog +'}
+              {t?.allCatalogPlus || "All catalog +"}
             </a>
           </div>
         </div>
@@ -3210,8 +3836,6 @@ function MobileCalculateCar({ t }) {
     </section>
   );
 }
-
-
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /* MobileHowWeWork — "HOW WE WORK / WE WORK FOR EACH CLIENT" mobile section
@@ -3242,65 +3866,63 @@ function MobileHowWeWork() {
     "'Helvetica Now Display', 'Helvetica Neue', Helvetica, Arial, sans-serif";
 
   const { lang } = useLang();
-  const isBg = (lang || 'en').toLowerCase().startsWith('bg');
+  const isBg = (lang || "en").toLowerCase().startsWith("bg");
   const L = isBg
     ? {
-        title: 'Как работим',
-        weWorkForEachClient: 'Работим за всеки клиент',
-        dependingOnBudget: 'според бюджета',
-        haveAQuestion: 'Имате въпрос?',
-        contactUs: 'Свържете се с нас',
-        popular: 'популярен',
+        title: "Как работим",
+        weWorkForEachClient: "Работим за всеки клиент",
+        dependingOnBudget: "според бюджета",
+        haveAQuestion: "Имате въпрос?",
+        contactUs: "Свържете се с нас",
+        popular: "популярен",
         plans: [
           {
-            key: 'standard',
-            tag: 'Стандарт',
-            desc: 'Намиране, инспекция, наддаване, покупка\nи доставка до България.',
-            accent: 'Останалите стъпки\nизвършвате сами.',
+            key: "standard",
+            tag: "Стандарт",
+            desc: "Намиране, инспекция, наддаване, покупка\nи доставка до България.",
+            accent: "Останалите стъпки\nизвършвате сами.",
           },
           {
-            key: 'turnkey',
-            tag: 'На ключ',
-            desc:
-              'Пълно обслужване без ваше участие:\nнамиране, инспекция, покупка,\nдоставка, адаптация, технически\nпреглед и регистрация.',
-            accent: 'Получавате готов за карaне\nавтомобил.',
+            key: "turnkey",
+            tag: "На ключ",
+            desc: "Пълно обслужване без ваше участие:\nнамиране, инспекция, покупка,\nдоставка, адаптация, технически\nпреглед и регистрация.",
+            accent: "Получавате готов за карaне\nавтомобил.",
           },
           {
-            key: 'sourcing',
-            tag: 'Намиране + Доставка\n+ Поддръжка',
-            desc: 'Намиране, инспекция, покупка\nи доставка.',
+            key: "sourcing",
+            tag: "Намиране + Доставка\n+ Поддръжка",
+            desc: "Намиране, инспекция, покупка\nи доставка.",
             accent:
-              'Регистрацията поемате сами —\nние ви свързваме с доверени\nсервизни партньори.',
+              "Регистрацията поемате сами —\nние ви свързваме с доверени\nсервизни партньори.",
           },
         ],
       }
     : {
-        title: 'How we work',
-        weWorkForEachClient: 'We work for each client',
-        dependingOnBudget: 'depending on the budget',
-        haveAQuestion: 'Have a question?',
-        contactUs: 'Contact us',
-        popular: 'popular',
+        title: "How we work",
+        weWorkForEachClient: "We work for each client",
+        dependingOnBudget: "depending on the budget",
+        haveAQuestion: "Have a question?",
+        contactUs: "Contact us",
+        popular: "popular",
         plans: [
           {
-            key: 'standard',
-            tag: 'Standard',
-            desc: 'Sourcing, inspection, bidding, purchase,\nand delivery to Bulgaria.',
-            accent: 'From there, you handle\neverything yourself.',
+            key: "standard",
+            tag: "Standard",
+            desc: "Sourcing, inspection, bidding, purchase,\nand delivery to Bulgaria.",
+            accent: "From there, you handle\neverything yourself.",
           },
           {
-            key: 'turnkey',
-            tag: 'Turnkey',
-            desc:
-              'Full-service with zero involvement\nrequired: sourcing, inspection,\npurchase, delivery, adaptation,\ntechnical inspection, and registration.',
-            accent: 'You simply pick up\na ready-to-drive car.',
+            key: "turnkey",
+            tag: "Turnkey",
+            desc: "Full-service with zero involvement\nrequired: sourcing, inspection,\npurchase, delivery, adaptation,\ntechnical inspection, and registration.",
+            accent: "You simply pick up\na ready-to-drive car.",
           },
           {
-            key: 'sourcing',
-            tag: 'Sourcing + Delivery\n+ Support',
-            desc: 'Sourcing, inspection, purchase, and\ndelivery.',
+            key: "sourcing",
+            tag: "Sourcing + Delivery\n+ Support",
+            desc: "Sourcing, inspection, purchase, and\ndelivery.",
             accent:
-              'You handle registration - we\nconnect you with trusted service\npartners.',
+              "You handle registration - we\nconnect you with trusted service\npartners.",
           },
         ],
       };
@@ -3313,26 +3935,26 @@ function MobileHowWeWork() {
   const PLANS = L.plans.map((p, idx) => ({
     ...p,
     num: idx + 1,
-    popular: p.key === 'turnkey',
-    yellow: p.key === 'turnkey',
+    popular: p.key === "turnkey",
+    yellow: p.key === "turnkey",
   }));
 
   return (
     <section
       data-testid="mobile-how-we-work"
       style={{
-        padding: '62px 0 0',
-        background: '#000',
-        boxSizing: 'border-box',
-        width: '100%',
+        padding: "62px 0 0",
+        background: "#000",
+        boxSizing: "border-box",
+        width: "100%",
       }}
     >
       {/* ── Title block — 63.5 px side padding, centered ─────────────── */}
       <div
         style={{
-          padding: '0 63.5px',
-          textAlign: 'center',
-          boxSizing: 'border-box',
+          padding: "0 63.5px",
+          textAlign: "center",
+          boxSizing: "border-box",
         }}
       >
         <AnimatedHeading
@@ -3343,28 +3965,28 @@ function MobileHowWeWork() {
             fontFamily: FONT,
             fontWeight: 700,
             fontSize: 24,
-            lineHeight: '28px',
-            color: '#FEAE00',
-            textTransform: 'uppercase',
-            letterSpacing: '0.02em',
+            lineHeight: "28px",
+            color: "#FEAE00",
+            textTransform: "uppercase",
+            letterSpacing: "0.02em",
           }}
         />
 
         <p
           style={{
-            margin: '24px 0 0',
+            margin: "24px 0 0",
             fontFamily: FONT,
             fontWeight: 500,
             fontSize: 16,
-            lineHeight: '20px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
+            lineHeight: "20px",
+            textTransform: "uppercase",
+            letterSpacing: "0.04em",
           }}
         >
-          <span style={{ color: '#FEAE00', display: 'block' }}>
+          <span style={{ color: "#FEAE00", display: "block" }}>
             {L.weWorkForEachClient}
           </span>
-          <span style={{ color: '#FFFFFF', display: 'block', marginTop: 2 }}>
+          <span style={{ color: "#FFFFFF", display: "block", marginTop: 2 }}>
             {L.dependingOnBudget}
           </span>
         </p>
@@ -3376,24 +3998,24 @@ function MobileHowWeWork() {
         className="tilt-scope-mobile"
         style={{
           marginTop: 91,
-          padding: '0 12px',                      /* user spec: 12 L/R on welcome mobile */
-          display: 'flex',
-          flexDirection: 'column',
+          padding: "0 12px" /* user spec: 12 L/R on welcome mobile */,
+          display: "flex",
+          flexDirection: "column",
           gap: 17,
-          boxSizing: 'border-box',
+          boxSizing: "border-box",
         }}
       >
         {PLANS.map((p) => {
-          const bg = p.yellow ? '#FEAE00' : '#0E0E0E';
-          const border = p.yellow ? 'none' : '1px solid #FEAE00';
-          const numColor = p.yellow ? 'rgba(0,0,0,0.55)' : '#FEAE00';
-          const titleColor = p.yellow ? '#000000' : '#FEAE00';
+          const bg = p.yellow ? "#FEAE00" : "#0E0E0E";
+          const border = p.yellow ? "none" : "1px solid #FEAE00";
+          const numColor = p.yellow ? "rgba(0,0,0,0.55)" : "#FEAE00";
+          const titleColor = p.yellow ? "#000000" : "#FEAE00";
           const descColor = p.yellow
-            ? '#000000'
-            : p.key === 'sourcing'
-              ? '#FFFFFF'
-              : '#FFFFFF';
-          const accentColor = p.yellow ? '#000000' : '#FEAE00';
+            ? "#000000"
+            : p.key === "sourcing"
+              ? "#FFFFFF"
+              : "#FFFFFF";
+          const accentColor = p.yellow ? "#000000" : "#FEAE00";
 
           return (
             <div
@@ -3404,29 +4026,29 @@ function MobileHowWeWork() {
                 background: bg,
                 border,
                 borderRadius: 0,
-                padding: '24px 24px 26px',
-                position: 'relative',
-                boxSizing: 'border-box',
+                padding: "24px 24px 26px",
+                position: "relative",
+                boxSizing: "border-box",
                 fontFamily: FONT,
                 /* leather-like noise on dark cards (subtle) */
                 backgroundImage: p.yellow
                   ? undefined
-                  : 'radial-gradient(circle at 30% 0%, rgba(254,174,0,0.04), transparent 50%)',
+                  : "radial-gradient(circle at 30% 0%, rgba(254,174,0,0.04), transparent 50%)",
               }}
             >
               {/* Top row: [N] number + optional [popular] pill */}
               <div
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                   marginBottom: 20,
                 }}
               >
                 <div
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
+                    display: "flex",
+                    alignItems: "center",
                     gap: 14,
                   }}
                 >
@@ -3434,9 +4056,9 @@ function MobileHowWeWork() {
                     style={{
                       width: 39,
                       height: 25,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
                       color: numColor,
                       fontFamily: FONT,
                       lineHeight: 1,
@@ -3444,9 +4066,21 @@ function MobileHowWeWork() {
                       letterSpacing: 0,
                     }}
                   >
-                    <span style={{ fontWeight: 400, fontSize: 25, lineHeight: 1 }}>[</span>
-                    <span style={{ fontWeight: 600, fontSize: 13, lineHeight: 1 }}>{p.num}</span>
-                    <span style={{ fontWeight: 400, fontSize: 25, lineHeight: 1 }}>]</span>
+                    <span
+                      style={{ fontWeight: 400, fontSize: 25, lineHeight: 1 }}
+                    >
+                      [
+                    </span>
+                    <span
+                      style={{ fontWeight: 600, fontSize: 13, lineHeight: 1 }}
+                    >
+                      {p.num}
+                    </span>
+                    <span
+                      style={{ fontWeight: 400, fontSize: 25, lineHeight: 1 }}
+                    >
+                      ]
+                    </span>
                   </span>
                   <h3
                     style={{
@@ -3454,10 +4088,10 @@ function MobileHowWeWork() {
                       fontFamily: FONT,
                       fontWeight: 700,
                       fontSize: 24,
-                      lineHeight: '28px',
+                      lineHeight: "28px",
                       color: titleColor,
-                      whiteSpace: 'pre-line',
-                      letterSpacing: '-0.005em',
+                      whiteSpace: "pre-line",
+                      letterSpacing: "-0.005em",
                     }}
                   >
                     {p.tag}
@@ -3469,20 +4103,20 @@ function MobileHowWeWork() {
                     style={{
                       width: 64,
                       height: 32,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      border: '1px solid rgba(0,0,0,0.85)',
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      border: "1px solid rgba(0,0,0,0.85)",
                       borderRadius: 16,
-                      color: '#000000',
+                      color: "#000000",
                       fontFamily: FONT,
                       fontWeight: 500,
                       fontSize: 12,
-                      lineHeight: '14px',
-                      textTransform: 'lowercase',
-                      letterSpacing: '0.02em',
+                      lineHeight: "14px",
+                      textTransform: "lowercase",
+                      letterSpacing: "0.02em",
                       flexShrink: 0,
-                      boxSizing: 'border-box',
+                      boxSizing: "border-box",
                     }}
                   >
                     {L.popular}
@@ -3493,13 +4127,13 @@ function MobileHowWeWork() {
               {/* Description (Helvetica Now/New Display Regular 18) */}
               <p
                 style={{
-                  margin: '0 0 22px',
+                  margin: "0 0 22px",
                   fontFamily: HELV,
                   fontWeight: 400,
                   fontSize: 18,
-                  lineHeight: '24px',
+                  lineHeight: "24px",
                   color: descColor,
-                  whiteSpace: 'pre-line',
+                  whiteSpace: "pre-line",
                 }}
               >
                 {p.desc}
@@ -3512,9 +4146,9 @@ function MobileHowWeWork() {
                   fontFamily: HELV,
                   fontWeight: 700,
                   fontSize: 18,
-                  lineHeight: '24px',
+                  lineHeight: "24px",
                   color: accentColor,
-                  whiteSpace: 'pre-line',
+                  whiteSpace: "pre-line",
                 }}
               >
                 {p.accent}
@@ -3543,18 +4177,18 @@ function MobileHowWeWork() {
         <div
           data-testid="mobile-have-a-question"
           style={{
-            marginTop: 57, /* 17 (gap) + 57 = 74 px from end of last plan card */
-            marginBottom: 43, /* bottom padding to next section */
-            background: '#000000',
-            border: '1px solid #FEAE00',
+            marginTop: 57 /* 17 (gap) + 57 = 74 px from end of last plan card */,
+            marginBottom: 43 /* bottom padding to next section */,
+            background: "#000000",
+            border: "1px solid #FEAE00",
             borderRadius: 8,
-            padding: '35px 97px 42px',
-            textAlign: 'center',
+            padding: "35px 97px 42px",
+            textAlign: "center",
             fontFamily: FONT,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            boxSizing: 'border-box',
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            boxSizing: "border-box",
           }}
         >
           <div
@@ -3562,8 +4196,8 @@ function MobileHowWeWork() {
               fontFamily: FONT,
               fontWeight: 700,
               fontSize: 16,
-              lineHeight: '20px',
-              color: '#FFFFFF',
+              lineHeight: "20px",
+              color: "#FFFFFF",
             }}
           >
             {L.haveAQuestion}
@@ -3575,8 +4209,8 @@ function MobileHowWeWork() {
               fontFamily: FONT,
               fontWeight: 700,
               fontSize: 16,
-              lineHeight: '20px',
-              color: '#FFFFFF',
+              lineHeight: "20px",
+              color: "#FFFFFF",
             }}
           >
             {L.contactUs}
@@ -3589,10 +4223,10 @@ function MobileHowWeWork() {
               fontFamily: FONT,
               fontWeight: 700,
               fontSize: 16,
-              lineHeight: '20px',
-              color: '#FEAE00',
-              textDecoration: 'none',
-              whiteSpace: 'nowrap',
+              lineHeight: "20px",
+              color: "#FEAE00",
+              textDecoration: "none",
+              whiteSpace: "nowrap",
             }}
           >
             +359 875 313 158
@@ -3605,10 +4239,10 @@ function MobileHowWeWork() {
               fontFamily: FONT,
               fontWeight: 700,
               fontSize: 16,
-              lineHeight: '20px',
-              color: '#FEAE00',
-              textDecoration: 'none',
-              whiteSpace: 'nowrap',
+              lineHeight: "20px",
+              color: "#FEAE00",
+              textDecoration: "none",
+              whiteSpace: "nowrap",
             }}
           >
             +359 897 884 804
@@ -3618,7 +4252,6 @@ function MobileHowWeWork() {
     </section>
   );
 }
-
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /* MobileHowToBuyTurnkey — "How to buy a turnkey car" mobile adaptation
@@ -3653,32 +4286,32 @@ function MobileHowToBuyTurnkey() {
   const FONT = "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif";
 
   const { lang } = useLang();
-  const isBg = (lang || 'en').toLowerCase().startsWith('bg');
+  const isBg = (lang || "en").toLowerCase().startsWith("bg");
   const L = isBg
     ? {
-        titleLine1: 'Как да купите',
-        titleLine2: 'автомобил на ключ',
-        joinOurGroup: 'Присъединете се\nкъм нашата група',
-        pickUpTheCar: 'Получете автомобила',
+        titleLine1: "Как да купите",
+        titleLine2: "автомобил на ключ",
+        joinOurGroup: "Присъединете се\nкъм нашата група",
+        pickUpTheCar: "Получете автомобила",
         steps: [
-          'Изпращаме заявка',
-          'Обсъждаме детайлите',
-          'Търсим автомобила',
-          'Купуваме и доставяме до\nевропейско пристанище',
-          'Митническо оформяне и\nдоставка до България',
+          "Изпращаме заявка",
+          "Обсъждаме детайлите",
+          "Търсим автомобила",
+          "Купуваме и доставяме до\nевропейско пристанище",
+          "Митническо оформяне и\nдоставка до България",
         ],
       }
     : {
-        titleLine1: 'How to buy',
-        titleLine2: 'a turnkey car',
-        joinOurGroup: 'Join our group',
-        pickUpTheCar: 'Pick up the car',
+        titleLine1: "How to buy",
+        titleLine2: "a turnkey car",
+        joinOurGroup: "Join our group",
+        pickUpTheCar: "Pick up the car",
         steps: [
-          'We send an application',
-          'We discuss the details',
-          'We look for a car',
-          'We buy and deliver to a\nEuropean port',
-          'We clear customs and\ndeliver the car to Bulgaria',
+          "We send an application",
+          "We discuss the details",
+          "We look for a car",
+          "We buy and deliver to a\nEuropean port",
+          "We clear customs and\ndeliver the car to Bulgaria",
         ],
       };
 
@@ -3699,12 +4332,12 @@ function MobileHowToBuyTurnkey() {
     <section
       data-testid="mobile-how-to-buy-turnkey"
       style={{
-        position: 'relative',
-        background: '#0A0A0A',
-        padding: '28px 0 39px',
-        overflow: 'hidden',
-        boxSizing: 'border-box',
-        width: '100%',
+        position: "relative",
+        background: "#0A0A0A",
+        padding: "28px 0 39px",
+        overflow: "hidden",
+        boxSizing: "border-box",
+        width: "100%",
         // Total card height per Figma = 1262 px:
         //   button top 1023 + 45 + 53 (gap) + 44 (2-line caption) + 16 (gap)
         //   + 42 (viber) + 39 (bottom padding) = 1262
@@ -3722,70 +4355,74 @@ function MobileHowToBuyTurnkey() {
         alt=""
         aria-hidden="true"
         style={{
-          position: 'absolute',
+          position: "absolute",
           top: 0,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          height: '100%',
-          width: 'auto',
-          minWidth: '100%',
-          objectFit: 'cover',
-          objectPosition: 'center top',
-          pointerEvents: 'none',
-          userSelect: 'none',
+          left: "50%",
+          transform: "translateX(-50%)",
+          height: "100%",
+          width: "auto",
+          minWidth: "100%",
+          objectFit: "cover",
+          objectPosition: "center top",
+          pointerEvents: "none",
+          userSelect: "none",
         }}
       />
       {/* Top fade so the title remains legible on light asphalt */}
       <div
         aria-hidden
         style={{
-          position: 'absolute',
+          position: "absolute",
           top: 0,
           left: 0,
           right: 0,
           height: 220,
           background:
-            'linear-gradient(180deg, rgba(10,10,10,0.85) 0%, rgba(10,10,10,0.55) 60%, rgba(10,10,10,0) 100%)',
-          pointerEvents: 'none',
+            "linear-gradient(180deg, rgba(10,10,10,0.85) 0%, rgba(10,10,10,0.55) 60%, rgba(10,10,10,0) 100%)",
+          pointerEvents: "none",
         }}
       />
       {/* Bottom fade for the CTA / Join card legibility */}
       <div
         aria-hidden
         style={{
-          position: 'absolute',
+          position: "absolute",
           left: 0,
           right: 0,
           bottom: 0,
           height: 320,
           background:
-            'linear-gradient(0deg, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.65) 55%, rgba(10,10,10,0) 100%)',
-          pointerEvents: 'none',
+            "linear-gradient(0deg, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.65) 55%, rgba(10,10,10,0) 100%)",
+          pointerEvents: "none",
         }}
       />
 
       {/* ── Content (above bg) ───────────────────────────────────────── */}
-      <div style={{ position: 'relative', zIndex: 1 }}>
+      <div style={{ position: "relative", zIndex: 1 }}>
         {/* Title */}
         <h2
           style={{
             margin: 0,
-            padding: '0 82px',
-            textAlign: 'center',
+            padding: "0 82px",
+            textAlign: "center",
             fontFamily: FONT,
             fontWeight: 700,
             fontSize: 32,
-            lineHeight: '36px',
-            color: '#FEAE00',
-            letterSpacing: '-0.005em',
+            lineHeight: "36px",
+            color: "#FEAE00",
+            letterSpacing: "-0.005em",
           }}
         >
-          <AnimatedHeading as="span" text={L.titleLine1} style={{ display: 'block' }} />
+          <AnimatedHeading
+            as="span"
+            text={L.titleLine1}
+            style={{ display: "block" }}
+          />
           <AnimatedHeading
             as="span"
             text={L.titleLine2}
-            baseDelay={L.titleLine1.replace(/\s/g, '').length * 28}
-            style={{ display: 'block' }}
+            baseDelay={L.titleLine1.replace(/\s/g, "").length * 28}
+            style={{ display: "block" }}
           />
         </h2>
 
@@ -3813,12 +4450,12 @@ function MobileHowToBuyTurnkey() {
           {/* Row 1 — fixed 40 px height so all three are vertically centred */}
           <div
             style={{
-              padding: '0 31px 0 35px',
+              padding: "0 31px 0 35px",
               height: 40,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              boxSizing: 'border-box',
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              boxSizing: "border-box",
             }}
           >
             <img
@@ -3826,33 +4463,33 @@ function MobileHowToBuyTurnkey() {
               alt="Copart"
               width={94}
               height={40}
-              style={{ width: 94, height: 40, display: 'block', flexShrink: 0 }}
+              style={{ width: 94, height: 40, display: "block", flexShrink: 0 }}
             />
             <img
               src="/figma/iaai-logo.svg"
               alt="IAA — Insurance Auto Auctions"
               width={51}
               height={29}
-              style={{ width: 51, height: 29, display: 'block', flexShrink: 0 }}
+              style={{ width: 51, height: 29, display: "block", flexShrink: 0 }}
             />
             <img
               src="/figma/carfax-logo.svg"
               alt="CARFAX"
               width={93}
               height={17}
-              style={{ width: 93, height: 17, display: 'block', flexShrink: 0 }}
+              style={{ width: 93, height: 17, display: "block", flexShrink: 0 }}
             />
           </div>
           {/* Row 2 — 33 px gap from row 1, fixed 30 px height */}
           <div
             style={{
               marginTop: 33,
-              padding: '0 60px 0 43px',
+              padding: "0 60px 0 43px",
               height: 30,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              boxSizing: 'border-box',
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              boxSizing: "border-box",
             }}
           >
             <img
@@ -3860,14 +4497,19 @@ function MobileHowToBuyTurnkey() {
               alt="Manheim"
               width={118}
               height={30}
-              style={{ width: 118, height: 30, display: 'block', flexShrink: 0 }}
+              style={{
+                width: 118,
+                height: 30,
+                display: "block",
+                flexShrink: 0,
+              }}
             />
             <img
               src="/figma/encar-logo.svg"
               alt="Encar"
               width={74}
               height={22}
-              style={{ width: 74, height: 22, display: 'block', flexShrink: 0 }}
+              style={{ width: 74, height: 22, display: "block", flexShrink: 0 }}
             />
           </div>
         </div>
@@ -3876,19 +4518,19 @@ function MobileHowToBuyTurnkey() {
         <div
           style={{
             marginTop: 60,
-            padding: '0 20px 0 40px',
-            display: 'flex',
-            flexDirection: 'column',
+            padding: "0 20px 0 40px",
+            display: "flex",
+            flexDirection: "column",
             gap: 18,
-            boxSizing: 'border-box',
+            boxSizing: "border-box",
           }}
         >
           {STEPS.map((s, i) => (
             <div
               key={i}
               style={{
-                display: 'flex',
-                alignItems: 'flex-start',
+                display: "flex",
+                alignItems: "flex-start",
                 gap: 13,
               }}
             >
@@ -3897,8 +4539,8 @@ function MobileHowToBuyTurnkey() {
                   fontFamily: FONT,
                   fontWeight: 800,
                   fontSize: 20,
-                  lineHeight: '24px',
-                  color: '#FEAE00',
+                  lineHeight: "24px",
+                  color: "#FEAE00",
                   flexShrink: 0,
                   minWidth: 22,
                 }}
@@ -3910,9 +4552,9 @@ function MobileHowToBuyTurnkey() {
                   fontFamily: FONT,
                   fontWeight: 700,
                   fontSize: 20,
-                  lineHeight: '24px',
-                  color: '#FFFFFF',
-                  whiteSpace: 'pre-line',
+                  lineHeight: "24px",
+                  color: "#FFFFFF",
+                  whiteSpace: "pre-line",
                 }}
               >
                 {s}
@@ -3920,7 +4562,6 @@ function MobileHowToBuyTurnkey() {
             </div>
           ))}
         </div>
-
       </div>
 
       {/* ── "Pick up the car" CTA — absolutely positioned per Figma spec
@@ -3933,10 +4574,10 @@ function MobileHowToBuyTurnkey() {
            Typography: Mazzard H Medium 14, uppercase, amber bg. ── */}
       <div
         style={{
-          position: 'absolute',
+          position: "absolute",
           top: 1023,
           left: 34,
-          right: 33,                              /* exact pixel per user spec */
+          right: 33 /* exact pixel per user spec */,
           height: 45,
           zIndex: 3,
         }}
@@ -3945,23 +4586,23 @@ function MobileHowToBuyTurnkey() {
           to="/calculator"
           data-testid="mobile-pick-up-the-car"
           style={{
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: '#FEAE00',
-            border: 'none',
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#FEAE00",
+            border: "none",
             borderRadius: 6,
-            color: '#000000',
+            color: "#000000",
             fontFamily: FONT,
             fontWeight: 500,
             fontSize: 14,
-            lineHeight: '17px',
-            letterSpacing: '0.18em',
-            textTransform: 'uppercase',
-            textDecoration: 'none',
-            boxSizing: 'border-box',
+            lineHeight: "17px",
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            textDecoration: "none",
+            boxSizing: "border-box",
           }}
         >
           {L.pickUpTheCar}
@@ -3974,24 +4615,24 @@ function MobileHowToBuyTurnkey() {
       <div
         data-testid="mobile-join-our-group"
         style={{
-          position: 'absolute',
+          position: "absolute",
           top: 1023 + 45 + 53,
           left: 0,
           right: 0,
-          padding: '0 55px 0 57px',
-          textAlign: 'center',
+          padding: "0 55px 0 57px",
+          textAlign: "center",
           fontFamily: FONT,
           fontWeight: 700,
           fontSize: 16,
-          lineHeight: '22px',
-          color: '#FFFFFF',
+          lineHeight: "22px",
+          color: "#FFFFFF",
           zIndex: 3,
-          boxSizing: 'border-box',
+          boxSizing: "border-box",
         }}
       >
         {isBg
-          ? 'Присъединете се към нашата група и получете най-горещите оферти'
-          : 'Join our group and get the hottest offers'}
+          ? "Присъединете се към нашата група и получете най-горещите оферти"
+          : "Join our group and get the hottest offers"}
       </div>
 
       {/* ── Viber icon — 42 × 42, exactly 16 px BELOW the caption.
@@ -4001,13 +4642,13 @@ function MobileHowToBuyTurnkey() {
       <div
         data-testid="mobile-viber-icon"
         style={{
-          position: 'absolute',
+          position: "absolute",
           top: 1023 + 45 + 53 + 44 + 16, // 1181
           left: 0,
           right: 0,
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
           zIndex: 3,
         }}
       >
@@ -4017,10 +4658,10 @@ function MobileHowToBuyTurnkey() {
           style={{
             width: 42,
             height: 42,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            textDecoration: 'none',
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            textDecoration: "none",
           }}
         >
           <img
@@ -4028,7 +4669,7 @@ function MobileHowToBuyTurnkey() {
             alt=""
             width={42}
             height={42}
-            style={{ display: 'block' }}
+            style={{ display: "block" }}
           />
         </a>
       </div>
@@ -4047,54 +4688,53 @@ function MobileHowToBuyTurnkey() {
       <div
         data-testid="mobile-from-usa-korea"
         style={{
-          position: 'absolute',
-          top: 436,                                /* 412 (initial) + 24 (user spec, session 36 follow-up) */
-          left: 94,                                /* exact pixel per user spec */
-          right: 87,                               /* exact pixel per user spec */
+          position: "absolute",
+          top: 436 /* 412 (initial) + 24 (user spec, session 36 follow-up) */,
+          left: 94 /* exact pixel per user spec */,
+          right: 87 /* exact pixel per user spec */,
           zIndex: 2,
-          pointerEvents: 'none',
+          pointerEvents: "none",
         }}
       >
         <div
           style={{
-            position: 'absolute',
+            position: "absolute",
             left: 0,
             right: 0,
-            bottom: '100%',
+            bottom: "100%",
             marginBottom: 2,
             fontFamily: FONT,
             fontWeight: 700,
             fontSize: 14,
-            lineHeight: '17px',
-            color: '#FEAE00',
-            letterSpacing: '0.04em',
-            textAlign: 'center',
+            lineHeight: "17px",
+            color: "#FEAE00",
+            letterSpacing: "0.04em",
+            textAlign: "center",
           }}
         >
-          {isBg ? 'от' : 'from'}
+          {isBg ? "от" : "from"}
         </div>
         <h3
           style={{
             margin: 0,
-            width: '100%',                         /* fill 179 px column → naturally centred */
+            width: "100%" /* fill 179 px column → naturally centred */,
             height: 38,
             fontFamily: FONT,
             fontWeight: 700,
             fontSize: 32,
-            lineHeight: '38px',
-            color: '#FFFFFF',
-            letterSpacing: '-0.005em',
-            textAlign: 'center',
-            whiteSpace: 'nowrap',
+            lineHeight: "38px",
+            color: "#FFFFFF",
+            letterSpacing: "-0.005em",
+            textAlign: "center",
+            whiteSpace: "nowrap",
           }}
         >
-          {isBg ? 'САЩ/Корея' : 'USA/Korea'}
+          {isBg ? "САЩ/Корея" : "USA/Korea"}
         </h3>
       </div>
     </section>
   );
 }
-
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /* MobileWeHavePerfectService                                              */
@@ -4123,20 +4763,22 @@ function MobileHowToBuyTurnkey() {
 
 const PERFECT_SERVICE_STEPS = [
   {
-    title: 'Choose your perfect car',
-    subtitle: 'Find a vehicle that matches your style and budget',
+    title: "Choose your perfect car",
+    subtitle: "Find a vehicle that matches your style and budget",
   },
   {
-    title: 'Pay quickly and effortlessly',
-    subtitle: 'A simple, transparent process with no complications',
+    title: "Pay quickly and effortlessly",
+    subtitle: "A simple, transparent process with no complications",
   },
   {
-    title: 'Track your car\nin real time',
-    subtitle: 'Stay updated on every step of the journey in your personal account',
+    title: "Track your car\nin real time",
+    subtitle:
+      "Stay updated on every step of the journey in your personal account",
   },
   {
-    title: 'Get the keys and enjoy your new car',
-    subtitle: 'Our manager will hand over the vehicle and take care of every detail',
+    title: "Get the keys and enjoy your new car",
+    subtitle:
+      "Our manager will hand over the vehicle and take care of every detail",
   },
 ];
 
@@ -4144,35 +4786,37 @@ function MobileWeHavePerfectService() {
   const FONT = "'Mazzard', 'Mazzard H', system-ui, -apple-system, sans-serif";
 
   const { lang } = useLang();
-  const isBg = (lang || 'en').toLowerCase().startsWith('bg');
+  const isBg = (lang || "en").toLowerCase().startsWith("bg");
   const L = isBg
     ? {
-        title: 'Имаме перфектен сервиз',
-        sub1: 'Само няколко стъпки',
-        sub2: 'до автомобила на мечтите ви',
+        title: "Имаме перфектен сервиз",
+        sub1: "Само няколко стъпки",
+        sub2: "до автомобила на мечтите ви",
         steps: [
           {
-            title: 'Изберете перфектния автомобил',
-            subtitle: 'Намерете автомобил, който отговаря на вашия стил и бюджет',
+            title: "Изберете перфектния автомобил",
+            subtitle:
+              "Намерете автомобил, който отговаря на вашия стил и бюджет",
           },
           {
-            title: 'Платете бързо и без усилия',
-            subtitle: 'Прост, прозрачен процес без усложнения',
+            title: "Платете бързо и без усилия",
+            subtitle: "Прост, прозрачен процес без усложнения",
           },
           {
-            title: 'Проследявайте автомобила\nв реално време',
-            subtitle: 'Бъдете в крак с всяка стъпка чрез личния си кабинет',
+            title: "Проследявайте автомобила\nв реално време",
+            subtitle: "Бъдете в крак с всяка стъпка чрез личния си кабинет",
           },
           {
-            title: 'Получете ключовете и се насладете\nна новия автомобил',
-            subtitle: 'Нашият мениджър ще предаде автомобила и ще се погрижи за всеки детайл',
+            title: "Получете ключовете и се насладете\nна новия автомобил",
+            subtitle:
+              "Нашият мениджър ще предаде автомобила и ще се погрижи за всеки детайл",
           },
         ],
       }
     : {
-        title: 'We have perfect service',
-        sub1: 'Just a few steps',
-        sub2: 'to your dream car',
+        title: "We have perfect service",
+        sub1: "Just a few steps",
+        sub2: "to your dream car",
         steps: PERFECT_SERVICE_STEPS,
       };
 
@@ -4181,14 +4825,14 @@ function MobileWeHavePerfectService() {
     <section
       data-testid="mobile-perfect-service"
       style={{
-        position: 'relative',
-        background: '#000000',
-        width: '100%',
+        position: "relative",
+        background: "#000000",
+        width: "100%",
         minHeight: 901,
         paddingTop: 59,
         paddingBottom: 48,
-        boxSizing: 'border-box',
-        color: '#FFFFFF',
+        boxSizing: "border-box",
+        color: "#FFFFFF",
         fontFamily: FONT,
       }}
     >
@@ -4196,10 +4840,10 @@ function MobileWeHavePerfectService() {
       <div
         data-testid="mobile-perfect-service-title-block"
         style={{
-          width: '100%',
-          padding: '0 43px',
-          boxSizing: 'border-box',
-          textAlign: 'center',
+          width: "100%",
+          padding: "0 43px",
+          boxSizing: "border-box",
+          textAlign: "center",
         }}
       >
         <AnimatedHeading
@@ -4210,10 +4854,10 @@ function MobileWeHavePerfectService() {
             fontFamily: FONT,
             fontWeight: 700,
             fontSize: 24,
-            lineHeight: '28px',
+            lineHeight: "28px",
             letterSpacing: 0,
-            textTransform: 'uppercase',
-            color: '#FEAE00',
+            textTransform: "uppercase",
+            color: "#FEAE00",
           }}
         />
         <div
@@ -4222,10 +4866,10 @@ function MobileWeHavePerfectService() {
             fontFamily: FONT,
             fontWeight: 500,
             fontSize: 16,
-            lineHeight: '20px',
+            lineHeight: "20px",
             letterSpacing: 0,
-            textTransform: 'uppercase',
-            color: '#FFFFFF',
+            textTransform: "uppercase",
+            color: "#FFFFFF",
           }}
         >
           {L.sub1}
@@ -4239,10 +4883,10 @@ function MobileWeHavePerfectService() {
         data-testid="mobile-perfect-service-steps"
         style={{
           marginTop: 59,
-          display: 'flex',
-          flexDirection: 'column',
+          display: "flex",
+          flexDirection: "column",
           gap: 48,
-          alignItems: 'center',
+          alignItems: "center",
         }}
       >
         {STEPS.map((step, i) => (
@@ -4251,12 +4895,12 @@ function MobileWeHavePerfectService() {
             data-testid={`mobile-perfect-service-step-${i + 1}`}
             style={{
               width: 328,
-              maxWidth: 'calc(100% - 32px)',
-              boxSizing: 'border-box',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              textAlign: 'center',
+              maxWidth: "calc(100% - 32px)",
+              boxSizing: "border-box",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              textAlign: "center",
             }}
           >
             {/* Map-pin — exact Figma asset (Vector.svg) with native dimensions
@@ -4269,7 +4913,7 @@ function MobileWeHavePerfectService() {
               width={18.27}
               height={23.31}
               style={{
-                display: 'block',
+                display: "block",
                 width: 18.27,
                 height: 23.31,
                 marginBottom: 4,
@@ -4282,24 +4926,24 @@ function MobileWeHavePerfectService() {
             <div
               aria-hidden="true"
               style={{
-                width: '100%',
+                width: "100%",
                 height: 1,
-                background: '#FEAE00',
+                background: "#FEAE00",
               }}
             />
 
             {/* Title — Bold 16, white, uppercase. 16 px below the hairline. */}
             <h3
               style={{
-                margin: '16px 0 0 0',
+                margin: "16px 0 0 0",
                 fontFamily: FONT,
                 fontWeight: 700,
                 fontSize: 16,
-                lineHeight: '20px',
+                lineHeight: "20px",
                 letterSpacing: 0,
-                textTransform: 'uppercase',
-                color: '#FFFFFF',
-                whiteSpace: 'pre-line',
+                textTransform: "uppercase",
+                color: "#FFFFFF",
+                whiteSpace: "pre-line",
               }}
             >
               {step.title}
@@ -4308,13 +4952,13 @@ function MobileWeHavePerfectService() {
             {/* Subtitle — Medium 14, amber. 16 px below the title. */}
             <p
               style={{
-                margin: '16px 0 0 0',
+                margin: "16px 0 0 0",
                 fontFamily: FONT,
                 fontWeight: 500,
                 fontSize: 14,
-                lineHeight: '18px',
+                lineHeight: "18px",
                 letterSpacing: 0,
-                color: '#FEAE00',
+                color: "#FEAE00",
               }}
             >
               {step.subtitle}
@@ -4325,7 +4969,6 @@ function MobileWeHavePerfectService() {
     </section>
   );
 }
-
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /* MobileTurnkeyServices                                                   */
@@ -4470,118 +5113,102 @@ function MobileTurnkeyServices() {
   }, []);
 
   const { lang } = useLang();
-  const isBg = (lang || 'en').toLowerCase().startsWith('bg');
+  const isBg = (lang || "en").toLowerCase().startsWith("bg");
 
   const CARDS = isBg
     ? [
         {
-          num: '1',
-          title: 'ВНОС',
-          body:
-            'Помагаме ви да намерите подходящия автомобил според вашия бюджет, стил и нужди — поемаме инспекцията, покупката и доставката от САЩ до България.',
+          num: "1",
+          title: "ВНОС",
+          body: "Помагаме ви да намерите подходящия автомобил според вашия бюджет, стил и нужди — поемаме инспекцията, покупката и доставката от САЩ до България.",
         },
         {
-          num: '2',
-          title: 'АДАПТАЦИЯ КЪМ ЕВРОПЕЙСКИТЕ СТАНДАРТИ',
-          body:
-            'Адаптираме автомобила към стандартите на ЕС и гарантираме, че е готов за безпроблемна регистрация.',
+          num: "2",
+          title: "АДАПТАЦИЯ КЪМ ЕВРОПЕЙСКИТЕ СТАНДАРТИ",
+          body: "Адаптираме автомобила към стандартите на ЕС и гарантираме, че е готов за безпроблемна регистрация.",
         },
         {
-          num: '3',
-          title: 'РЕГИСТРАЦИЯ И СЕРТИФИКАЦИЯ',
-          body:
-            'Поемаме пълната регистрация в България, включително КАТ, документи и транзитни номера — подкрепяме ви на всяка стъпка.',
+          num: "3",
+          title: "РЕГИСТРАЦИЯ И СЕРТИФИКАЦИЯ",
+          body: "Поемаме пълната регистрация в България, включително КАТ, документи и транзитни номера — подкрепяме ви на всяка стъпка.",
         },
         {
-          num: '4',
-          title: 'ФИНАНСИРАНЕ',
-          body:
-            'Свързваме ви с TBI Bank и UniCredit Bulbank и ви водим през процеса на финансиране.',
+          num: "4",
+          title: "ФИНАНСИРАНЕ",
+          body: "Свързваме ви с TBI Bank и UniCredit Bulbank и ви водим през процеса на финансиране.",
         },
         {
-          num: '5',
-          title: 'НАМИРАНЕ И ДОСТАВКА НА ЧАСТИ',
-          body:
-            'Намираме и поръчваме качествени части от САЩ, помагайки ви да спестите без компромиси.',
+          num: "5",
+          title: "НАМИРАНЕ И ДОСТАВКА НА ЧАСТИ",
+          body: "Намираме и поръчваме качествени части от САЩ, помагайки ви да спестите без компромиси.",
         },
         {
-          num: '6',
-          title: 'АВТО СЕРВИЗ',
-          body:
-            'Поемаме всички ремонти и техническа работа чрез доверен партньорски сервиз.',
+          num: "6",
+          title: "АВТО СЕРВИЗ",
+          body: "Поемаме всички ремонти и техническа работа чрез доверен партньорски сервиз.",
         },
         {
-          num: '7',
-          title: 'ДЕТАЙЛИНГ И ПОЧИСТВАНЕ',
-          body:
-            'Предлагаме професионално почистване и възстановяване на интериор и екстериор. Правим автомобила ви като нов.',
+          num: "7",
+          title: "ДЕТАЙЛИНГ И ПОЧИСТВАНЕ",
+          body: "Предлагаме професионално почистване и възстановяване на интериор и екстериор. Правим автомобила ви като нов.",
         },
         {
-          num: '8',
-          title: 'ДОСТАВКА ДО ДОМА',
-          body:
-            'Организираме доставката на автомобила до всеки град в България. Получавате готов за карaне автомобил направо пред дома си — без усложнения, без излишни пътувания.',
+          num: "8",
+          title: "ДОСТАВКА ДО ДОМА",
+          body: "Организираме доставката на автомобила до всеки град в България. Получавате готов за карaне автомобил направо пред дома си — без усложнения, без излишни пътувания.",
         },
       ]
     : [
-    {
-      num: '1',
-      title: 'IMPORT',
-      body:
-        'We help you find the right car based on your budget, style, and needs - handling the inspection, purchase, and delivery from the USA to Bulgaria.',
-    },
-    {
-      num: '2',
-      title: 'ADAPTATION TO EUROPEAN STANDARDST',
-      body:
-        "We adapt the vehicle to EU standards and ensure it's ready for smooth registration.",
-    },
-    {
-      num: '3',
-      title: 'REGISTRATION AND CERTIFICATION',
-      body:
-        'We handle full registration in Bulgaria, including KAT, documents, and transit plates - supporting you every step.',
-    },
-    {
-      num: '4',
-      title: 'FINANCING',
-      body:
-        'We connect you with TBI Bank and UniCredit Bulbank and guide you through the financing process.',
-    },
-    {
-      num: '5',
-      title: 'PARTS SOURCING AND DELIVERY',
-      body:
-        'We source and order quality parts from the USA, helping you save without compromise.',
-    },
-    {
-      num: '6',
-      title: 'AUTO SERVICE',
-      body:
-        'We handle all repairs and technical work through a trusted partner service.',
-    },
-    {
-      num: '7',
-      title: 'DETAILING AND CLEANING',
-      body:
-        'We provide professional cleaning and restoration of both exterior and interior. We make your car look and feel like new..',
-    },
-    {
-      num: '8',
-      title: 'HOME DELIVERY',
-      body:
-        'We arrange delivery of your vehicle to any city in Bulgaria. You receive a ready-to-drive car right at your doorstep — no hassle, no extra trips.',
-    },
-  ];
+        {
+          num: "1",
+          title: "IMPORT",
+          body: "We help you find the right car based on your budget, style, and needs - handling the inspection, purchase, and delivery from the USA to Bulgaria.",
+        },
+        {
+          num: "2",
+          title: "ADAPTATION TO EUROPEAN STANDARDST",
+          body: "We adapt the vehicle to EU standards and ensure it's ready for smooth registration.",
+        },
+        {
+          num: "3",
+          title: "REGISTRATION AND CERTIFICATION",
+          body: "We handle full registration in Bulgaria, including KAT, documents, and transit plates - supporting you every step.",
+        },
+        {
+          num: "4",
+          title: "FINANCING",
+          body: "We connect you with TBI Bank and UniCredit Bulbank and guide you through the financing process.",
+        },
+        {
+          num: "5",
+          title: "PARTS SOURCING AND DELIVERY",
+          body: "We source and order quality parts from the USA, helping you save without compromise.",
+        },
+        {
+          num: "6",
+          title: "AUTO SERVICE",
+          body: "We handle all repairs and technical work through a trusted partner service.",
+        },
+        {
+          num: "7",
+          title: "DETAILING AND CLEANING",
+          body: "We provide professional cleaning and restoration of both exterior and interior. We make your car look and feel like new..",
+        },
+        {
+          num: "8",
+          title: "HOME DELIVERY",
+          body: "We arrange delivery of your vehicle to any city in Bulgaria. You receive a ready-to-drive car right at your doorstep — no hassle, no extra trips.",
+        },
+      ];
 
   return (
     <section
       data-testid="mobile-turnkey-services"
       style={{
-        width: '100%',
-        background: '#000000',
-        padding: '0 12px',                        /* user spec: 12 L/R on welcome mobile */
-        boxSizing: 'border-box',
+        width: "100%",
+        background: "#000000",
+        padding: "0 12px" /* user spec: 12 L/R on welcome mobile */,
+        boxSizing: "border-box",
         fontFamily: FONT,
       }}
     >
@@ -4648,14 +5275,14 @@ function MobileTurnkeyServices() {
         ref={listRef}
         data-testid="mobile-turnkey-services-list"
         style={{
-          display: 'flex',
-          flexDirection: 'column',
+          display: "flex",
+          flexDirection: "column",
           gap: 7,
           /* Single perspective shared by all 8 cards so they tilt toward
              a consistent vanishing point. 900 px makes the tilt clearly
              readable on a phone screen. */
-          perspective: '900px',
-          perspectiveOrigin: '50% 50%',
+          perspective: "900px",
+          perspectiveOrigin: "50% 50%",
         }}
       >
         {CARDS.map((c, i) => (
@@ -4663,50 +5290,50 @@ function MobileTurnkeyServices() {
             key={c.num}
             data-testid={`mobile-turnkey-service-card-${c.num}`}
             style={{
-              background: '#FEAE00',
-              padding: '24px 10px',
-              boxSizing: 'border-box',
-              color: '#000000',
+              background: "#FEAE00",
+              padding: "24px 10px",
+              boxSizing: "border-box",
+              color: "#000000",
             }}
           >
             {/* Header row: "/N" + TITLE */}
             <div
               className="mts-head"
               style={{
-                display: 'flex',
-                alignItems: 'flex-start',
+                display: "flex",
+                alignItems: "flex-start",
                 gap: 16,
               }}
             >
               <span
                 style={{
-                  flex: '0 0 auto',
+                  flex: "0 0 auto",
                   fontFamily: "'Mazzard H', 'Mazzard', system-ui, sans-serif",
                   fontWeight: 500,
                   fontSize: 24,
-                  lineHeight: '28px',
+                  lineHeight: "28px",
                   height: 28,
-                  display: 'inline-flex',
-                  alignItems: 'center',
+                  display: "inline-flex",
+                  alignItems: "center",
                   letterSpacing: 0,
-                  color: '#000000',
-                  whiteSpace: 'nowrap',
+                  color: "#000000",
+                  whiteSpace: "nowrap",
                 }}
               >
                 /{c.num}
               </span>
               <h3
                 style={{
-                  flex: '1 1 auto',
+                  flex: "1 1 auto",
                   margin: 0,
-                  alignSelf: 'center',
+                  alignSelf: "center",
                   fontFamily: "'Mazzard H', 'Mazzard', system-ui, sans-serif",
                   fontWeight: 500,
                   fontSize: 16,
-                  lineHeight: '20px',
+                  lineHeight: "20px",
                   letterSpacing: 0,
-                  textTransform: 'uppercase',
-                  color: '#000000',
+                  textTransform: "uppercase",
+                  color: "#000000",
                 }}
               >
                 {c.title}
@@ -4718,13 +5345,13 @@ function MobileTurnkeyServices() {
               className="mts-body"
               data-testid={`mobile-turnkey-service-body-${c.num}`}
               style={{
-                margin: '16px 0 0 0',
+                margin: "16px 0 0 0",
                 fontFamily: "'Mazzard H', 'Mazzard', system-ui, sans-serif",
                 fontWeight: 400,
                 fontSize: 14,
-                lineHeight: '18px',
+                lineHeight: "18px",
                 letterSpacing: 0,
-                color: '#000000',
+                color: "#000000",
               }}
             >
               {c.body}
@@ -4735,7 +5362,6 @@ function MobileTurnkeyServices() {
     </section>
   );
 }
-
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /* MobileBeforeAndAfter                                                    */
@@ -4780,8 +5406,8 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
   const idx = total > 0 ? Math.min(Math.max(0, activeIdx || 0), total - 1) : 0;
   const counter =
     total > 0
-      ? `${String(idx + 1).padStart(2, '0')}/${String(total).padStart(2, '0')}`
-      : '00/00';
+      ? `${String(idx + 1).padStart(2, "0")}/${String(total).padStart(2, "0")}`
+      : "00/00";
 
   const trackRef = useRef(null);
 
@@ -4803,7 +5429,7 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
     const card = track.querySelector(`[data-card-idx="${targetIdx}"]`);
     if (!card) return;
     const left = card.offsetLeft - (track.clientWidth - card.offsetWidth) / 2;
-    track.scrollTo({ left, behavior: 'smooth' });
+    track.scrollTo({ left, behavior: "smooth" });
   };
 
   // ── Active-card detection: "STICKY 70 %"
@@ -4818,18 +5444,20 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
   // We keep `idxRef` so the IO callback always reads the *latest* active
   // index instead of the stale value captured in closure.
   const idxRef = useRef(idx);
-  useEffect(() => { idxRef.current = idx; }, [idx]);
+  useEffect(() => {
+    idxRef.current = idx;
+  }, [idx]);
 
   useEffect(() => {
     const track = trackRef.current;
     if (!track || total === 0) return;
-    if (typeof IntersectionObserver === 'undefined') return;
+    if (typeof IntersectionObserver === "undefined") return;
 
     const ratios = new Map();
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => {
-          const cardIdx = Number(e.target.getAttribute('data-card-idx'));
+          const cardIdx = Number(e.target.getAttribute("data-card-idx"));
           ratios.set(cardIdx, e.intersectionRatio);
         });
 
@@ -4842,7 +5470,10 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
         let bestI = -1;
         let bestR = 0.7;
         ratios.forEach((r, i) => {
-          if (r > bestR) { bestR = r; bestI = i; }
+          if (r > bestR) {
+            bestR = r;
+            bestI = i;
+          }
         });
         if (bestI >= 0 && bestI !== cur) setActiveIdx(bestI);
       },
@@ -4853,7 +5484,8 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
     );
 
     const cards = Array.from(track.children).filter(
-      (n) => n.nodeType === 1 && n.hasAttribute && n.hasAttribute('data-card-idx'),
+      (n) =>
+        n.nodeType === 1 && n.hasAttribute && n.hasAttribute("data-card-idx"),
     );
     cards.forEach((c) => observer.observe(c));
     return () => observer.disconnect();
@@ -4882,14 +5514,14 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
   // because the actual files shipped under /public/figma are webp-encoded.
   // This keeps any historical/in-flight data working without a DB migration.
   const fullMediaUrl = (u) => {
-    if (!u) return '';
+    if (!u) return "";
     let v = u;
-    if (v.startsWith('/figma/') && v.toLowerCase().endsWith('.png')) {
-      v = v.slice(0, -4) + '.webp';
+    if (v.startsWith("/figma/") && v.toLowerCase().endsWith(".png")) {
+      v = v.slice(0, -4) + ".webp";
     }
     if (/^https?:\/\//i.test(v)) return v;
-    if (v.startsWith('/figma/') || v.startsWith('/mobile/')) return v;
-    if (v.startsWith('/')) return `${API}${v}`;
+    if (v.startsWith("/figma/") || v.startsWith("/mobile/")) return v;
+    if (v.startsWith("/")) return `${API}${v}`;
     return `${API}/${v}`;
   };
 
@@ -4901,13 +5533,13 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
     <section
       data-testid="mobile-before-and-after"
       style={{
-        width: '100%',
-        background: '#000000',
+        width: "100%",
+        background: "#000000",
         fontFamily: FONT,
         // Top spacing keeps a clean 40 px breathing room from the last Turnkey
         // card (#8 HOME DELIVERY) and a 40 px gap to the Dream-car CTA below.
-        padding: '40px 0',
-        boxSizing: 'border-box',
+        padding: "40px 0",
+        boxSizing: "border-box",
       }}
     >
       {/* ── Section title ───────────────────────────────────────────────── */}
@@ -4916,14 +5548,14 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
         data-testid="mobile-before-and-after-title"
         text={t?.beforeAndAfter || "Before and after"}
         style={{
-          margin: '0 12px',                       /* user spec: 12 L/R on welcome mobile */
+          margin: "0 12px" /* user spec: 12 L/R on welcome mobile */,
           fontFamily: FONT,
           fontWeight: 700,
           fontSize: 24,
-          lineHeight: '28px',
-          textAlign: 'center',
-          textTransform: 'uppercase',
-          color: '#FEAE00',
+          lineHeight: "28px",
+          textAlign: "center",
+          textTransform: "uppercase",
+          color: "#FEAE00",
           letterSpacing: 0,
         }}
       />
@@ -4932,19 +5564,23 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
       <div
         data-testid="mobile-before-and-after-subtitle"
         style={{
-          margin: '24px 12px 0',                  /* user spec: 12 L/R on welcome mobile */
+          margin: "24px 12px 0" /* user spec: 12 L/R on welcome mobile */,
           fontFamily: FONT,
           fontWeight: 500,
           fontSize: 16,
-          lineHeight: '20px',
-          textAlign: 'center',
-          textTransform: 'uppercase',
+          lineHeight: "20px",
+          textAlign: "center",
+          textTransform: "uppercase",
           letterSpacing: 0,
         }}
       >
-        <span style={{ color: '#FEAE00' }}>{t?.ourClientsReceive || 'Our clients receive'}</span>
+        <span style={{ color: "#FEAE00" }}>
+          {t?.ourClientsReceive || "Our clients receive"}
+        </span>
         <br />
-        <span style={{ color: '#FFFFFF' }}>{t?.theBestService || 'the best service'}</span>
+        <span style={{ color: "#FFFFFF" }}>
+          {t?.theBestService || "the best service"}
+        </span>
       </div>
 
       {/* ── Cards track (horizontal scroll + snap) ──────────────────────── */}
@@ -4953,19 +5589,19 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
         data-testid="mobile-before-and-after-track"
         style={{
           marginTop: 32,
-          display: 'flex',
+          display: "flex",
           gap: 16,
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          scrollSnapType: 'x mandatory',
-          WebkitOverflowScrolling: 'touch',
-          touchAction: 'pan-x',
-          overscrollBehaviorX: 'contain',
+          overflowX: "auto",
+          overflowY: "hidden",
+          scrollSnapType: "x mandatory",
+          WebkitOverflowScrolling: "touch",
+          touchAction: "pan-x",
+          overscrollBehaviorX: "contain",
           /* user spec: 12 L/R on welcome mobile (peek of next card preserved) */
           paddingLeft: 12,
           paddingRight: 12,
-          scrollbarWidth: 'none',
-          cursor: 'grab',
+          scrollbarWidth: "none",
+          cursor: "grab",
         }}
       >
         <style>{`
@@ -4978,46 +5614,46 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
             data-card-idx={i}
             data-testid={`mobile-before-and-after-card-${i + 1}`}
             style={{
-              flex: '0 0 auto',
+              flex: "0 0 auto",
               width: 328,
               height: 317,
-              boxSizing: 'border-box',
-              background: '#1A1A1A',
-              scrollSnapAlign: 'center',
-              position: 'relative',
-              padding: '16px 10px 18px',
-              display: 'flex',
-              flexDirection: 'column',
-              color: '#FFFFFF',
+              boxSizing: "border-box",
+              background: "#1A1A1A",
+              scrollSnapAlign: "center",
+              position: "relative",
+              padding: "16px 10px 18px",
+              display: "flex",
+              flexDirection: "column",
+              color: "#FFFFFF",
             }}
           >
             {/* /before /after labels — absolute, exact insets per Figma */}
             <span
               style={{
-                position: 'absolute',
+                position: "absolute",
                 top: 16,
                 left: 62.5,
                 fontFamily: FONT,
                 fontWeight: 500,
                 fontSize: 12,
-                lineHeight: '14px',
-                color: '#FFFFFF',
-                whiteSpace: 'nowrap',
+                lineHeight: "14px",
+                color: "#FFFFFF",
+                whiteSpace: "nowrap",
               }}
             >
               / before
             </span>
             <span
               style={{
-                position: 'absolute',
+                position: "absolute",
                 top: 16,
                 right: 61.5,
                 fontFamily: FONT,
                 fontWeight: 500,
                 fontSize: 12,
-                lineHeight: '14px',
-                color: '#FEAE00',
-                whiteSpace: 'nowrap',
+                lineHeight: "14px",
+                color: "#FEAE00",
+                whiteSpace: "nowrap",
               }}
             >
               / after
@@ -5027,39 +5663,49 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
             <div
               style={{
                 marginTop: 22, // 16 (top inset) + 14 (label line) − ~8 visual
-                display: 'flex',
+                display: "flex",
                 gap: 8,
-                justifyContent: 'center',
+                justifyContent: "center",
               }}
             >
               <img
-                src={optimizeImage(fullMediaUrl(c.before_image_url), ImageSize.beforeAfter)}
+                src={optimizeImage(
+                  fullMediaUrl(c.before_image_url),
+                  ImageSize.beforeAfter,
+                )}
                 alt="before"
                 data-testid={`mobile-before-img-${i + 1}`}
                 style={{
                   width: 150,
                   height: 144,
-                  objectFit: 'cover',
-                  filter: 'grayscale(1)',
-                  display: 'block',
+                  objectFit: "cover",
+                  filter: "grayscale(1)",
+                  display: "block",
                 }}
                 loading="lazy"
                 decoding="async"
-                onError={(e) => { e.currentTarget.style.opacity = 0.3; }}
+                onError={(e) => {
+                  e.currentTarget.style.opacity = 0.3;
+                }}
               />
               <img
-                src={optimizeImage(fullMediaUrl(c.after_image_url), ImageSize.beforeAfter)}
+                src={optimizeImage(
+                  fullMediaUrl(c.after_image_url),
+                  ImageSize.beforeAfter,
+                )}
                 alt="after"
                 data-testid={`mobile-after-img-${i + 1}`}
                 style={{
                   width: 150,
                   height: 144,
-                  objectFit: 'cover',
-                  display: 'block',
+                  objectFit: "cover",
+                  display: "block",
                 }}
                 loading="lazy"
                 decoding="async"
-                onError={(e) => { e.currentTarget.style.opacity = 0.3; }}
+                onError={(e) => {
+                  e.currentTarget.style.opacity = 0.3;
+                }}
               />
             </div>
 
@@ -5067,25 +5713,25 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
             <h3
               data-testid={`mobile-before-and-after-model-${i + 1}`}
               style={{
-                margin: '14px 10px 0',
+                margin: "14px 10px 0",
                 fontFamily: FONT,
                 fontWeight: 700,
                 fontSize: 16,
-                lineHeight: '20px',
-                color: '#FFFFFF',
+                lineHeight: "20px",
+                color: "#FFFFFF",
                 letterSpacing: 0,
               }}
             >
-              {c.model || 'BMV 328'}
+              {c.model || "BMV 328"}
             </h3>
 
             {/* Info rows — labels: H Regular 12 / gray;  values: H Medium 14 / white */}
             <dl
               style={{
-                margin: '12px 10px 0',
+                margin: "12px 10px 0",
                 padding: 0,
-                display: 'grid',
-                gridTemplateColumns: '1fr auto',
+                display: "grid",
+                gridTemplateColumns: "1fr auto",
                 rowGap: 8,
                 columnGap: 12,
                 fontFamily: FONT,
@@ -5098,8 +5744,8 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
                   fontFamily: FONT,
                   fontWeight: 400,
                   fontSize: 12,
-                  lineHeight: '16px',
-                  color: '#9B9B9B',
+                  lineHeight: "16px",
+                  color: "#9B9B9B",
                 }}
               >
                 Order date
@@ -5108,15 +5754,15 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
                 data-testid={`mobile-before-and-after-order-${i + 1}`}
                 style={{
                   margin: 0,
-                  textAlign: 'right',
+                  textAlign: "right",
                   fontFamily: FONT,
                   fontWeight: 500,
                   fontSize: 14,
-                  lineHeight: '18px',
-                  color: '#FFFFFF',
+                  lineHeight: "18px",
+                  color: "#FFFFFF",
                 }}
               >
-                {c.order_date || ''}
+                {c.order_date || ""}
               </dd>
 
               <dt
@@ -5125,8 +5771,8 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
                   fontFamily: FONT,
                   fontWeight: 400,
                   fontSize: 12,
-                  lineHeight: '16px',
-                  color: '#9B9B9B',
+                  lineHeight: "16px",
+                  color: "#9B9B9B",
                 }}
               >
                 The date of the finished car
@@ -5135,15 +5781,15 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
                 data-testid={`mobile-before-and-after-finished-${i + 1}`}
                 style={{
                   margin: 0,
-                  textAlign: 'right',
+                  textAlign: "right",
                   fontFamily: FONT,
                   fontWeight: 500,
                   fontSize: 14,
-                  lineHeight: '18px',
-                  color: '#FFFFFF',
+                  lineHeight: "18px",
+                  color: "#FFFFFF",
                 }}
               >
-                {c.finished_date || ''}
+                {c.finished_date || ""}
               </dd>
 
               <dt
@@ -5152,8 +5798,8 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
                   fontFamily: FONT,
                   fontWeight: 400,
                   fontSize: 12,
-                  lineHeight: '16px',
-                  color: '#9B9B9B',
+                  lineHeight: "16px",
+                  color: "#9B9B9B",
                 }}
               >
                 Turnkey price in Bulgaria
@@ -5162,15 +5808,15 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
                 data-testid={`mobile-before-and-after-price-${i + 1}`}
                 style={{
                   margin: 0,
-                  textAlign: 'right',
+                  textAlign: "right",
                   fontFamily: FONT,
                   fontWeight: 500,
                   fontSize: 14,
-                  lineHeight: '18px',
-                  color: '#FFFFFF',
+                  lineHeight: "18px",
+                  color: "#FFFFFF",
                 }}
               >
-                {c.price || ''}
+                {c.price || ""}
               </dd>
             </dl>
           </article>
@@ -5185,10 +5831,10 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
           // Side insets 116 / 115 centre the 36 + 24 + ~44 + 24 + 36 = 164 px
           // pagination block inside a 396 px target row. On a 360-wide screen
           // we clamp this to a sensible 0-edge fallback so it stays visible.
-          padding: '0 max(0px, calc((100% - 360px) / 2))',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          padding: "0 max(0px, calc((100% - 360px) / 2))",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
           gap: 24,
         }}
       >
@@ -5200,20 +5846,32 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
           style={{
             width: 40,
             height: 40,
-            borderRadius: '50%',
-            border: '1.5px solid #FEAE00',
-            background: 'transparent',
-            color: '#FEAE00',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            borderRadius: "50%",
+            border: "1.5px solid #FEAE00",
+            background: "transparent",
+            color: "#FEAE00",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
             padding: 0,
             lineHeight: 1,
           }}
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M15 4l-8 8 8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M15 4l-8 8 8 8"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         </button>
 
@@ -5223,11 +5881,11 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
             fontFamily: FONT,
             fontWeight: 500,
             fontSize: 12,
-            lineHeight: '16px',
-            color: '#FFFFFF',
+            lineHeight: "16px",
+            color: "#FFFFFF",
             letterSpacing: 0,
             minWidth: 44,
-            textAlign: 'center',
+            textAlign: "center",
           }}
         >
           {counter}
@@ -5242,20 +5900,32 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
           style={{
             width: 40,
             height: 40,
-            borderRadius: '50%',
-            border: 'none',
-            background: '#FEAE00',
-            color: '#000000',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            borderRadius: "50%",
+            border: "none",
+            background: "#FEAE00",
+            color: "#000000",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
             padding: 0,
             lineHeight: 1,
           }}
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M9 4l8 8-8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M9 4l8 8-8 8"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         </button>
       </div>
@@ -5277,7 +5947,14 @@ function MobileBeforeAndAfter({ items, activeIdx, setActiveIdx, t }) {
 /* Carousel uses the SAME IntersectionObserver + dominance ≥ 55% logic     */
 /* as the Before / After block so the counter is honest and stable.        */
 /* ─────────────────────────────────────────────────────────────────────── */
-function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, activeIdx, setActiveIdx, t }) {
+function MobileOurClientsSay({
+  reviews,
+  googleRating,
+  googleReviewsCount,
+  activeIdx,
+  setActiveIdx,
+  t,
+}) {
   const FONT = "'Mazzard H', 'Mazzard', system-ui, -apple-system, sans-serif";
 
   const list = Array.isArray(reviews) ? reviews : [];
@@ -5285,8 +5962,8 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
   const idx = total > 0 ? Math.min(Math.max(0, activeIdx || 0), total - 1) : 0;
   const counter =
     total > 0
-      ? `${String(idx + 1).padStart(2, '0')}/${String(total).padStart(2, '0')}`
-      : '00/00';
+      ? `${String(idx + 1).padStart(2, "0")}/${String(total).padStart(2, "0")}`
+      : "00/00";
 
   const trackRef = useRef(null);
 
@@ -5306,39 +5983,47 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
     const card = track.querySelector(`[data-card-idx="${targetIdx}"]`);
     if (!card) return;
     const left = card.offsetLeft - (track.clientWidth - card.offsetWidth) / 2;
-    track.scrollTo({ left, behavior: 'smooth' });
+    track.scrollTo({ left, behavior: "smooth" });
   };
 
   // Dominant-card detection — STICKY 70 %: counter stays on the current
   // card while it's ≥ 70 % visible, and only flips when a DIFFERENT card
   // crosses ≥ 70 % visibility (identical rule to the Before / After block).
   const idxRef = useRef(idx);
-  useEffect(() => { idxRef.current = idx; }, [idx]);
+  useEffect(() => {
+    idxRef.current = idx;
+  }, [idx]);
 
   useEffect(() => {
     const track = trackRef.current;
     if (!track || total === 0) return;
-    if (typeof IntersectionObserver === 'undefined') return;
+    if (typeof IntersectionObserver === "undefined") return;
 
     const ratios = new Map();
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => {
-          const ci = Number(e.target.getAttribute('data-card-idx'));
+          const ci = Number(e.target.getAttribute("data-card-idx"));
           ratios.set(ci, e.intersectionRatio);
         });
         const cur = idxRef.current;
         if ((ratios.get(cur) || 0) >= 0.7) return;
         let bestI = -1;
         let bestR = 0.7;
-        ratios.forEach((r, i) => { if (r > bestR) { bestR = r; bestI = i; } });
+        ratios.forEach((r, i) => {
+          if (r > bestR) {
+            bestR = r;
+            bestI = i;
+          }
+        });
         if (bestI >= 0 && bestI !== cur) setActiveIdx(bestI);
       },
       { root: track, threshold: [0, 0.3, 0.5, 0.7, 0.85, 1] },
     );
 
     const cards = Array.from(track.children).filter(
-      (n) => n.nodeType === 1 && n.hasAttribute && n.hasAttribute('data-card-idx'),
+      (n) =>
+        n.nodeType === 1 && n.hasAttribute && n.hasAttribute("data-card-idx"),
     );
     cards.forEach((c) => observer.observe(c));
     return () => observer.disconnect();
@@ -5370,10 +6055,10 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
 
   // Resolve avatar image (backend-served / public / absolute http(s) URLs).
   const fullMediaUrl = (u) => {
-    if (!u) return '';
+    if (!u) return "";
     if (/^https?:\/\//i.test(u)) return u;
-    if (u.startsWith('/figma/') || u.startsWith('/mobile/')) return u;
-    if (u.startsWith('/')) return `${API}${u}`;
+    if (u.startsWith("/figma/") || u.startsWith("/mobile/")) return u;
+    if (u.startsWith("/")) return `${API}${u}`;
     return `${API}/${u}`;
   };
 
@@ -5381,11 +6066,11 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
     <section
       data-testid="mobile-our-clients-say"
       style={{
-        width: '100%',
-        background: '#000000',
+        width: "100%",
+        background: "#000000",
         fontFamily: FONT,
-        padding: '73px 0 40px',
-        boxSizing: 'border-box',
+        padding: "73px 0 40px",
+        boxSizing: "border-box",
       }}
     >
       {/* ── Section title "OUR CLIENTS SAY" (centered, 76 px side insets) */}
@@ -5394,14 +6079,14 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
         data-testid="mobile-our-clients-say-title"
         text={t?.ourClientsSay || "Our clients say"}
         style={{
-          margin: '0 76px',
+          margin: "0 76px",
           fontFamily: FONT,
           fontWeight: 700,
           fontSize: 24,
-          lineHeight: '28px',
-          textAlign: 'center',
-          textTransform: 'uppercase',
-          color: '#FEAE00',
+          lineHeight: "28px",
+          textAlign: "center",
+          textTransform: "uppercase",
+          color: "#FEAE00",
           letterSpacing: 0,
         }}
       />
@@ -5410,19 +6095,23 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
       <div
         data-testid="mobile-our-clients-say-subtitle"
         style={{
-          margin: '24px 76px 0',
+          margin: "24px 76px 0",
           fontFamily: FONT,
           fontWeight: 500,
           fontSize: 16,
-          lineHeight: '20px',
-          textAlign: 'center',
-          textTransform: 'uppercase',
+          lineHeight: "20px",
+          textAlign: "center",
+          textTransform: "uppercase",
           letterSpacing: 0,
         }}
       >
-        <span style={{ color: '#FEAE00' }}>{t?.satisfiedClients || 'Satisfied clients'}</span>
+        <span style={{ color: "#FEAE00" }}>
+          {t?.satisfiedClients || "Satisfied clients"}
+        </span>
         <br />
-        <span style={{ color: '#FFFFFF' }}>{t?.areOurPriority || 'are our priority'}</span>
+        <span style={{ color: "#FFFFFF" }}>
+          {t?.areOurPriority || "are our priority"}
+        </span>
       </div>
 
       {/* ── Google trust row — logo left @17, rating block right @17 */}
@@ -5430,30 +6119,39 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
         data-testid="mobile-our-clients-say-google"
         style={{
           marginTop: 44,
-          padding: '0 17px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
+          padding: "0 17px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
           gap: 12,
         }}
       >
         <img
           src="/figma/google-logo.svg"
           alt="Google"
-          style={{ height: 26, width: 'auto', display: 'block' }}
-          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          style={{ height: 26, width: "auto", display: "block" }}
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
         />
 
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: 4,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span
               data-testid="mobile-our-clients-say-rating"
               style={{
                 fontFamily: FONT,
                 fontWeight: 700,
                 fontSize: 14,
-                lineHeight: '16px',
-                color: '#FFFFFF',
+                lineHeight: "16px",
+                color: "#FFFFFF",
               }}
             >
               {googleRating ?? 4.9}
@@ -5463,12 +6161,16 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
               style={{
                 width: 80,
                 height: 16,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "space-between",
               }}
             >
-              <Star /><Star /><Star /><Star /><Star />
+              <Star />
+              <Star />
+              <Star />
+              <Star />
+              <Star />
             </span>
           </div>
           <a
@@ -5480,13 +6182,13 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
               fontFamily: FONT,
               fontWeight: 500,
               fontSize: 12,
-              lineHeight: '14px',
-              color: '#FFFFFF',
-              textDecoration: 'underline',
-              textUnderlineOffset: '2px',
+              lineHeight: "14px",
+              color: "#FFFFFF",
+              textDecoration: "underline",
+              textUnderlineOffset: "2px",
             }}
           >
-            {googleReviewsCount ?? 31} {t?.googleReviews || 'Google reviews'}
+            {googleReviewsCount ?? 31} {t?.googleReviews || "Google reviews"}
           </a>
         </div>
       </div>
@@ -5495,18 +6197,18 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
       <h3
         data-testid="mobile-our-clients-say-heading"
         style={{
-          margin: '47px 17px 0',
+          margin: "47px 17px 0",
           fontFamily: FONT,
           fontWeight: 700,
           fontSize: 24,
-          lineHeight: '28px',
-          color: '#FFFFFF',
+          lineHeight: "28px",
+          color: "#FFFFFF",
           letterSpacing: 0,
         }}
       >
-        {t?.whatCustomersSay || 'What customers say'}
+        {t?.whatCustomersSay || "What customers say"}
         <br />
-        {t?.whenTheyWorkWithUs || 'when they work with us'}
+        {t?.whenTheyWorkWithUs || "when they work with us"}
       </h3>
 
       {/* ── Reviews track (horizontal scroll + snap) ────────────────────── */}
@@ -5515,18 +6217,18 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
         data-testid="mobile-our-clients-say-track"
         style={{
           marginTop: 24,
-          display: 'flex',
+          display: "flex",
           gap: 16,
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          scrollSnapType: 'x mandatory',
-          WebkitOverflowScrolling: 'touch',
-          touchAction: 'pan-x',
-          overscrollBehaviorX: 'contain',
-          paddingLeft: 12,                        /* user spec: 12 L/R on welcome mobile */
+          overflowX: "auto",
+          overflowY: "hidden",
+          scrollSnapType: "x mandatory",
+          WebkitOverflowScrolling: "touch",
+          touchAction: "pan-x",
+          overscrollBehaviorX: "contain",
+          paddingLeft: 12 /* user spec: 12 L/R on welcome mobile */,
           paddingRight: 12,
-          scrollbarWidth: 'none',
-          cursor: 'grab',
+          scrollbarWidth: "none",
+          cursor: "grab",
         }}
       >
         <style>{`
@@ -5536,10 +6238,10 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
         {total === 0 ? (
           <div
             style={{
-              width: '100%',
-              padding: '40px 16px',
-              textAlign: 'center',
-              color: '#9B9B9B',
+              width: "100%",
+              padding: "40px 16px",
+              textAlign: "center",
+              color: "#9B9B9B",
               fontFamily: FONT,
               fontWeight: 400,
               fontSize: 14,
@@ -5554,39 +6256,44 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
               data-card-idx={i}
               data-testid={`mobile-our-clients-say-card-${i + 1}`}
               style={{
-                flex: '0 0 auto',
+                flex: "0 0 auto",
                 width: 330,
                 height: 324,
-                boxSizing: 'border-box',
-                background: '#1A1A1A',
-                scrollSnapAlign: 'center',
-                padding: '24px 20px',
-                display: 'flex',
-                flexDirection: 'column',
-                color: '#FFFFFF',
+                boxSizing: "border-box",
+                background: "#1A1A1A",
+                scrollSnapAlign: "center",
+                padding: "24px 20px",
+                display: "flex",
+                flexDirection: "column",
+                color: "#FFFFFF",
               }}
             >
               {/* Header: avatar + name (gap 27) */}
-              <header style={{ display: 'flex', alignItems: 'center', gap: 27 }}>
+              <header
+                style={{ display: "flex", alignItems: "center", gap: 27 }}
+              >
                 {r.image_url ? (
                   <img
-                    src={optimizeImage(fullMediaUrl(r.image_url), ImageSize.avatar)}
-                    alt={r.name || ''}
+                    src={optimizeImage(
+                      fullMediaUrl(r.image_url),
+                      ImageSize.avatar,
+                    )}
+                    alt={r.name || ""}
                     width={40}
                     height={40}
                     style={{
                       width: 40,
                       height: 40,
-                      borderRadius: '50%',
-                      objectFit: 'cover',
-                      display: 'block',
-                      flex: '0 0 auto',
+                      borderRadius: "50%",
+                      objectFit: "cover",
+                      display: "block",
+                      flex: "0 0 auto",
                     }}
                     loading="lazy"
                     decoding="async"
                     onError={(e) => {
                       // Fall back to a neutral initial-avatar circle
-                      e.currentTarget.style.display = 'none';
+                      e.currentTarget.style.display = "none";
                     }}
                   />
                 ) : (
@@ -5595,19 +6302,19 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
                     style={{
                       width: 40,
                       height: 40,
-                      borderRadius: '50%',
-                      background: '#3A3A3A',
-                      flex: '0 0 auto',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#FFFFFF',
+                      borderRadius: "50%",
+                      background: "#3A3A3A",
+                      flex: "0 0 auto",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#FFFFFF",
                       fontFamily: FONT,
                       fontWeight: 700,
                       fontSize: 16,
                     }}
                   >
-                    {(r.name || '?').slice(0, 1).toUpperCase()}
+                    {(r.name || "?").slice(0, 1).toUpperCase()}
                   </div>
                 )}
                 <h4
@@ -5617,12 +6324,12 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
                     fontFamily: FONT,
                     fontWeight: 700,
                     fontSize: 24,
-                    lineHeight: '28px',
-                    color: '#FEAE00',
+                    lineHeight: "28px",
+                    color: "#FEAE00",
                     letterSpacing: 0,
                   }}
                 >
-                  {r.name || ''}
+                  {r.name || ""}
                 </h4>
               </header>
 
@@ -5630,17 +6337,17 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
               <p
                 data-testid={`mobile-our-clients-say-text-${i + 1}`}
                 style={{
-                  margin: '16px 0 0 0',
+                  margin: "16px 0 0 0",
                   fontFamily: FONT,
                   fontWeight: 400,
                   fontSize: 16,
-                  lineHeight: '22px',
-                  color: '#FFFFFF',
+                  lineHeight: "22px",
+                  color: "#FFFFFF",
                   letterSpacing: 0,
-                  overflow: 'hidden',
+                  overflow: "hidden",
                 }}
               >
-                {r.text || ''}
+                {r.text || ""}
               </p>
             </article>
           ))
@@ -5653,9 +6360,9 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
           data-testid="mobile-our-clients-say-pagination"
           style={{
             marginTop: 24,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
             gap: 24,
           }}
         >
@@ -5667,20 +6374,32 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
             style={{
               width: 40,
               height: 40,
-              borderRadius: '50%',
-              border: '1.5px solid #FEAE00',
-              background: 'transparent',
-              color: '#FEAE00',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              borderRadius: "50%",
+              border: "1.5px solid #FEAE00",
+              background: "transparent",
+              color: "#FEAE00",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
               padding: 0,
               lineHeight: 1,
             }}
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M15 4l-8 8 8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M15 4l-8 8 8 8"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </button>
 
@@ -5690,11 +6409,11 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
               fontFamily: FONT,
               fontWeight: 500,
               fontSize: 12,
-              lineHeight: '16px',
-              color: '#FFFFFF',
+              lineHeight: "16px",
+              color: "#FFFFFF",
               letterSpacing: 0,
               minWidth: 44,
-              textAlign: 'center',
+              textAlign: "center",
             }}
           >
             {counter}
@@ -5709,20 +6428,32 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
             style={{
               width: 40,
               height: 40,
-              borderRadius: '50%',
-              border: 'none',
-              background: '#FEAE00',
-              color: '#000000',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              borderRadius: "50%",
+              border: "none",
+              background: "#FEAE00",
+              color: "#000000",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
               padding: 0,
               lineHeight: 1,
             }}
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M9 4l8 8-8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M9 4l8 8-8 8"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </button>
         </div>
@@ -5730,7 +6461,6 @@ function MobileOurClientsSay({ reviews, googleRating, googleReviewsCount, active
     </section>
   );
 }
-
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /* MobileWhyPayLess                                                        */
@@ -5757,51 +6487,49 @@ function MobileWhyPayLess() {
   const FONT = "'Mazzard H', 'Mazzard', system-ui, -apple-system, sans-serif";
 
   const { lang } = useLang();
-  const isBg = (lang || 'en').toLowerCase().startsWith('bg');
+  const isBg = (lang || "en").toLowerCase().startsWith("bg");
   const L = isBg
     ? {
-        titleOrange: 'Защо плащате по-малко',
-        titleWhite: '— и получавате повече',
+        titleOrange: "Защо плащате по-малко",
+        titleWhite: "— и получавате повече",
         items: [
           {
-            title: 'Голям избор',
-            body: 'Повече комплектации, цветове, редки модели',
+            title: "Голям избор",
+            body: "Повече комплектации, цветове, редки модели",
           },
           {
-            title: 'По-добри комплектации',
-            body: 'Повече опции\nПо-добра мултимедия\nПо-високо ниво на комфорт',
+            title: "По-добри комплектации",
+            body: "Повече опции\nПо-добра мултимедия\nПо-високо ниво на комфорт",
           },
           {
-            title: 'Много по-евтино',
-            body:
-              'Дори с включена доставка и митническо оформяне,\nавтомобилът често излиза 20–50% по-евтин',
+            title: "Много по-евтино",
+            body: "Дори с включена доставка и митническо оформяне,\nавтомобилът често излиза 20–50% по-евтин",
           },
           {
-            title: 'Прозрачна история',
-            body: 'VIN проверки (Carfax, AutoCheck)',
+            title: "Прозрачна история",
+            body: "VIN проверки (Carfax, AutoCheck)",
           },
         ],
       }
     : {
-        titleOrange: 'Why you pay less',
-        titleWhite: '— and get more',
+        titleOrange: "Why you pay less",
+        titleWhite: "— and get more",
         items: [
           {
-            title: 'Large selection',
-            body: 'More trim levels, colors, rare models',
+            title: "Large selection",
+            body: "More trim levels, colors, rare models",
           },
           {
-            title: 'Better trim levels',
-            body: 'More options\nBetter multimedia\nHigher level of comfort',
+            title: "Better trim levels",
+            body: "More options\nBetter multimedia\nHigher level of comfort",
           },
           {
-            title: 'Much cheaper',
-            body:
-              'Even taking into account delivery and customs clearance,\nthe car often comes out 20–50% cheaper',
+            title: "Much cheaper",
+            body: "Even taking into account delivery and customs clearance,\nthe car often comes out 20–50% cheaper",
           },
           {
-            title: 'Transparent history',
-            body: 'VIN checks (Carfax, AutoCheck)',
+            title: "Transparent history",
+            body: "VIN checks (Carfax, AutoCheck)",
           },
         ],
       };
@@ -5812,40 +6540,40 @@ function MobileWhyPayLess() {
     <section
       data-testid="mobile-why-pay-less"
       style={{
-        width: '100%',
-        background: '#000000',
+        width: "100%",
+        background: "#000000",
         fontFamily: FONT,
         // Top inset 47 per Figma. Bottom inset 100 keeps a clear breathing
         // gap between the last benefit ("/ TRANSPARENT HISTORY · VIN checks")
         // and the Dream-car CTA image below — analysed from the Figma mock.
-        padding: '47px 0 100px',
-        boxSizing: 'border-box',
+        padding: "47px 0 100px",
+        boxSizing: "border-box",
       }}
     >
       {/* ── Title: two-tone "WHY YOU PAY LESS — AND GET MORE" ──────────── */}
       <h2
         data-testid="mobile-why-pay-less-title"
         style={{
-          margin: '0 65px',
+          margin: "0 65px",
           fontFamily: FONT,
           fontWeight: 700,
           fontSize: 24,
-          lineHeight: '28px',
-          textAlign: 'center',
-          textTransform: 'uppercase',
+          lineHeight: "28px",
+          textAlign: "center",
+          textTransform: "uppercase",
           letterSpacing: 0,
         }}
       >
         <AnimatedHeading
           as="span"
           text={L.titleOrange}
-          style={{ color: '#FEAE00', display: 'block' }}
+          style={{ color: "#FEAE00", display: "block" }}
         />
         <AnimatedHeading
           as="span"
           text={L.titleWhite}
-          baseDelay={L.titleOrange.replace(/\s/g, '').length * 28}
-          style={{ color: '#FFFFFF', display: 'block' }}
+          baseDelay={L.titleOrange.replace(/\s/g, "").length * 28}
+          style={{ color: "#FFFFFF", display: "block" }}
         />
       </h2>
 
@@ -5853,11 +6581,11 @@ function MobileWhyPayLess() {
       <div
         data-testid="mobile-why-pay-less-hero"
         style={{
-          margin: '24px 16px 0',
-          width: 'calc(100% - 32px)',
+          margin: "24px 16px 0",
+          width: "calc(100% - 32px)",
           maxWidth: 328,
-          marginLeft: 'auto',
-          marginRight: 'auto',
+          marginLeft: "auto",
+          marginRight: "auto",
         }}
       >
         <img
@@ -5866,21 +6594,21 @@ function MobileWhyPayLess() {
           width={328}
           height={328}
           style={{
-            display: 'block',
-            width: '100%',
-            height: 'auto',
-            aspectRatio: '328 / 328',
-            objectFit: 'contain',
+            display: "block",
+            width: "100%",
+            height: "auto",
+            aspectRatio: "328 / 328",
+            objectFit: "contain",
           }}
           loading="lazy"
           onError={(e) => {
             // Hard fallback to the bundled SVG illustration if PNG missing.
             const t = e.currentTarget;
             if (t && !t.dataset.fallback) {
-              t.dataset.fallback = '1';
-              t.src = '/figma/why-pay-less-car.svg';
+              t.dataset.fallback = "1";
+              t.src = "/figma/why-pay-less-car.svg";
             } else {
-              t.style.display = 'none';
+              t.style.display = "none";
             }
           }}
         />
@@ -5892,11 +6620,11 @@ function MobileWhyPayLess() {
         style={{
           // Block width 298 inside a 360-wide screen → side insets ≈ 31 / 31
           // ("Подпись внизу" lives in the same 298-wide column as the title)
-          margin: '24px auto 0',
+          margin: "24px auto 0",
           width: 298,
-          maxWidth: 'calc(100% - 32px)',
-          display: 'flex',
-          flexDirection: 'column',
+          maxWidth: "calc(100% - 32px)",
+          display: "flex",
+          flexDirection: "column",
           // Block-to-block gap per Figma — 49 px between the bottoms of one
           // benefit's body and the next benefit's yellow header.
           rowGap: 49,
@@ -5906,7 +6634,7 @@ function MobileWhyPayLess() {
           <div
             key={it.title}
             data-testid={`mobile-why-pay-less-item-${i + 1}`}
-            style={{ display: 'flex', flexDirection: 'column' }}
+            style={{ display: "flex", flexDirection: "column" }}
           >
             <h3
               data-testid={`mobile-why-pay-less-item-title-${i + 1}`}
@@ -5915,9 +6643,9 @@ function MobileWhyPayLess() {
                 fontFamily: FONT,
                 fontWeight: 700,
                 fontSize: 16,
-                lineHeight: '20px',
-                color: '#FEAE00',
-                textTransform: 'uppercase',
+                lineHeight: "20px",
+                color: "#FEAE00",
+                textTransform: "uppercase",
                 letterSpacing: 0,
               }}
             >
@@ -5927,13 +6655,13 @@ function MobileWhyPayLess() {
               data-testid={`mobile-why-pay-less-item-body-${i + 1}`}
               style={{
                 // 8 px between yellow header and white body, per Figma.
-                margin: '8px 0 0 0',
+                margin: "8px 0 0 0",
                 fontFamily: FONT,
                 fontWeight: 400,
                 fontSize: 16,
-                lineHeight: '22px',
-                color: '#FFFFFF',
-                whiteSpace: 'pre-line',
+                lineHeight: "22px",
+                color: "#FFFFFF",
+                whiteSpace: "pre-line",
                 letterSpacing: 0,
               }}
             >
@@ -5945,4 +6673,3 @@ function MobileWhyPayLess() {
     </section>
   );
 }
-

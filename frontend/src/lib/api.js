@@ -6,28 +6,28 @@
  * 2. `token` (legacy/admin) — fallback
  */
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 /** Read the active customer Bearer token (returns null if no session). */
 export function getCustomerToken() {
   try {
-    const raw = localStorage.getItem('customer_session');
+    const raw = localStorage.getItem("customer_session");
     if (raw) {
       const parsed = JSON.parse(raw);
       const tok = parsed?.sessionToken || parsed?.accessToken || parsed?.token;
       if (tok) return tok;
     }
   } catch {}
-  return localStorage.getItem('token') || null;
+  return localStorage.getItem("token") || null;
 }
 
 export async function apiFetch(url, options = {}) {
   const token = getCustomerToken();
 
   const res = await fetch(`${API_URL}${url}`, {
-    credentials: 'include',
+    credentials: "include",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
@@ -50,8 +50,8 @@ export async function apiFetch(url, options = {}) {
   }
 
   // Some endpoints return arrays directly; honor that.
-  const ct = res.headers.get('content-type') || '';
-  if (ct.includes('application/json')) return res.json();
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) return res.json();
   return res.text();
 }
 
@@ -60,63 +60,63 @@ export async function apiFetch(url, options = {}) {
  */
 export const userEngagementApi = {
   favorites: {
-    getMine: () => apiFetch('/api/favorites/me'),
+    getMine: () => apiFetch("/api/favorites/me"),
     add: (payload) =>
-      apiFetch('/api/favorites', {
-        method: 'POST',
+      apiFetch("/api/favorites", {
+        method: "POST",
         body: JSON.stringify(payload),
       }),
     /** identifier accepts VIN or favorite-id */
     remove: (identifier) =>
       apiFetch(`/api/favorites/${encodeURIComponent(identifier)}`, {
-        method: 'DELETE',
+        method: "DELETE",
       }),
     check: (vin) => apiFetch(`/api/favorites/check/${encodeURIComponent(vin)}`),
   },
 
   compare: {
-    getMine: () => apiFetch('/api/compare/me'),
+    getMine: () => apiFetch("/api/compare/me"),
     add: (payload) =>
-      apiFetch('/api/compare/add', {
-        method: 'POST',
+      apiFetch("/api/compare/add", {
+        method: "POST",
         body: JSON.stringify(payload),
       }),
     remove: (vehicleId) =>
       apiFetch(`/api/compare/remove/${vehicleId}`, {
-        method: 'DELETE',
+        method: "DELETE",
       }),
-    clear: () => apiFetch('/api/compare/clear', { method: 'DELETE' }),
-    resolve: () => apiFetch('/api/compare/resolve', { method: 'POST' }),
+    clear: () => apiFetch("/api/compare/clear", { method: "DELETE" }),
+    resolve: () => apiFetch("/api/compare/resolve", { method: "POST" }),
   },
 
   history: {
     request: (vin) =>
-      apiFetch('/api/history/request', {
-        method: 'POST',
+      apiFetch("/api/history/request", {
+        method: "POST",
         body: JSON.stringify({ vin }),
       }),
     getReport: (vin) => apiFetch(`/api/history/report/${vin}`),
-    getQuota: () => apiFetch('/api/history/quota/me'),
+    getQuota: () => apiFetch("/api/history/quota/me"),
   },
 
   intent: {
-    getMyScore: () => apiFetch('/api/intent/me'),
+    getMyScore: () => apiFetch("/api/intent/me"),
   },
 
   shares: {
     /** List the current authenticated customer's share history (array). */
-    getMine: () => apiFetch('/api/shares/me'),
+    getMine: () => apiFetch("/api/shares/me"),
     /** Create a share record. Auth is optional — anonymous shares are tracked
      *  by IP server-side. Returns `{ id, shareUrl, snapshot, ... }`. */
     create: (payload) =>
-      apiFetch('/api/shares', {
-        method: 'POST',
+      apiFetch("/api/shares", {
+        method: "POST",
         body: JSON.stringify(payload),
       }),
     /** Owner can remove their own share record. */
     remove: (shareId) =>
       apiFetch(`/api/shares/${encodeURIComponent(shareId)}`, {
-        method: 'DELETE',
+        method: "DELETE",
       }),
     /** Public read of one share record by id (used by unfurl/preview bots). */
     get: (shareId) => apiFetch(`/api/shares/${encodeURIComponent(shareId)}`),

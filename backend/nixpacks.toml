@@ -1,0 +1,45 @@
+# Railway / Nixpacks build configuration for BIBI Cars backend
+#
+# Installs system libraries required by:
+#   - WeasyPrint (PDF rendering): libgobject / pango / cairo / gdk-pixbuf
+#   - Playwright Chromium (PDF fallback + scraping): browser binary + deps
+#
+# NOTE: When a Dockerfile is present Railway uses it instead of this file.
+# This config acts as a fallback for nixpacks-only deployments.
+
+[variables]
+PLAYWRIGHT_BROWSERS_PATH = "/pw-browsers"
+
+[phases.setup]
+aptPkgs = [
+  # ── WeasyPrint runtime deps (libgobject-2.0-0 lives inside libglib2.0-0) ──
+  "libglib2.0-0",
+  "libpango-1.0-0",
+  "libpangocairo-1.0-0",
+  "libharfbuzz0b",
+  "libgdk-pixbuf-2.0-0",
+  "libcairo2",
+  "libffi8",
+  "shared-mime-info",
+  # ── Chromium / Playwright system deps ────────────────────────────────────
+  "libnss3",
+  "libnspr4",
+  "libatk1.0-0",
+  "libatk-bridge2.0-0",
+  "libcups2",
+  "libdrm2",
+  "libxkbcommon0",
+  "libxcomposite1",
+  "libxdamage1",
+  "libxfixes3",
+  "libxrandr2",
+  "libgbm1",
+  "libasound2",
+]
+
+[phases.build]
+# Use `python -m playwright` so the installed venv playwright is invoked
+# (nixpacks may not put the venv bin dir on PATH during the build phase).
+cmds = [
+  "python -m playwright install chromium",
+]

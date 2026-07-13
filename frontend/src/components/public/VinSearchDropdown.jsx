@@ -25,14 +25,15 @@ import axios from "axios";
 import { useLang } from "../../i18n";
 import "./VinSearchDropdown.css";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || "";
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 const DEBOUNCE_MS = 320;
 const MIN_LEN = 2;
 const MAX_ITEMS = 8;
 
 const fmtMileage = (n, unit) => {
   if (!n) return null;
-  const num = typeof n === "number" ? n : parseInt(String(n).replace(/[^\d]/g, ""), 10);
+  const num =
+    typeof n === "number" ? n : parseInt(String(n).replace(/[^\d]/g, ""), 10);
   if (!Number.isFinite(num) || num <= 0) return null;
   const u = (unit || "km").toLowerCase() === "mi" ? "mi" : "km";
   return `${num.toLocaleString("en-US")} ${u}`;
@@ -51,7 +52,9 @@ const fmtTitle = (it) => {
     const rest = y ? parts.slice(1).join(" ") : it.title;
     return y ? `${y} ${titleCase(rest)}` : titleCase(rest);
   }
-  return [it?.year, titleCase(it?.make || ""), titleCase(it?.model || "")].filter(Boolean).join(" ");
+  return [it?.year, titleCase(it?.make || ""), titleCase(it?.model || "")]
+    .filter(Boolean)
+    .join(" ");
 };
 
 const VinSearchDropdown = ({
@@ -86,10 +89,13 @@ const VinSearchDropdown = ({
       setLoading(true);
       setError(null);
       try {
-        const { data } = await axios.get(`${API_URL}/api/public/search/suggest`, {
-          params: { q, limit: MAX_ITEMS },
-          timeout: 8000,
-        });
+        const { data } = await axios.get(
+          `${API_URL}/api/public/search/suggest`,
+          {
+            params: { q, limit: MAX_ITEMS },
+            timeout: 8000,
+          },
+        );
         if (lastReqRef.current !== reqId) return;
         const arr = Array.isArray(data?.items) ? data.items : [];
         setItems(arr.slice(0, MAX_ITEMS));
@@ -97,11 +103,15 @@ const VinSearchDropdown = ({
         if (lastReqRef.current !== reqId) return;
         // Never set error to a non-string (e.g. Pydantic 422 detail array) — would crash React.
         const data = e?.response?.data;
-        let msg = t("vinSearchUnavailable") || "Search unavailable. Please try again.";
+        let msg =
+          t("vinSearchUnavailable") || "Search unavailable. Please try again.";
         if (data) {
           if (typeof data === "string") msg = data;
           else if (Array.isArray(data?.detail)) {
-            const m = data.detail.map((d) => (typeof d === "string" ? d : d?.msg)).filter(Boolean).join("; ");
+            const m = data.detail
+              .map((d) => (typeof d === "string" ? d : d?.msg))
+              .filter(Boolean)
+              .join("; ");
             if (m) msg = m;
           } else if (typeof data?.detail === "string") msg = data.detail;
           else if (typeof data?.detail?.msg === "string") msg = data.detail.msg;
@@ -118,7 +128,9 @@ const VinSearchDropdown = ({
   }, [query, open]);
 
   /* ── Reset selection when items refresh ─────────────────────────── */
-  useEffect(() => { setHoverIdx(-1); }, [items]);
+  useEffect(() => {
+    setHoverIdx(-1);
+  }, [items]);
 
   /* ── Click outside closes ───────────────────────────────────────── */
   useEffect(() => {
@@ -135,10 +147,13 @@ const VinSearchDropdown = ({
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => {
-      if (e.key === "Escape") { onClose?.(); return; }
+      if (e.key === "Escape") {
+        onClose?.();
+        return;
+      }
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setHoverIdx((i) => Math.min((items.length - 1), (i < 0 ? 0 : i + 1)));
+        setHoverIdx((i) => Math.min(items.length - 1, i < 0 ? 0 : i + 1));
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
@@ -159,11 +174,10 @@ const VinSearchDropdown = ({
 
   const q = (query || "").trim();
   const visible = open && q.length >= MIN_LEN;
-  const panelClass = useMemo(() => [
-    "vinsd-panel",
-    `vinsd-${variant}`,
-    `vinsd-align-${align}`,
-  ].join(" "), [variant, align]);
+  const panelClass = useMemo(
+    () => ["vinsd-panel", `vinsd-${variant}`, `vinsd-align-${align}`].join(" "),
+    [variant, align],
+  );
 
   if (!visible) return null;
 
@@ -178,7 +192,8 @@ const VinSearchDropdown = ({
     >
       {loading && (
         <div className="vinsd-state">
-          <span className="vinsd-spinner" /> {t("vinSearchSearching") || "Searching auctions…"}
+          <span className="vinsd-spinner" />{" "}
+          {t("vinSearchSearching") || "Searching auctions…"}
         </div>
       )}
       {!loading && error && (
@@ -186,7 +201,8 @@ const VinSearchDropdown = ({
       )}
       {!loading && !error && items.length === 0 && (
         <div className="vinsd-state">
-          {t("vinSearchNoMatchesPart1") || "No matches for"} <span className="vinsd-q">{q.toUpperCase()}</span>.{' '}
+          {t("vinSearchNoMatchesPart1") || "No matches for"}{" "}
+          <span className="vinsd-q">{q.toUpperCase()}</span>.{" "}
           {t("vinSearchNoMatchesPart2") || "Press Enter to open full lookup."}
         </div>
       )}
@@ -194,7 +210,8 @@ const VinSearchDropdown = ({
         <ul className="vinsd-list">
           {items.map((it, idx) => {
             const subtitleBits = [
-              it.lot_number && `${t("vinSearchLotPrefix") || "Lot"} ${it.lot_number}`,
+              it.lot_number &&
+                `${t("vinSearchLotPrefix") || "Lot"} ${it.lot_number}`,
               it.year,
               fmtMileage(it.odometer, it.odometer_unit),
               titleCase(it.location || ""),
@@ -215,7 +232,14 @@ const VinSearchDropdown = ({
               >
                 <div className="vinsd-thumb">
                   {it.image ? (
-                    <img src={it.image} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+                    <img
+                      src={it.image}
+                      alt=""
+                      loading="lazy"
+                      onError={(e) => {
+                        e.currentTarget.style.visibility = "hidden";
+                      }}
+                    />
                   ) : (
                     <span className="vinsd-thumb-fallback">VIN</span>
                   )}
@@ -225,8 +249,12 @@ const VinSearchDropdown = ({
                   <div className="vinsd-sub">{subtitleBits.join(" · ")}</div>
                   <div className="vinsd-vin">{it.vin}</div>
                 </div>
-                {it._src === "live" && <span className="vinsd-chip vinsd-chip--live">LIVE</span>}
-                {it._src === "stale" && <span className="vinsd-chip vinsd-chip--stale">CACHE</span>}
+                {it._src === "live" && (
+                  <span className="vinsd-chip vinsd-chip--live">LIVE</span>
+                )}
+                {it._src === "stale" && (
+                  <span className="vinsd-chip vinsd-chip--stale">CACHE</span>
+                )}
               </li>
             );
           })}
@@ -245,7 +273,8 @@ const VinSearchDropdown = ({
             }
           }}
         >
-          {t("vinSearchOpenFullFor") || "Open full lookup for"} <strong>{q.toUpperCase()}</strong>
+          {t("vinSearchOpenFullFor") || "Open full lookup for"}{" "}
+          <strong>{q.toUpperCase()}</strong>
         </button>
       </div>
     </div>

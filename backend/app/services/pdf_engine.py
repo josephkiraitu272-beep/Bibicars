@@ -41,6 +41,73 @@ logger = logging.getLogger("bibi.pdf_engine")
 
 GEN_COLLECTION = "generated_documents"
 
+# ── Playwright lazy-install state ─────────────────────────────────────────────
+# Playwright browser binaries are baked into the Docker image at build time
+# (playwright install --with-deps chromium).  If they are absent (e.g. a
+# nixpacks build or a fresh Railway deploy that skipped the binary download)
+# we try a one-off install before the first PDF attempt so the fallback
+# renderer can still function without a redeploy.
+_pw_install_lock: Optional[Any] = None   # asyncio.Lock, created on first use
+_pw_install_attempted: bool = False      # prevents repeated install attempts
+
+
+def _get_pw_lock():  # type: ignore[return]
+    global _pw_install_lock
+    if _pw_install_lock is None:
+        import asyncio as _asyncio
+        _pw_install_lock = _asyncio.Lock()
+    return _pw_install_lock
+
+
+async def _maybe_install_playwright_browser() -> None:
+    """Best-effort: install Playwright Chromium if the binary is missing.
+    Runs at most once per process (subsequent calls are no-ops)."""
+    global _pw_install_attempted
+    if _pw_install_attempted:
+        return
+    async with _get_pw_lock():
+        if _pw_install_attempted:
+            return
+        import asyncio
+        import os
+        import pathlib
+        import sys
+
+        browsers_path = pathlib.Path(
+            os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "/pw-browsers")
+        )
+        if browsers_path.exists() and any(browsers_path.glob("chromium*")):
+            _pw_install_attempted = True
+            return  # binary already present
+
+        logger.info(
+            "[pdf_engine] Playwright Chromium not found at %s – "
+            "running playwright install (one-time, may take ~60 s)",
+            browsers_path,
+        )
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, "-m", "playwright", "install", "chromium",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+            if proc.returncode == 0:
+                logger.info(
+                    "[pdf_engine] Playwright Chromium installed successfully")
+            else:
+                logger.warning(
+                    "[pdf_engine] playwright install rc=%s: %s",
+                    proc.returncode, (stderr or b"").decode()[:500],
+                )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "[pdf_engine] playwright install timed out (>300 s)")
+        except Exception as exc:
+            logger.warning("[pdf_engine] playwright install raised: %s", exc)
+        finally:
+            _pw_install_attempted = True  # don't retry even on failure
+
 # Map a document type to the file-manager folder name where it lives.
 TYPE_TO_FOLDER: Dict[str, str] = {
     "contract":             "Contracts",
@@ -50,11 +117,14 @@ TYPE_TO_FOLDER: Dict[str, str] = {
 }
 
 # Forgiving Undefined - missing variables render as empty strings
+
+
 class _SilentUndefined(Undefined):
     def __str__(self): return ""
     def __getattr__(self, name): return _SilentUndefined()
     def __getitem__(self, key): return _SilentUndefined()
     def __bool__(self): return False
+
 
 _jinja_env = Environment(
     loader=BaseLoader(),
@@ -81,7 +151,8 @@ async def _resolve_customer(db, customer_id: str) -> Dict[str, Any]:
 async def _resolve_manager(db, manager_id: Optional[str], manager_email: Optional[str]) -> Dict[str, Any]:
     if not manager_id and not manager_email:
         return {}
-    q = {"$or": [{"id": manager_id or "__none__"}, {"email": manager_email or "__none__"}]}
+    q = {"$or": [{"id": manager_id or "__none__"},
+                 {"email": manager_email or "__none__"}]}
     mgr = await db.staff.find_one(q, {"_id": 0, "password": 0, "passwordHash": 0})
     return mgr or {"id": manager_id, "email": manager_email, "name": manager_email}
 
@@ -139,23 +210,26 @@ async def generate(
     if not tpl:
         tpl = await get_default_template(doc_type, language=language)
     if not tpl:
-        raise ValueError(f"No template available for type={doc_type}, language={language}")
+        raise ValueError(
+            f"No template available for type={doc_type}, language={language}")
 
     # ---- 2. Build render context -----------------------------------------
     customer = await _resolve_customer(db, customer_id)
-    invoice  = await db.invoices.find_one({"id": invoice_id}, {"_id": 0}) if invoice_id else None
-    order    = await db.orders.find_one({"id": order_id},   {"_id": 0}) if order_id   else None
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0}) if invoice_id else None
+    order = await db.orders.find_one({"id": order_id},   {"_id": 0}) if order_id else None
     if not order and invoice:
         order = await db.orders.find_one({"invoiceId": invoice.get("id")}, {"_id": 0})
     if not invoice and order and order.get("invoiceId"):
         invoice = await db.invoices.find_one({"id": order["invoiceId"]}, {"_id": 0})
-    manager_id    = (invoice or {}).get("managerId") or (order or {}).get("managerId")
-    manager_email = (invoice or {}).get("managerEmail") or (order or {}).get("managerEmail")
+    manager_id = (invoice or {}).get(
+        "managerId") or (order or {}).get("managerId")
+    manager_email = (invoice or {}).get(
+        "managerEmail") or (order or {}).get("managerEmail")
     manager = await _resolve_manager(db, manager_id, manager_email)
     company = await _resolve_company(db)
 
     entity_id = invoice_id or order_id
-    version   = await _next_version(customer_id, doc_type, entity_id)
+    version = await _next_version(customer_id, doc_type, entity_id)
 
     # Normalise line-item collections so templates can safely iterate them.
     # NOTE: Jinja resolves ``invoice['items']`` on a dict that lacks the key
@@ -198,7 +272,16 @@ async def generate(
         pdf_bytes = HTML(string=html_str).write_pdf()
     except Exception as exc:
         logger.exception("[pdf_engine] weasyprint failed: %s", exc)
-        raise RuntimeError(f"PDF rendering failed: {exc}")
+        try:
+            pdf_bytes = await _render_pdf_via_playwright(html_str)
+            logger.warning(
+                "[pdf_engine] PDF generated via Playwright fallback")
+        except Exception as fallback_exc:
+            logger.exception(
+                "[pdf_engine] playwright fallback failed: %s", fallback_exc)
+            raise RuntimeError(
+                f"PDF rendering failed: {exc}. Playwright fallback also failed: {fallback_exc}"
+            )
 
     # ---- 5. Ensure folder + upload --------------------------------------
     folder_name = TYPE_TO_FOLDER.get(doc_type, "Other")
@@ -224,7 +307,8 @@ async def generate(
             {"_id": 0},
         )
     if not folder:
-        raise RuntimeError(f"System folder '{folder_name}' missing for customer")
+        raise RuntimeError(
+            f"System folder '{folder_name}' missing for customer")
 
     base = doc_type.replace("_", " ").title().replace(" ", "_")
     safe_entity = (entity_id or "")[-8:]
@@ -307,14 +391,54 @@ async def generate(
                 generated_by_email=generated_by_email,
             )
         except Exception:
-            logger.exception("[contract_lifecycle] auto-row creation failed (non-fatal)")
+            logger.exception(
+                "[contract_lifecycle] auto-row creation failed (non-fatal)")
 
     return {"file": file_doc, "document": gen_doc}
+
+
+async def _render_pdf_via_playwright(html: str) -> bytes:
+    """Render HTML to PDF using Playwright Chromium as a fallback.
+
+    The binary is normally baked into the Docker image via
+    ``playwright install --with-deps chromium``.  If it is absent (nixpacks
+    build / fresh deploy that skipped the download), we attempt a one-time
+    lazy install before launching so the fallback can recover without a
+    redeploy.
+    """
+    import os
+    from playwright.async_api import async_playwright
+
+    os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/pw-browsers")
+
+    # Ensure the binary exists – installs it at most once per process.
+    await _maybe_install_playwright_browser()
+
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                ],
+            )
+            page = await browser.new_page()
+            await page.set_content(html, wait_until="networkidle")
+            pdf_bytes = await page.pdf(format="A4", print_background=True)
+            await browser.close()
+            return pdf_bytes
+    except Exception as exc:
+        logger.exception(
+            "[pdf_engine] Playwright PDF fallback failed: %s", exc)
+        raise RuntimeError(f"Playwright PDF fallback failed: {exc}")
 
 
 async def list_generated(customer_id: str, *, doc_type: Optional[str] = None) -> list:
     db = get_db()
     q: Dict[str, Any] = {"customer_id": customer_id}
-    if doc_type: q["type"] = doc_type
+    if doc_type:
+        q["type"] = doc_type
     cur = db[GEN_COLLECTION].find(q, {"_id": 0}).sort([("generated_at", -1)])
     return await cur.to_list(length=200)

@@ -130,7 +130,8 @@ async def bootstrap_jwt_secret(db) -> str:
 
     # 1) ENV is authoritative — never read/write Mongo when it is set.
     if JWT_SECRET_SOURCE == "env":
-        logger.info("[security] JWT_SECRET source=ENV (recommended, replica-safe).")
+        logger.info(
+            "[security] JWT_SECRET source=ENV (recommended, replica-safe).")
         return JWT_SECRET
 
     if db is None:
@@ -188,17 +189,21 @@ HMAC_WINDOW_SEC = int(os.environ.get("HMAC_WINDOW_SEC", "60"))  # ±60 s default
 # Nonce: X-Ext-Nonce header for stronger replay-protection. Soft-launch:
 # when ENFORCE_NONCE=0 (default) a missing nonce only emits a warning so the
 # current extension build keeps working; duplicate nonces are still rejected.
-ENFORCE_NONCE = os.environ.get("ENFORCE_NONCE", "0").strip() in ("1", "true", "yes", "on")
+ENFORCE_NONCE = os.environ.get(
+    "ENFORCE_NONCE", "0").strip() in ("1", "true", "yes", "on")
 
 CRM_ADMIN_TOKEN = os.environ.get("CRM_ADMIN_TOKEN", "").strip()
 
 AUTH_MODE = os.environ.get("AUTH_MODE", "legacy").strip().lower()
 if AUTH_MODE not in ("strict", "legacy", "disabled"):
-    logger.warning(f"[security] unknown AUTH_MODE={AUTH_MODE!r}, falling back to 'legacy'")
+    logger.warning(
+        f"[security] unknown AUTH_MODE={AUTH_MODE!r}, falling back to 'legacy'")
     AUTH_MODE = "legacy"
 
-PAYLOAD_DEBUG_STORE = os.environ.get("PAYLOAD_DEBUG_STORE", "0").strip() in ("1", "true", "yes")
-BACKEND_VF_SCRAPING = os.environ.get("BACKEND_VF_SCRAPING", "off").strip().lower() in ("on", "1", "true", "yes")
+PAYLOAD_DEBUG_STORE = os.environ.get(
+    "PAYLOAD_DEBUG_STORE", "0").strip() in ("1", "true", "yes")
+BACKEND_VF_SCRAPING = os.environ.get(
+    "BACKEND_VF_SCRAPING", "off").strip().lower() in ("on", "1", "true", "yes")
 
 # Allowed legacy token (back-compat) — DISABLED (PHASE SECURITY S1/A-1).
 # Kept only as a denylist marker; never accepted by _check_token anymore.
@@ -220,7 +225,8 @@ MASTER_ROLES: Set[str] = {"admin", "owner", "master_admin"}
 # dashboards, parser health, integrations, etc). Destructive operations are
 # still gated by `MASTER_ROLES` via `require_master_admin`.
 ADMIN_ROLES: Set[str] = {"admin", "owner", "master_admin", "team_lead"}
-MANAGER_ROLES: Set[str] = {"admin", "owner", "master_admin", "team_lead", "manager", "moderator"}
+MANAGER_ROLES: Set[str] = {"admin", "owner",
+                           "master_admin", "team_lead", "manager", "moderator"}
 STAFF_ROLES: Set[str] = ADMIN_ROLES | MANAGER_ROLES
 
 
@@ -239,7 +245,8 @@ def parse_cors_origins() -> list[str]:
     raw = _origin_tokens()
     safe = [o for o in raw if o != "*" and "*" not in o]
     if "*" in raw:
-        logger.error("[security] CORS_ORIGINS contains '*' — dropped (use explicit origins or wildcard subdomain)")
+        logger.error(
+            "[security] CORS_ORIGINS contains '*' — dropped (use explicit origins or wildcard subdomain)")
     return safe
 
 
@@ -274,11 +281,14 @@ def assert_prod_safe() -> None:
     """
     problems: list[str] = []
     if not JWT_SECRET or JWT_SECRET == JWT_DEFAULT_PLACEHOLDER:
-        problems.append(f"JWT_SECRET is empty or default placeholder ({JWT_DEFAULT_PLACEHOLDER!r})")
+        problems.append(
+            f"JWT_SECRET is empty or default placeholder ({JWT_DEFAULT_PLACEHOLDER!r})")
     if not EXT_SHARED_SECRET:
-        problems.append("EXT_SHARED_SECRET is empty — HMAC protection disabled")
+        problems.append(
+            "EXT_SHARED_SECRET is empty — HMAC protection disabled")
     if "*" in _origin_tokens():
-        problems.append("CORS_ORIGINS contains '*' — disallowed with credentials")
+        problems.append(
+            "CORS_ORIGINS contains '*' — disallowed with credentials")
     if AUTH_MODE == "disabled":
         problems.append("AUTH_MODE=disabled — all API endpoints are open")
 
@@ -289,7 +299,8 @@ def assert_prod_safe() -> None:
     msg = "[security] startup problems:\n  - " + "\n  - ".join(problems)
     if AUTH_MODE == "strict":
         logger.error(msg)
-        raise RuntimeError("Refusing to start in AUTH_MODE=strict with insecure config:\n" + msg)
+        raise RuntimeError(
+            "Refusing to start in AUTH_MODE=strict with insecure config:\n" + msg)
     logger.warning(msg)
 
 
@@ -328,7 +339,8 @@ def create_jwt(user: Dict[str, Any], ttl_hours: Optional[int] = None) -> str:
     Keeps tokens small — we only put id/email/role/managerId/customerId.
     """
     if not JWT_SECRET or JWT_SECRET == JWT_DEFAULT_PLACEHOLDER:
-        raise RuntimeError("JWT_SECRET not configured — refusing to issue token")
+        raise RuntimeError(
+            "JWT_SECRET not configured — refusing to issue token")
     ttl = ttl_hours if ttl_hours is not None else JWT_TTL_HOURS
     now = datetime.now(timezone.utc)
     payload = {
@@ -534,7 +546,8 @@ async def require_admin(
     user = await require_user(creds, request)
     role = (user.get("role") or "").lower()
     if role not in ADMIN_ROLES:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
     return user
 
 
@@ -573,7 +586,8 @@ async def require_manager_or_admin(
     user = await require_user(creds, request)
     role = (user.get("role") or "").lower()
     if role not in MANAGER_ROLES:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager or admin role required")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Manager or admin role required")
     return user
 
 
@@ -701,8 +715,10 @@ async def _fire_hmac_audit(reason: str, client: Optional[str], request: Request)
 
 async def require_extension_hmac(
     request: Request,
-    x_ext_timestamp: Optional[str] = Header(default=None, alias="X-Ext-Timestamp"),
-    x_ext_signature: Optional[str] = Header(default=None, alias="X-Ext-Signature"),
+    x_ext_timestamp: Optional[str] = Header(
+        default=None, alias="X-Ext-Timestamp"),
+    x_ext_signature: Optional[str] = Header(
+        default=None, alias="X-Ext-Signature"),
     x_ext_client: Optional[str] = Header(default=None, alias="X-Ext-Client"),
     x_ext_nonce: Optional[str] = Header(default=None, alias="X-Ext-Nonce"),
 ) -> dict:
@@ -753,14 +769,38 @@ async def require_extension_hmac(
             if per_client == "__REVOKED__":
                 # Explicitly revoked client — reject even if signed correctly
                 await _fire_hmac_audit("revoked_client", x_ext_client, request)
-                raise HTTPException(status_code=401, detail="Revoked X-Ext-Client")
+                raise HTTPException(
+                    status_code=401, detail="Revoked X-Ext-Client")
             effective_secret = per_client
             client_source = "ext_client"
         # else: client id not in registry → fall back to global (soft enrollment)
 
-    msg = f"{x_ext_timestamp}\n{request.method.upper()}\n{request.url.path}\n{body_sha}".encode("utf-8")
-    expected = hmac.new(effective_secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(expected, (x_ext_signature or "").strip().lower()):
+    sig_in = (x_ext_signature or "").strip().lower()
+    method_up = request.method.upper()
+    path_only = request.url.path
+    # Backward compatibility: older extensions signed with "path?query".
+    # Canonical format is path-only, but we accept both during rollout.
+    path_with_query = (
+        f"{request.url.path}?{request.url.query}"
+        if request.url.query else request.url.path
+    )
+
+    msg_path_only = f"{x_ext_timestamp}\n{method_up}\n{path_only}\n{body_sha}".encode(
+        "utf-8")
+    expected_path_only = hmac.new(
+        effective_secret.encode("utf-8"), msg_path_only, hashlib.sha256
+    ).hexdigest()
+
+    msg_path_query = f"{x_ext_timestamp}\n{method_up}\n{path_with_query}\n{body_sha}".encode(
+        "utf-8")
+    expected_path_query = hmac.new(
+        effective_secret.encode("utf-8"), msg_path_query, hashlib.sha256
+    ).hexdigest()
+
+    if not (
+        hmac.compare_digest(expected_path_only, sig_in)
+        or hmac.compare_digest(expected_path_query, sig_in)
+    ):
         logger.warning(
             f"[security] HMAC mismatch on {request.method} {request.url.path} "
             f"from client={x_ext_client!r} source={client_source}"
@@ -778,7 +818,8 @@ async def require_extension_hmac(
                 ok = True  # do not block on DB failure
             if not ok:
                 await _fire_hmac_audit("nonce_replay", x_ext_client, request)
-                raise HTTPException(status_code=401, detail="Replayed X-Ext-Nonce")
+                raise HTTPException(
+                    status_code=401, detail="Replayed X-Ext-Nonce")
         elif ENFORCE_NONCE:
             await _fire_hmac_audit("missing_nonce", x_ext_client, request)
             raise HTTPException(status_code=401, detail="Missing X-Ext-Nonce")

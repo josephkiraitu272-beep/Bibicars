@@ -26,7 +26,7 @@ import useInView from "../../components/useInView";
 import { useLang } from "../../i18n";
 import styles from "./frame-component21.module.css";
 
-const API = process.env.REACT_APP_BACKEND_URL || "";
+const API = "https://backend-production-ae6d.up.railway.app";
 
 const PLACEHOLDER_IMGS = [
   "/figma/image-15@2x.webp",
@@ -87,7 +87,9 @@ const FrameComponent21 = ({ className = "", category, budget, onCount }) => {
       if (category) params.category = category;
       if (budget) params.budget = budget;
       const { data } = await axios.get(`${API}/api/public/wishlist-deals`, {
-        params, signal, timeout: 15000,
+        params,
+        signal,
+        timeout: 15000,
       });
       const list = Array.isArray(data?.data) ? data.data : [];
       return { items: list.map(wishlistToCard), raw: list };
@@ -111,19 +113,33 @@ const FrameComponent21 = ({ className = "", category, budget, onCount }) => {
     try {
       const favs = await userEngagementApi.favorites.getMine();
       if (Array.isArray(favs)) {
-        setFavSet(new Set(favs.map((f) => (f.vin || f.vehicleId || "").toUpperCase()).filter(Boolean)));
+        setFavSet(
+          new Set(
+            favs
+              .map((f) => (f.vin || f.vehicleId || "").toUpperCase())
+              .filter(Boolean),
+          ),
+        );
       }
-    } catch {/* unauth or API down → leave empty */}
+    } catch {
+      /* unauth or API down → leave empty */
+    }
     try {
       const cmp = await userEngagementApi.compare.getMine();
-      const list = Array.isArray(cmp) ? cmp : (cmp?.items || []);
-      const ids = list.map((c) => (c.vin || c.vehicleId || "").toUpperCase()).filter(Boolean);
+      const list = Array.isArray(cmp) ? cmp : cmp?.items || [];
+      const ids = list
+        .map((c) => (c.vin || c.vehicleId || "").toUpperCase())
+        .filter(Boolean);
       setCmpSet(new Set(ids));
       setCmpCount(ids.length);
-    } catch {/* leave empty */}
+    } catch {
+      /* leave empty */
+    }
   }, []);
 
-  useEffect(() => { loadEngagement(); }, [loadEngagement]);
+  useEffect(() => {
+    loadEngagement();
+  }, [loadEngagement]);
 
   /* ── Optimistic toggles propagated from Card1 ─────────────────────── */
   const handleToggleFavorite = useCallback((vin, next) => {
@@ -131,7 +147,8 @@ const FrameComponent21 = ({ className = "", category, budget, onCount }) => {
     const v = vin.toUpperCase();
     setFavSet((prev) => {
       const ns = new Set(prev);
-      if (next) ns.add(v); else ns.delete(v);
+      if (next) ns.add(v);
+      else ns.delete(v);
       return ns;
     });
   }, []);
@@ -141,7 +158,8 @@ const FrameComponent21 = ({ className = "", category, budget, onCount }) => {
     const v = vin.toUpperCase();
     setCmpSet((prev) => {
       const ns = new Set(prev);
-      if (next) ns.add(v); else ns.delete(v);
+      if (next) ns.add(v);
+      else ns.delete(v);
       return ns;
     });
     setCmpCount((c) => Math.max(0, c + (next ? 1 : -1)));
@@ -153,9 +171,10 @@ const FrameComponent21 = ({ className = "", category, budget, onCount }) => {
   // Once the request settles and there are 0 curated picks for the
   // selected (category, budget) combo, we hide the placeholders and
   // render the empty-state block instead.
-  const isInitialLoading = dealsQ.isLoading || (dealsQ.isFetching && !dealsQ.data);
+  const isInitialLoading =
+    dealsQ.isLoading || (dealsQ.isFetching && !dealsQ.data);
   const showPlaceholders = !live && isInitialLoading;
-  const visibleCount = live ? live.length : (showPlaceholders ? 6 : 0);
+  const visibleCount = live ? live.length : showPlaceholders ? 6 : 0;
   const rows = useMemo(() => {
     const out = [];
     if (live) {
@@ -204,14 +223,21 @@ const FrameComponent21 = ({ className = "", category, budget, onCount }) => {
   }, [category, budget]);
 
   return (
-    <div ref={sectionRef} className={[styles.cardsBlockWrapper, className, inView ? "is-visible" : ""].join(" ")}>
+    <div
+      ref={sectionRef}
+      className={[
+        styles.cardsBlockWrapper,
+        className,
+        inView ? "is-visible" : "",
+      ].join(" ")}
+    >
       <div ref={blockRef} className={`${styles.cardsBlock} tilt-scope`}>
         {rows.map((row, ri) => (
           <div className={styles.cardsParent} key={`row-${ri}`}>
             {row.map((cell, ci) => {
               const cardIdx = ri * 3 + ci;
               const isFresh = cardIdx >= prevCount;
-              const delayIdx = isFresh ? (cardIdx - prevCount) : (cardIdx % 6);
+              const delayIdx = isFresh ? cardIdx - prevCount : cardIdx % 6;
               const animStyle = { animationDelay: `${delayIdx * 140}ms` };
               if (live) {
                 const v = cell;
@@ -240,7 +266,9 @@ const FrameComponent21 = ({ className = "", category, budget, onCount }) => {
                   style={animStyle}
                   key={`ph-${idx}`}
                 >
-                  <Card1 image15={PLACEHOLDER_IMGS[idx % PLACEHOLDER_IMGS.length]} />
+                  <Card1
+                    image15={PLACEHOLDER_IMGS[idx % PLACEHOLDER_IMGS.length]}
+                  />
                 </section>
               );
             })}
@@ -263,7 +291,15 @@ const FrameComponent21 = ({ className = "", category, budget, onCount }) => {
                 ? "Все още няма селекция за тази седмица"
                 : "No curated picks for this combo yet"}
             </div>
-            <div style={{ fontSize: 14, opacity: 0.75, marginBottom: 18, maxWidth: 520, margin: "0 auto 18px" }}>
+            <div
+              style={{
+                fontSize: 14,
+                opacity: 0.75,
+                marginBottom: 18,
+                maxWidth: 520,
+                margin: "0 auto 18px",
+              }}
+            >
               {isBg
                 ? "Изберете друг бюджет или категория, или прегледайте целия каталог."
                 : "Pick another category or budget — or browse the full catalog below."}
@@ -272,24 +308,49 @@ const FrameComponent21 = ({ className = "", category, budget, onCount }) => {
         )}
 
         {/* "MORE WISH LIST" → jumps to the full catalog (preserves filters as query params). */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "32px 0 0", gap: 6 }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            padding: "32px 0 0",
+            gap: 6,
+          }}
+        >
           <Link
             to={catalogHref}
             data-testid="top-deals-more-link"
             style={{
-              background: "transparent", border: 0, color: "#FEAE00",
-              fontFamily: "var(--font-mazzard)", fontSize: 18, fontWeight: 500,
-              letterSpacing: "0.06em", textTransform: "uppercase",
-              textDecoration: "underline", cursor: loadingMore ? "wait" : "pointer", padding: "8px 12px",
+              background: "transparent",
+              border: 0,
+              color: "#FEAE00",
+              fontFamily: "var(--font-mazzard)",
+              fontSize: 18,
+              fontWeight: 500,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              textDecoration: "underline",
+              cursor: loadingMore ? "wait" : "pointer",
+              padding: "8px 12px",
               opacity: loadingMore ? 0.5 : 1,
             }}
           >
             {loadingMore
-              ? (isBg ? "зареждам…" : "loading…")
-              : (isBg ? "още автомобили +" : "more vehicles +")}
+              ? isBg
+                ? "зареждам…"
+                : "loading…"
+              : isBg
+                ? "още автомобили +"
+                : "more vehicles +"}
           </Link>
           {total > 0 && (
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", letterSpacing: "0.04em" }}>
+            <div
+              style={{
+                fontSize: 12,
+                color: "rgba(255,255,255,0.5)",
+                letterSpacing: "0.04em",
+              }}
+            >
               {isBg
                 ? `${total} селекции за тази седмица`
                 : `${total} curated pick${total === 1 ? "" : "s"} this week`}

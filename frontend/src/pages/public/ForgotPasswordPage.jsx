@@ -10,67 +10,66 @@
  *   → in dry-run mode (default dev) the response also contains { reset_link }
  *     which we expose for testing convenience.
  */
-import React, { useState } from 'react';
-import axios from 'axios';
-import { Link } from 'react-router-dom';
+import React, { useState } from "react";
+import axios from "axios";
+import { Link } from "react-router-dom";
 import {
   Envelope,
   ArrowLeft,
   CheckCircle,
   SpinnerGap,
   WarningCircle,
-} from '@phosphor-icons/react';
-import { toast } from 'sonner';
-import { useLang } from '../../i18n';
+} from "@phosphor-icons/react";
+import { toast } from "sonner";
+import { useLang } from "../../i18n";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 // ── Bilingual strings (EN/BG only — cabinet never speaks UK) ──────────────
 const STR = {
   en: {
-    backToLogin: 'Back to sign in',
-    title: 'Forgot your password?',
-    subtitle: 'Enter your email and we\u2019ll send you a link to reset it.',
-    emailLabel: 'Email',
-    emailPlaceholder: 'you@example.com',
-    submit: 'Send reset link',
-    sending: 'Sending\u2026',
-    emailRequired: 'Please enter your email',
-    genericError: 'Something went wrong. Please try again.',
-    successTitle: 'Request received',
+    backToLogin: "Back to sign in",
+    title: "Forgot your password?",
+    subtitle: "Enter your email and we\u2019ll send you a link to reset it.",
+    emailLabel: "Email",
+    emailPlaceholder: "you@example.com",
+    submit: "Send reset link",
+    sending: "Sending\u2026",
+    emailRequired: "Please enter your email",
+    genericError: "Something went wrong. Please try again.",
+    successTitle: "Request received",
     successDefault:
-      'If that email exists, we\u2019ve sent a reset link. Check your inbox.',
-    dryRunTitle: 'Dev mode',
+      "If that email exists, we\u2019ve sent a reset link. Check your inbox.",
+    dryRunTitle: "Dev mode",
     dryRunNote:
-      'Emails are not actually sent. Here is the direct reset link for testing:',
-    backLink: 'Return to sign in',
+      "Emails are not actually sent. Here is the direct reset link for testing:",
+    backLink: "Return to sign in",
   },
   bg: {
-    backToLogin: 'Към входа',
-    title: 'Забравена парола?',
-    subtitle: 'Въведете имейла си — ще изпратим линк за възстановяване.',
-    emailLabel: 'Имейл',
-    emailPlaceholder: 'you@example.com',
-    submit: 'Изпрати линк',
-    sending: 'Изпращане…',
-    emailRequired: 'Моля, въведете имейл',
-    genericError: 'Нещо се обърка. Моля, опитайте отново.',
-    successTitle: 'Заявката е приета',
+    backToLogin: "Към входа",
+    title: "Забравена парола?",
+    subtitle: "Въведете имейла си — ще изпратим линк за възстановяване.",
+    emailLabel: "Имейл",
+    emailPlaceholder: "you@example.com",
+    submit: "Изпрати линк",
+    sending: "Изпращане…",
+    emailRequired: "Моля, въведете имейл",
+    genericError: "Нещо се обърка. Моля, опитайте отново.",
+    successTitle: "Заявката е приета",
     successDefault:
-      'Ако този имейл съществува, ще получите линк за възстановяване.',
-    dryRunTitle: 'Dev режим',
-    dryRunNote:
-      'Имейли не се изпращат реално. Ето директния линк за тест:',
-    backLink: 'Връщане към входа',
+      "Ако този имейл съществува, ще получите линк за възстановяване.",
+    dryRunTitle: "Dev режим",
+    dryRunNote: "Имейли не се изпращат реално. Ето директния линк за тест:",
+    backLink: "Връщане към входа",
   },
 };
-const pick = (lang) => (lang === 'bg' ? STR.bg : STR.en);
+const pick = (lang) => (lang === "bg" ? STR.bg : STR.en);
 
 export default function ForgotPasswordPage() {
   const { lang } = useLang();
   const t = pick(lang);
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(null); // { message, dry_run?, reset_link? }
 
@@ -85,7 +84,7 @@ export default function ForgotPasswordPage() {
     try {
       const res = await axios.post(
         `${API_URL}/api/customer-auth/forgot-password`,
-        { email: clean }
+        { email: clean },
       );
       setDone(res.data || { message: t.successDefault });
     } catch (err) {
@@ -114,7 +113,11 @@ export default function ForgotPasswordPage() {
           <p className="text-white/60 text-sm mb-6">{t.subtitle}</p>
 
           {!done && (
-            <form onSubmit={submit} className="space-y-4" data-testid="forgot-form">
+            <form
+              onSubmit={submit}
+              className="space-y-4"
+              data-testid="forgot-form"
+            >
               <div>
                 <label className="block text-[11px] font-bold text-[#FEAE00] uppercase tracking-[0.12em] mb-2">
                   {t.emailLabel}
@@ -138,7 +141,8 @@ export default function ForgotPasswordPage() {
               >
                 {submitting ? (
                   <>
-                    <SpinnerGap size={18} className="animate-spin" /> {t.sending}
+                    <SpinnerGap size={18} className="animate-spin" />{" "}
+                    {t.sending}
                   </>
                 ) : (
                   t.submit

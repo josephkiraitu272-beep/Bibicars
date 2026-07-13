@@ -9,7 +9,7 @@ import VinSearchDropdown from "../../components/public/VinSearchDropdown";
 import { useGetInTouch } from "../../components/public/GetInTouchModal";
 import styles from "./header1.module.css";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || "";
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 const SITE_INFO_CACHE = "__bibi_site_info_promise__";
 
 function fetchSiteInfo() {
@@ -52,14 +52,18 @@ const Header1 = ({ className = "" }) => {
     fetchSiteInfo().then((d) => {
       if (!cancelled) setSiteInfo(d);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Admin-managed phones (with sensible default)
   const phones = useMemo(() => {
     const fromHeader = (siteInfo?.header?.phones || []).filter(Boolean);
     if (fromHeader.length) return fromHeader;
-    const fromFooter = (siteInfo?.footer?.contacts?.phones || []).filter(Boolean);
+    const fromFooter = (siteInfo?.footer?.contacts?.phones || []).filter(
+      Boolean,
+    );
     if (fromFooter.length) return fromFooter;
     return ["+359 875 313 158", "+359 897 884 804"];
   }, [siteInfo]);
@@ -72,16 +76,64 @@ const Header1 = ({ className = "" }) => {
     const isBg = lang === "bg";
     return isBg
       ? [
-          { key: "catalog",    label: "КАТАЛОГ",    path: "/catalog",    cONTACTSWidth: "80px",  cONTACTSWidth1: "82px"  },
-          { key: "calculator", label: "КАЛКУЛАТОР", path: "/calculator", cONTACTSWidth: "116px", cONTACTSWidth1: "118px" },
-          { key: "about",      label: "ЗА НАС",     path: "/about",      cONTACTSWidth: "70px",  cONTACTSWidth1: "70px"  },
-          { key: "contacts",   label: "КОНТАКТИ",   path: "/contacts",   cONTACTSWidth: "96px",  cONTACTSWidth1: "98px"  },
+          {
+            key: "catalog",
+            label: "КАТАЛОГ",
+            path: "/catalog",
+            cONTACTSWidth: "80px",
+            cONTACTSWidth1: "82px",
+          },
+          {
+            key: "calculator",
+            label: "КАЛКУЛАТОР",
+            path: "/calculator",
+            cONTACTSWidth: "116px",
+            cONTACTSWidth1: "118px",
+          },
+          {
+            key: "about",
+            label: "ЗА НАС",
+            path: "/about",
+            cONTACTSWidth: "70px",
+            cONTACTSWidth1: "70px",
+          },
+          {
+            key: "contacts",
+            label: "КОНТАКТИ",
+            path: "/contacts",
+            cONTACTSWidth: "96px",
+            cONTACTSWidth1: "98px",
+          },
         ]
       : [
-          { key: "catalog",    label: "CATALOG",    path: "/catalog",    cONTACTSWidth: "69px",  cONTACTSWidth1: "78px"  },
-          { key: "calculator", label: "CALCULATOR", path: "/calculator", cONTACTSWidth: "100px", cONTACTSWidth1: "110px" },
-          { key: "about",      label: "ABOUT US",   path: "/about",      cONTACTSWidth: "82px",  cONTACTSWidth1: "84px"  },
-          { key: "contacts",   label: "CONTACTS",   path: "/contacts",   cONTACTSWidth: "82px",  cONTACTSWidth1: "91px"  },
+          {
+            key: "catalog",
+            label: "CATALOG",
+            path: "/catalog",
+            cONTACTSWidth: "69px",
+            cONTACTSWidth1: "78px",
+          },
+          {
+            key: "calculator",
+            label: "CALCULATOR",
+            path: "/calculator",
+            cONTACTSWidth: "100px",
+            cONTACTSWidth1: "110px",
+          },
+          {
+            key: "about",
+            label: "ABOUT US",
+            path: "/about",
+            cONTACTSWidth: "82px",
+            cONTACTSWidth1: "84px",
+          },
+          {
+            key: "contacts",
+            label: "CONTACTS",
+            path: "/contacts",
+            cONTACTSWidth: "82px",
+            cONTACTSWidth1: "91px",
+          },
         ];
   }, [lang]);
 
@@ -98,7 +150,11 @@ const Header1 = ({ className = "" }) => {
 
   const handleProfileClick = () => {
     let sess = null;
-    try { sess = JSON.parse(localStorage.getItem("customer_session") || "null"); } catch { /* ignore */ }
+    try {
+      sess = JSON.parse(localStorage.getItem("customer_session") || "null");
+    } catch {
+      /* ignore */
+    }
     const id = customer?.customerId || sess?.customerId;
     navigate(id ? `/cabinet/${id}` : "/cabinet/login");
   };
@@ -117,7 +173,11 @@ const Header1 = ({ className = "" }) => {
   return (
     <header className={[styles.header, className].join(" ")}>
       <div className={styles.bibiLogo021Parent}>
-        <Link to="/" aria-label="BIBI Cars — Home" style={{ display: "inline-flex" }}>
+        <Link
+          to="/"
+          aria-label="BIBI Cars — Home"
+          style={{ display: "inline-flex" }}
+        >
           <img
             className={styles.bibiLogo021Icon}
             loading="lazy"
@@ -171,10 +231,17 @@ const Header1 = ({ className = "" }) => {
               />
               <input
                 className={styles.searchByVin}
-                placeholder={lang === "bg" ? "Търсене по VIN или № на лот" : "Search by VIN or lot number"}
+                placeholder={
+                  lang === "bg"
+                    ? "Търсене по VIN или № на лот"
+                    : "Search by VIN or lot number"
+                }
                 type="text"
                 value={vinQuery}
-                onChange={(e) => { setVinQuery(e.target.value); setVinOpen(true); }}
+                onChange={(e) => {
+                  setVinQuery(e.target.value);
+                  setVinOpen(true);
+                }}
                 onFocus={() => setVinOpen(true)}
                 autoComplete="off"
                 data-testid="header-vin-input"
@@ -216,10 +283,20 @@ const Header1 = ({ className = "" }) => {
       <FrameComponent17
         onProfileClick={handleProfileClick}
         onContactClick={handleContactClick}
-        isAuthed={!!(customer?.customerId || (() => {
-          try { return JSON.parse(localStorage.getItem("customer_session") || "null")?.customerId; }
-          catch { return null; }
-        })())}
+        isAuthed={
+          !!(
+            customer?.customerId ||
+            (() => {
+              try {
+                return JSON.parse(
+                  localStorage.getItem("customer_session") || "null",
+                )?.customerId;
+              } catch {
+                return null;
+              }
+            })()
+          )
+        }
         customerName={customer?.name || customer?.email || ""}
       />
     </header>

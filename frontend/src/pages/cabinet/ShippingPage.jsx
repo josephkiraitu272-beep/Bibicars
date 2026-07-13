@@ -1,73 +1,130 @@
 /**
  * Shipping Page (Cabinet)
- * 
+ *
  * /cabinet/shipping
- * 
+ *
  * Shows shipping tracking and timeline with REAL-TIME notifications
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
-import { useLang, getLocale } from '../../i18n';
-import { 
-  Truck, 
-  Package, 
+import React, { useState, useEffect, useCallback } from "react";
+import axios from "axios";
+import { useLang, getLocale } from "../../i18n";
+import {
+  Truck,
+  Package,
   Anchor,
-  CheckCircle, 
-  Clock, 
+  CheckCircle,
+  Clock,
   MapPin,
   CalendarBlank,
   FileText,
   ArrowRight,
   Bell,
   WifiHigh,
-  WifiSlash
-} from '@phosphor-icons/react';
-import { toast } from 'sonner';
-import { useShipmentNotifications } from '../../hooks/useShipmentNotifications';
-import ShipmentTrackingMap from '../../components/shipping/ShipmentTrackingMap';
-import JourneyPanel from '../../components/shipping/JourneyPanel';
-import { HelpTooltip } from '../../components/ui/HelpTooltip';
+  WifiSlash,
+} from "@phosphor-icons/react";
+import { toast } from "sonner";
+import { useShipmentNotifications } from "../../hooks/useShipmentNotifications";
+import ShipmentTrackingMap from "../../components/shipping/ShipmentTrackingMap";
+import JourneyPanel from "../../components/shipping/JourneyPanel";
+import { HelpTooltip } from "../../components/ui/HelpTooltip";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 // Status config
 const STATUS_CONFIG = {
-  pending: { color: 'zinc', icon: Clock, label: 'Awaiting', step: 0 },
-  picked_up: { color: 'blue', icon: Package, label: 'Picked Up', step: 1 },
-  in_transit: { color: 'amber', icon: Truck, label: 'In transit', step: 2 },
-  at_port: { color: 'indigo', icon: Anchor, label: 'At port', step: 3 },
-  customs_clearance: { color: 'purple', icon: FileText, label: 'Customs', step: 4 },
-  delivered: { color: 'emerald', icon: CheckCircle, label: 'Delivered', step: 5 },
-  cancelled: { color: 'red', icon: Clock, label: 'Cancelled', step: -1 },
+  pending: { color: "zinc", icon: Clock, label: "Awaiting", step: 0 },
+  picked_up: { color: "blue", icon: Package, label: "Picked Up", step: 1 },
+  in_transit: { color: "amber", icon: Truck, label: "In transit", step: 2 },
+  at_port: { color: "indigo", icon: Anchor, label: "At port", step: 3 },
+  customs_clearance: {
+    color: "purple",
+    icon: FileText,
+    label: "Customs",
+    step: 4,
+  },
+  delivered: {
+    color: "emerald",
+    icon: CheckCircle,
+    label: "Delivered",
+    step: 5,
+  },
+  cancelled: { color: "red", icon: Clock, label: "Cancelled", step: -1 },
 };
 
 // Plain-language explanation of each delivery status — shown on hover so the
 // customer always understands where their vehicle is.
 const DELIVERY_DESC = {
-  pending: { en: 'Awaiting pickup — the carrier has not collected the vehicle yet.', bg: 'Очаква изпращане — превозвачът още не е взел автомобила.', uk: 'Очікує відправлення — перевізник ще не забрав автомобіль.' },
-  picked_up: { en: 'Picked up — the vehicle has been collected and is heading to the port.', bg: 'Взет — автомобилът е поет и пътува към пристанището.', uk: 'Забрано — автомобіль отримано й прямує до порту.' },
-  in_transit: { en: 'In transit — the vehicle is on the move (road or sea).', bg: 'В транзит — автомобилът се движи (по суша или море).', uk: 'В дорозі — автомобіль рухається (суходолом або морем).' },
-  at_port: { en: 'At port — the vehicle reached a port and awaits the next leg.', bg: 'На пристанище — автомобилът е на пристанище и чака следващия етап.', uk: 'У порту — автомобіль прибув у порт і очікує наступного етапу.' },
-  customs_clearance: { en: 'Customs — the vehicle is going through customs clearance.', bg: 'Митница — автомобилът минава митническо оформяне.', uk: 'Митниця — автомобіль проходить митне оформлення.' },
-  delivered: { en: 'Delivered — the vehicle has arrived and been handed over.', bg: 'Доставен — автомобилът пристигна и е предаден.', uk: 'Доставлено — автомобіль прибув і переданий вам.' },
-  cancelled: { en: 'Cancelled — this shipment was cancelled.', bg: 'Отказан — тази пратка е отменена.', uk: 'Скасовано — це відправлення скасовано.' },
+  pending: {
+    en: "Awaiting pickup — the carrier has not collected the vehicle yet.",
+    bg: "Очаква изпращане — превозвачът още не е взел автомобила.",
+    uk: "Очікує відправлення — перевізник ще не забрав автомобіль.",
+  },
+  picked_up: {
+    en: "Picked up — the vehicle has been collected and is heading to the port.",
+    bg: "Взет — автомобилът е поет и пътува към пристанището.",
+    uk: "Забрано — автомобіль отримано й прямує до порту.",
+  },
+  in_transit: {
+    en: "In transit — the vehicle is on the move (road or sea).",
+    bg: "В транзит — автомобилът се движи (по суша или море).",
+    uk: "В дорозі — автомобіль рухається (суходолом або морем).",
+  },
+  at_port: {
+    en: "At port — the vehicle reached a port and awaits the next leg.",
+    bg: "На пристанище — автомобилът е на пристанище и чака следващия етап.",
+    uk: "У порту — автомобіль прибув у порт і очікує наступного етапу.",
+  },
+  customs_clearance: {
+    en: "Customs — the vehicle is going through customs clearance.",
+    bg: "Митница — автомобилът минава митническо оформяне.",
+    uk: "Митниця — автомобіль проходить митне оформлення.",
+  },
+  delivered: {
+    en: "Delivered — the vehicle has arrived and been handed over.",
+    bg: "Доставен — автомобилът пристигна и е предаден.",
+    uk: "Доставлено — автомобіль прибув і переданий вам.",
+  },
+  cancelled: {
+    en: "Cancelled — this shipment was cancelled.",
+    bg: "Отказан — тази пратка е отменена.",
+    uk: "Скасовано — це відправлення скасовано.",
+  },
 };
 
 // Live-tracking signal quality explanation.
 const LIVE_DESC = {
-  Live: { en: 'Live — real GPS coordinates updated within the last 10 minutes.', bg: 'На живо — реални GPS координати, обновени през последните 10 минути.', uk: 'У реальному часі — реальні GPS-координати оновлено за останні 10 хвилин.' },
-  Estimated: { en: 'Estimated — position is approximated (interpolated or older than 10 minutes).', bg: 'Прогнозно — позицията е приблизителна (интерполация или по-стара от 10 минути).', uk: 'Орієнтовно — позиція приблизна (інтерполяція або дані старші за 10 хвилин).' },
-  'No data': { en: 'No data — no live position is available for this shipment yet.', bg: 'Няма данни — все още няма данни за позицията на тази пратка.', uk: 'Немає даних — для цього відправлення поки немає даних про місцезнаходження.' },
+  Live: {
+    en: "Live — real GPS coordinates updated within the last 10 minutes.",
+    bg: "На живо — реални GPS координати, обновени през последните 10 минути.",
+    uk: "У реальному часі — реальні GPS-координати оновлено за останні 10 хвилин.",
+  },
+  Estimated: {
+    en: "Estimated — position is approximated (interpolated or older than 10 minutes).",
+    bg: "Прогнозно — позицията е приблизителна (интерполация или по-стара от 10 минути).",
+    uk: "Орієнтовно — позиція приблизна (інтерполяція або дані старші за 10 хвилин).",
+  },
+  "No data": {
+    en: "No data — no live position is available for this shipment yet.",
+    bg: "Няма данни — все още няма данни за позицията на тази пратка.",
+    uk: "Немає даних — для цього відправлення поки немає даних про місцезнаходження.",
+  },
 };
-const shipPick = (m, l) => (m && (m[l] || m.en)) || '';
+const shipPick = (m, l) => (m && (m[l] || m.en)) || "";
 
 // Progress Steps
 const ProgressSteps = ({ currentStatus }) => {
   const { t, lang } = useLang();
-  const steps = ['pending', 'picked_up', 'in_transit', 'at_port', 'customs_clearance', 'delivered'];
+  const steps = [
+    "pending",
+    "picked_up",
+    "in_transit",
+    "at_port",
+    "customs_clearance",
+    "delivered",
+  ];
   const currentStep = STATUS_CONFIG[currentStatus]?.step || 0;
-  
+
   return (
     <div className="flex items-center justify-between mb-8">
       {steps.map((step, index) => {
@@ -75,26 +132,35 @@ const ProgressSteps = ({ currentStatus }) => {
         const Icon = config.icon;
         const isActive = currentStep >= config.step;
         const isCurrent = currentStatus === step;
-        
+
         return (
           <React.Fragment key={step}>
-            <HelpTooltip text={`${config.label} — ${shipPick(DELIVERY_DESC[step], lang)}`}>
-              <div className="flex flex-col items-center cursor-help" data-testid={`delivery-step-${step}`}>
-                <div 
+            <HelpTooltip
+              text={`${config.label} — ${shipPick(DELIVERY_DESC[step], lang)}`}
+            >
+              <div
+                className="flex flex-col items-center cursor-help"
+                data-testid={`delivery-step-${step}`}
+              >
+                <div
                   className={`w-10 h-10 rounded-full flex items-center justify-center transition-all
-                    ${isActive ? `bg-${config.color}-500 text-white` : 'bg-zinc-200 text-zinc-400'}
-                    ${isCurrent ? 'ring-4 ring-blue-200 scale-110' : ''}`}
+                    ${isActive ? `bg-${config.color}-500 text-white` : "bg-zinc-200 text-zinc-400"}
+                    ${isCurrent ? "ring-4 ring-blue-200 scale-110" : ""}`}
                 >
-                  <Icon size={20} weight={isActive ? 'fill' : 'regular'} />
+                  <Icon size={20} weight={isActive ? "fill" : "regular"} />
                 </div>
-                <span className={`text-xs mt-2 ${isActive ? 'text-zinc-900 font-medium' : 'text-zinc-400'}`}>
+                <span
+                  className={`text-xs mt-2 ${isActive ? "text-zinc-900 font-medium" : "text-zinc-400"}`}
+                >
                   {config.label}
                 </span>
               </div>
             </HelpTooltip>
-            
+
             {index < steps.length - 1 && (
-              <div className={`flex-1 h-1 mx-2 rounded ${currentStep > config.step ? 'bg-emerald-500' : 'bg-zinc-200'}`} />
+              <div
+                className={`flex-1 h-1 mx-2 rounded ${currentStep > config.step ? "bg-emerald-500" : "bg-zinc-200"}`}
+              />
             )}
           </React.Fragment>
         );
@@ -138,27 +204,52 @@ const ShipmentCard = ({ shipment, expanded, onToggle, liveUpdate }) => {
   // 🔴 no-data — координат нет или ошибка
   const livePill = (() => {
     const src = shipment.trackingSource || shipment.currentPosition?.source;
-    const upd = shipment.currentPosition?.updatedAt || shipment.lastTrackingUpdate;
-    const ageSec = upd ? Math.max(0, (Date.now() - new Date(upd).getTime()) / 1000) : Infinity;
+    const upd =
+      shipment.currentPosition?.updatedAt || shipment.lastTrackingUpdate;
+    const ageSec = upd
+      ? Math.max(0, (Date.now() - new Date(upd).getTime()) / 1000)
+      : Infinity;
     const fresh = ageSec < 600;
-    if (src && src.startsWith('real') && fresh) {
-      return { dot: 'bg-emerald-500', text: 'Live', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+    if (src && src.startsWith("real") && fresh) {
+      return {
+        dot: "bg-emerald-500",
+        text: "Live",
+        cls: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      };
     }
-    if (src === 'interpolated' || (src && src.startsWith('real') && !fresh)) {
-      return { dot: 'bg-amber-500', text: 'Estimated', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+    if (src === "interpolated" || (src && src.startsWith("real") && !fresh)) {
+      return {
+        dot: "bg-amber-500",
+        text: "Estimated",
+        cls: "bg-amber-50 text-amber-700 border-amber-200",
+      };
     }
-    if (src === 'simulated') {
-      return { dot: 'bg-amber-400', text: 'Estimated', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+    if (src === "simulated") {
+      return {
+        dot: "bg-amber-400",
+        text: "Estimated",
+        cls: "bg-amber-50 text-amber-700 border-amber-200",
+      };
     }
-    return { dot: 'bg-slate-400', text: 'No data', cls: 'bg-slate-100 text-slate-600 border-slate-200' };
+    return {
+      dot: "bg-slate-400",
+      text: "No data",
+      cls: "bg-slate-100 text-slate-600 border-slate-200",
+    };
   })();
 
   // Current vessel/container from currentStage OR top-level fallback.
-  const curStage = (shipment.stages || []).find((s) => s.id === shipment.currentStageId);
+  const curStage = (shipment.stages || []).find(
+    (s) => s.id === shipment.currentStageId,
+  );
   const curVessel = curStage?.vessel || shipment.vessel;
   const curContainer = curStage?.container || shipment.container;
-  const progressPct = Math.min(100, Math.max(0, Math.round((shipment.progress || 0) * 100)));
-  const etaIso = shipment.liveEta || shipment.eta || shipment.estimatedArrivalDate;
+  const progressPct = Math.min(
+    100,
+    Math.max(0, Math.round((shipment.progress || 0) * 100)),
+  );
+  const etaIso =
+    shipment.liveEta || shipment.eta || shipment.estimatedArrivalDate;
 
   return (
     <div
@@ -176,8 +267,12 @@ const ShipmentCard = ({ shipment, expanded, onToggle, liveUpdate }) => {
               <Icon size={24} className={`text-${config.color}-600`} />
             </div>
             <div className="min-w-0">
-              <h3 className="font-semibold text-zinc-900 truncate">{shipment.vehicleTitle || t('adm3_3d88f603b5')}</h3>
-              <p className="text-sm text-zinc-500 font-mono truncate">VIN: {shipment.vin}</p>
+              <h3 className="font-semibold text-zinc-900 truncate">
+                {shipment.vehicleTitle || t("adm3_3d88f603b5")}
+              </h3>
+              <p className="text-sm text-zinc-500 font-mono truncate">
+                VIN: {shipment.vin}
+              </p>
             </div>
           </div>
           <div className="flex flex-col items-end gap-1.5">
@@ -186,11 +281,18 @@ const ShipmentCard = ({ shipment, expanded, onToggle, liveUpdate }) => {
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border cursor-help ${livePill.cls}`}
                 data-testid="live-pill"
               >
-                <span className={`w-2 h-2 rounded-full ${livePill.dot} ${livePill.dot.includes('emerald') ? 'animate-pulse' : ''}`} />
+                <span
+                  className={`w-2 h-2 rounded-full ${livePill.dot} ${livePill.dot.includes("emerald") ? "animate-pulse" : ""}`}
+                />
                 {livePill.text}
               </span>
             </HelpTooltip>
-            <HelpTooltip text={shipPick(DELIVERY_DESC[shipment.status] || DELIVERY_DESC.pending, lang)}>
+            <HelpTooltip
+              text={shipPick(
+                DELIVERY_DESC[shipment.status] || DELIVERY_DESC.pending,
+                lang,
+              )}
+            >
               <span
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium cursor-help bg-${config.color}-100 text-${config.color}-700`}
                 data-testid="delivery-status-pill"
@@ -229,14 +331,19 @@ const ShipmentCard = ({ shipment, expanded, onToggle, liveUpdate }) => {
               style={{ width: `${progressPct}%` }}
             />
           </div>
-          <span className="text-xs font-semibold text-zinc-700 min-w-[2.5rem] text-right">{progressPct}%</span>
+          <span className="text-xs font-semibold text-zinc-700 min-w-[2.5rem] text-right">
+            {progressPct}%
+          </span>
         </div>
         {etaIso && (
           <div className="mt-1.5 text-xs text-zinc-500 flex items-center gap-1.5">
             <CalendarBlank size={12} className="text-blue-500" />
             <span>ETA:</span>
             <span className="font-semibold text-zinc-700">
-              {new Date(etaIso).toLocaleDateString(getLocale(), { day: '2-digit', month: 'short' })}
+              {new Date(etaIso).toLocaleDateString(getLocale(), {
+                day: "2-digit",
+                month: "short",
+              })}
             </span>
           </div>
         )}
@@ -245,13 +352,17 @@ const ShipmentCard = ({ shipment, expanded, onToggle, liveUpdate }) => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-3 border-t border-zinc-100">
           {shipment.originPort && (
             <div>
-              <div className="text-xs text-zinc-500">{t('adm3_6e8fad3f97')}</div>
+              <div className="text-xs text-zinc-500">
+                {t("adm3_6e8fad3f97")}
+              </div>
               <div className="text-sm">{shipment.originPort}</div>
             </div>
           )}
           {shipment.destinationPort && (
             <div>
-              <div className="text-xs text-zinc-500">{t('adm3_51d1e34f83')}</div>
+              <div className="text-xs text-zinc-500">
+                {t("adm3_51d1e34f83")}
+              </div>
               <div className="text-sm">{shipment.destinationPort}</div>
             </div>
           )}
@@ -259,13 +370,15 @@ const ShipmentCard = ({ shipment, expanded, onToggle, liveUpdate }) => {
             <div>
               <div className="text-xs text-zinc-500">ETA</div>
               <div className="text-sm font-medium text-blue-600">
-                {new Date(shipment.estimatedArrivalDate).toLocaleDateString(getLocale())}
+                {new Date(shipment.estimatedArrivalDate).toLocaleDateString(
+                  getLocale(),
+                )}
               </div>
             </div>
           )}
         </div>
       </div>
-      
+
       {/* Expanded Content */}
       {expanded && (
         <div className="border-t border-zinc-100 p-4 bg-zinc-50 space-y-4">
@@ -279,7 +392,9 @@ const ShipmentCard = ({ shipment, expanded, onToggle, liveUpdate }) => {
           {/* Documents */}
           {shipment.documents?.length > 0 && (
             <div className="rounded-xl border border-zinc-200 bg-white p-4">
-              <h4 className="font-medium text-zinc-900 mb-3">{t('adm3_63d85a25cd')}</h4>
+              <h4 className="font-medium text-zinc-900 mb-3">
+                {t("adm3_63d85a25cd")}
+              </h4>
               <div className="grid grid-cols-2 gap-2">
                 {shipment.documents.map((doc, index) => (
                   <a
@@ -296,38 +411,54 @@ const ShipmentCard = ({ shipment, expanded, onToggle, liveUpdate }) => {
               </div>
             </div>
           )}
-          
+
           {/* Dates */}
           <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
             {shipment.estimatedPickupDate && (
               <div className="bg-white rounded-lg p-3 border border-zinc-200">
-                <div className="text-xs text-zinc-500">{t('adm3_19ebcce22d')}</div>
+                <div className="text-xs text-zinc-500">
+                  {t("adm3_19ebcce22d")}
+                </div>
                 <div className="text-sm font-medium mt-1">
-                  {new Date(shipment.estimatedPickupDate).toLocaleDateString(getLocale())}
+                  {new Date(shipment.estimatedPickupDate).toLocaleDateString(
+                    getLocale(),
+                  )}
                 </div>
               </div>
             )}
             {shipment.estimatedDepartureDate && (
               <div className="bg-white rounded-lg p-3 border border-zinc-200">
-                <div className="text-xs text-zinc-500">{t('adm3_6ea3f01437')}</div>
+                <div className="text-xs text-zinc-500">
+                  {t("adm3_6ea3f01437")}
+                </div>
                 <div className="text-sm font-medium mt-1">
-                  {new Date(shipment.estimatedDepartureDate).toLocaleDateString(getLocale())}
+                  {new Date(shipment.estimatedDepartureDate).toLocaleDateString(
+                    getLocale(),
+                  )}
                 </div>
               </div>
             )}
             {shipment.estimatedArrivalDate && (
               <div className="bg-white rounded-lg p-3 border border-zinc-200">
-                <div className="text-xs text-zinc-500">{t('adm3_f42ffb7ca6')}</div>
+                <div className="text-xs text-zinc-500">
+                  {t("adm3_f42ffb7ca6")}
+                </div>
                 <div className="text-sm font-medium mt-1">
-                  {new Date(shipment.estimatedArrivalDate).toLocaleDateString(getLocale())}
+                  {new Date(shipment.estimatedArrivalDate).toLocaleDateString(
+                    getLocale(),
+                  )}
                 </div>
               </div>
             )}
             {shipment.estimatedDeliveryDate && (
               <div className="bg-white rounded-lg p-3 border border-zinc-200">
-                <div className="text-xs text-zinc-500">{t('adm3_1983753466')}</div>
+                <div className="text-xs text-zinc-500">
+                  {t("adm3_1983753466")}
+                </div>
                 <div className="text-sm font-medium mt-1">
-                  {new Date(shipment.estimatedDeliveryDate).toLocaleDateString(getLocale())}
+                  {new Date(shipment.estimatedDeliveryDate).toLocaleDateString(
+                    getLocale(),
+                  )}
                 </div>
               </div>
             )}
@@ -344,17 +475,17 @@ const ShippingPage = () => {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
   const [trackingHealth, setTrackingHealth] = useState(null);
-  
+
   // Real-time notifications via WebSocket
-  const { 
-    isConnected, 
-    statusChanged, 
-    etaChanged, 
+  const {
+    isConnected,
+    statusChanged,
+    etaChanged,
     lastUpdate,
     positionUpdate,
     reconnectTimestamp,
     subscribe,
-    clearUpdate 
+    clearUpdate,
   } = useShipmentNotifications();
 
   const getCustomerId = () => {
@@ -362,23 +493,35 @@ const ShippingPage = () => {
     const match = path.match(/\/cabinet\/([^/]+)/);
     const raw = match?.[1];
     const RESERVED = new Set([
-      'shipping', 'invoices', 'contracts', 'favorites', 'compare',
-      'history', 'carfax', 'payment-success', 'notifications', 'profile',
+      "shipping",
+      "invoices",
+      "contracts",
+      "favorites",
+      "compare",
+      "history",
+      "carfax",
+      "payment-success",
+      "notifications",
+      "profile",
     ]);
     if (raw && !RESERVED.has(raw)) return raw;
-    return localStorage.getItem('customerId');
+    return localStorage.getItem("customerId");
   };
 
   const fetchShipments = useCallback(async () => {
     try {
       const customerId = getCustomerId();
-      const response = await axios.get(`${API_URL}/api/shipping/me`, { params: { customerId } });
+      const response = await axios.get(`${API_URL}/api/shipping/me`, {
+        params: { customerId },
+      });
       const payload = response.data;
-      const list = Array.isArray(payload) ? payload : (payload?.data || []);
+      const list = Array.isArray(payload) ? payload : payload?.data || [];
       setShipments(list);
 
       // Auto-expand first active shipment
-      const active = list.find(s => !['delivered', 'cancelled'].includes(s.status));
+      const active = list.find(
+        (s) => !["delivered", "cancelled"].includes(s.status),
+      );
       if (active) {
         setExpandedId(active.id);
       }
@@ -389,8 +532,8 @@ const ShippingPage = () => {
       // every cold-load would be noisy for the UAT release.
       const status = error?.response?.status;
       if (status !== 401 && status !== 403 && status !== 404) {
-        console.error('Error fetching shipments:', error);
-        toast.error(t('adm3_de6e6d1388'));
+        console.error("Error fetching shipments:", error);
+        toast.error(t("adm3_de6e6d1388"));
       }
       setShipments([]);
     } finally {
@@ -407,13 +550,20 @@ const ShippingPage = () => {
     let active = true;
     const fetchHealth = async () => {
       try {
-        const res = await axios.get(`${API_URL}/api/vesselfinder/session/status`);
+        const res = await axios.get(
+          `${API_URL}/api/vesselfinder/session/status`,
+        );
         if (active) setTrackingHealth(res.data);
-      } catch (e) { /* silent */ }
+      } catch (e) {
+        /* silent */
+      }
     };
     fetchHealth();
     const t = setInterval(fetchHealth, 30000);
-    return () => { active = false; clearInterval(t); };
+    return () => {
+      active = false;
+      clearInterval(t);
+    };
   }, []);
 
   // Refetch on socket reconnect (recover from sleep/network drops)
@@ -431,8 +581,10 @@ const ShippingPage = () => {
       pos &&
       Number.isFinite(pos.lat) &&
       Number.isFinite(pos.lng) &&
-      pos.lat >= -90 && pos.lat <= 90 &&
-      pos.lng >= -180 && pos.lng <= 180;
+      pos.lat >= -90 &&
+      pos.lat <= 90 &&
+      pos.lng >= -180 &&
+      pos.lng <= 180;
     const clampProgress = (p) => {
       const n = Number(p);
       if (!Number.isFinite(n)) return null;
@@ -449,15 +601,15 @@ const ShippingPage = () => {
           trackingSource: positionUpdate.type || s.trackingSource,
           currentPosition: hasValidCoord ? pos : s.currentPosition,
         };
-      })
+      }),
     );
   }, [positionUpdate]);
 
   // Subscribe to all active shipments for real-time updates
   useEffect(() => {
     if (isConnected && shipments.length > 0) {
-      shipments.forEach(shipment => {
-        if (!['delivered', 'cancelled'].includes(shipment.status)) {
+      shipments.forEach((shipment) => {
+        if (!["delivered", "cancelled"].includes(shipment.status)) {
           subscribe(shipment.id);
         }
       });
@@ -472,22 +624,24 @@ const ShippingPage = () => {
         <div className="flex items-center gap-3">
           <Bell size={20} className="text-blue-500" />
           <div>
-            <div className="font-medium">{t('adm3_97537f3e75')}</div>
+            <div className="font-medium">{t("adm3_97537f3e75")}</div>
             <div className="text-sm text-zinc-500">
               {statusChanged.vin}: {statusChanged.statusLabel}
             </div>
           </div>
         </div>,
-        { duration: 6000 }
+        { duration: 6000 },
       );
-      
+
       // Update local state
-      setShipments(prev => prev.map(s => 
-        s.id === statusChanged.shipmentId 
-          ? { ...s, status: statusChanged.newStatus }
-          : s
-      ));
-      
+      setShipments((prev) =>
+        prev.map((s) =>
+          s.id === statusChanged.shipmentId
+            ? { ...s, status: statusChanged.newStatus }
+            : s,
+        ),
+      );
+
       // Refetch for full data
       fetchShipments();
       clearUpdate();
@@ -502,57 +656,59 @@ const ShippingPage = () => {
         <div className="flex items-center gap-3">
           <CalendarBlank size={20} className="text-amber-500" />
           <div>
-            <div className="font-medium">{t('adm3_c630c43518')}</div>
+            <div className="font-medium">{t("adm3_c630c43518")}</div>
             <div className="text-sm text-zinc-500">
               {etaChanged.vin}: {etaChanged.formattedEta}
             </div>
           </div>
         </div>,
-        { duration: 6000 }
+        { duration: 6000 },
       );
-      
+
       // Update local state
-      setShipments(prev => prev.map(s => 
-        s.id === etaChanged.shipmentId 
-          ? { ...s, estimatedArrivalDate: etaChanged.newEta }
-          : s
-      ));
-      
+      setShipments((prev) =>
+        prev.map((s) =>
+          s.id === etaChanged.shipmentId
+            ? { ...s, estimatedArrivalDate: etaChanged.newEta }
+            : s,
+        ),
+      );
+
       clearUpdate();
     }
   }, [etaChanged, clearUpdate]);
 
   // Handle shipment arrived notification
   useEffect(() => {
-    if (lastUpdate?.type === 'arrived') {
+    if (lastUpdate?.type === "arrived") {
       toast.success(
         <div className="flex items-center gap-3">
           <Anchor size={20} className="text-emerald-500" />
           <div>
-            <div className="font-medium">{t('adm3_f3ef38f781')}</div>
+            <div className="font-medium">{t("adm3_f3ef38f781")}</div>
             <div className="text-sm text-zinc-500">
               {lastUpdate.data.vehicleTitle}
             </div>
           </div>
         </div>,
-        { duration: 10000 }
+        { duration: 10000 },
       );
       fetchShipments();
       clearUpdate();
     }
-    
-    if (lastUpdate?.type === 'ready') {
+
+    if (lastUpdate?.type === "ready") {
       toast.success(
         <div className="flex items-center gap-3">
           <CheckCircle size={20} className="text-emerald-500" />
           <div>
-            <div className="font-medium">{t('adm3_be3af8cd91')}</div>
+            <div className="font-medium">{t("adm3_be3af8cd91")}</div>
             <div className="text-sm text-zinc-500">
               {lastUpdate.data.vehicleTitle}
             </div>
           </div>
         </div>,
-        { duration: 10000 }
+        { duration: 10000 },
       );
       fetchShipments();
       clearUpdate();
@@ -568,8 +724,12 @@ const ShippingPage = () => {
   }
 
   const shipmentsArray = Array.isArray(shipments) ? shipments : [];
-  const activeShipments = shipmentsArray.filter(s => !['delivered', 'cancelled'].includes(s.status));
-  const completedShipments = shipmentsArray.filter(s => s.status === 'delivered');
+  const activeShipments = shipmentsArray.filter(
+    (s) => !["delivered", "cancelled"].includes(s.status),
+  );
+  const completedShipments = shipmentsArray.filter(
+    (s) => s.status === "delivered",
+  );
 
   return (
     <div className="p-6 max-w-4xl mx-auto" data-testid="shipping-page">
@@ -577,28 +737,30 @@ const ShippingPage = () => {
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-zinc-900 mb-2">{t('adm3_b973ee8690')}</h1>
-            <p className="text-zinc-600">{t('adm3_bcba18170c')}</p>
+            <h1 className="text-2xl font-bold text-zinc-900 mb-2">
+              {t("adm3_b973ee8690")}
+            </h1>
+            <p className="text-zinc-600">{t("adm3_bcba18170c")}</p>
           </div>
-          
+
           {/* Real-time connection indicator */}
-          <div 
+          <div
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
-              isConnected 
-                ? 'bg-emerald-100 text-emerald-700' 
-                : 'bg-zinc-100 text-zinc-500'
+              isConnected
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-zinc-100 text-zinc-500"
             }`}
             data-testid="realtime-status"
           >
             {isConnected ? (
               <>
                 <WifiHigh size={16} weight="fill" />
-                <span>{t('common.realtime', 'Real-time')}</span>
+                <span>{t("common.realtime", "Real-time")}</span>
               </>
             ) : (
               <>
                 <WifiSlash size={16} />
-                <span>{t('common.offline', 'Offline')}</span>
+                <span>{t("common.offline", "Offline")}</span>
               </>
             )}
           </div>
@@ -606,61 +768,83 @@ const ShippingPage = () => {
       </div>
 
       {/* Tracking health banner (only when paused/expired) */}
-      {trackingHealth && ['paused', 'expired'].includes(trackingHealth.sessionStatus) && activeShipments.length > 0 && (
-        <div className={`mb-6 rounded-xl border px-4 py-3 text-sm flex items-start gap-3 ${
-          trackingHealth.sessionStatus === 'paused'
-            ? 'bg-amber-50 border-amber-200 text-amber-900'
-            : 'bg-rose-50 border-rose-200 text-rose-900'
-        }`}>
-          <Clock size={18} weight="fill" className="mt-0.5 flex-shrink-0" />
-          <div>
-            <div className="font-semibold">
-              {trackingHealth.sessionStatus === 'paused'
-                ? t('adm3_6ea57f54a9')
-                : t('adm3_a7213eed99')}
-            </div>
-            <div className="text-xs mt-0.5 opacity-90">
-              {trackingHealth.sessionStatus === 'paused'
-                ? t('adm3_2d9cf600c6')
-                : t('adm3_372a3615eb')}
+      {trackingHealth &&
+        ["paused", "expired"].includes(trackingHealth.sessionStatus) &&
+        activeShipments.length > 0 && (
+          <div
+            className={`mb-6 rounded-xl border px-4 py-3 text-sm flex items-start gap-3 ${
+              trackingHealth.sessionStatus === "paused"
+                ? "bg-amber-50 border-amber-200 text-amber-900"
+                : "bg-rose-50 border-rose-200 text-rose-900"
+            }`}
+          >
+            <Clock size={18} weight="fill" className="mt-0.5 flex-shrink-0" />
+            <div>
+              <div className="font-semibold">
+                {trackingHealth.sessionStatus === "paused"
+                  ? t("adm3_6ea57f54a9")
+                  : t("adm3_a7213eed99")}
+              </div>
+              <div className="text-xs mt-0.5 opacity-90">
+                {trackingHealth.sessionStatus === "paused"
+                  ? t("adm3_2d9cf600c6")
+                  : t("adm3_372a3615eb")}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 text-white">
           <div className="flex items-center gap-3 mb-4">
             <Truck size={28} />
-            <span className="text-lg font-semibold">{t('adm3_2ddf5e05c5')}</span>
+            <span className="text-lg font-semibold">
+              {t("adm3_2ddf5e05c5")}
+            </span>
           </div>
           <div className="text-4xl font-bold">{activeShipments.length}</div>
-          <div className="text-blue-100 text-sm mt-1">{t('adm3_b3b78308f9')}</div>
+          <div className="text-blue-100 text-sm mt-1">
+            {t("adm3_b3b78308f9")}
+          </div>
         </div>
-        
+
         <div className="bg-white rounded-2xl border border-zinc-200 p-6">
           <div className="flex items-center gap-3 mb-4">
             <CheckCircle size={28} className="text-emerald-500" />
-            <span className="text-lg font-semibold text-zinc-900">{t('adm3_f5cce37a63')}</span>
+            <span className="text-lg font-semibold text-zinc-900">
+              {t("adm3_f5cce37a63")}
+            </span>
           </div>
-          <div className="text-4xl font-bold text-zinc-900">{completedShipments.length}</div>
-          <div className="text-zinc-500 text-sm mt-1">{t('adm3_680254fa12')}</div>
+          <div className="text-4xl font-bold text-zinc-900">
+            {completedShipments.length}
+          </div>
+          <div className="text-zinc-500 text-sm mt-1">
+            {t("adm3_680254fa12")}
+          </div>
         </div>
       </div>
 
       {/* Active Shipments */}
       {activeShipments.length > 0 && (
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-zinc-900 mb-4">{t('adm3_877d2292fb')}</h2>
+          <h2 className="text-lg font-semibold text-zinc-900 mb-4">
+            {t("adm3_877d2292fb")}
+          </h2>
           <div className="space-y-4">
-            {activeShipments.map(shipment => (
-              <ShipmentCard 
-                key={shipment.id} 
+            {activeShipments.map((shipment) => (
+              <ShipmentCard
+                key={shipment.id}
                 shipment={shipment}
                 expanded={expandedId === shipment.id}
-                onToggle={() => setExpandedId(expandedId === shipment.id ? null : shipment.id)}
-                liveUpdate={positionUpdate?.shipmentId === shipment.id ? positionUpdate : null}
+                onToggle={() =>
+                  setExpandedId(expandedId === shipment.id ? null : shipment.id)
+                }
+                liveUpdate={
+                  positionUpdate?.shipmentId === shipment.id
+                    ? positionUpdate
+                    : null
+                }
               />
             ))}
           </div>
@@ -670,15 +854,23 @@ const ShippingPage = () => {
       {/* Completed Shipments */}
       {completedShipments.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900 mb-4">{t('adm3_4245aaadf5')}</h2>
+          <h2 className="text-lg font-semibold text-zinc-900 mb-4">
+            {t("adm3_4245aaadf5")}
+          </h2>
           <div className="space-y-4">
-            {completedShipments.map(shipment => (
-              <ShipmentCard 
-                key={shipment.id} 
+            {completedShipments.map((shipment) => (
+              <ShipmentCard
+                key={shipment.id}
                 shipment={shipment}
                 expanded={expandedId === shipment.id}
-                onToggle={() => setExpandedId(expandedId === shipment.id ? null : shipment.id)}
-                liveUpdate={positionUpdate?.shipmentId === shipment.id ? positionUpdate : null}
+                onToggle={() =>
+                  setExpandedId(expandedId === shipment.id ? null : shipment.id)
+                }
+                liveUpdate={
+                  positionUpdate?.shipmentId === shipment.id
+                    ? positionUpdate
+                    : null
+                }
               />
             ))}
           </div>
@@ -689,8 +881,10 @@ const ShippingPage = () => {
       {shipmentsArray.length === 0 && (
         <div className="text-center py-12 bg-zinc-50 rounded-xl">
           <Truck size={48} className="text-zinc-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-zinc-900 mb-2">{t('adm3_35efae5070')}</h3>
-          <p className="text-zinc-600">{t('adm3_84bb32d271')}</p>
+          <h3 className="text-lg font-medium text-zinc-900 mb-2">
+            {t("adm3_35efae5070")}
+          </h3>
+          <p className="text-zinc-600">{t("adm3_84bb32d271")}</p>
         </div>
       )}
     </div>

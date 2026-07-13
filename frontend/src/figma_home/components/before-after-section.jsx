@@ -11,7 +11,7 @@ import styles from "./before-after-section.module.css";
  * and editable in Admin → Info → Content → Before / After.
  */
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || "";
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 const FALLBACK_CFG = {
   enabled: true,
@@ -175,7 +175,9 @@ const BeforeAfterSection = () => {
         /* keep fallback */
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -259,17 +261,31 @@ const BeforeAfterSection = () => {
       <AnimatedHeading as="h2" className={styles.title} text={title} />
 
       <div className={styles.bracketRow}>
-        <img className={styles.bracketLeft} src="/figma/Vector.svg" width={13} height={76} alt="" />
+        <img
+          className={styles.bracketLeft}
+          src="/figma/Vector.svg"
+          width={13}
+          height={76}
+          alt=""
+        />
         <h3 className={styles.subhead}>
           <span className={styles.subheadYellow}>{subYellow}</span>
           <br />
           <span className={styles.subheadWhite}>{subWhite}</span>
         </h3>
-        <img className={styles.bracketRight} src="/figma/Vector.svg" width={13} height={76} alt="" />
+        <img
+          className={styles.bracketRight}
+          src="/figma/Vector.svg"
+          width={13}
+          height={76}
+          alt=""
+        />
       </div>
 
       {visibleCards.length === 0 ? (
-        <div className={styles.empty}>{lang === "bg" ? "Все още няма карти." : "No cards yet."}</div>
+        <div className={styles.empty}>
+          {lang === "bg" ? "Все още няма карти." : "No cards yet."}
+        </div>
       ) : (
         <>
           <div className={styles.carousel}>
@@ -277,19 +293,29 @@ const BeforeAfterSection = () => {
               {visibleCards.map((c) => (
                 <article className={styles.card} key={c.id}>
                   <div className={styles.labelsRow}>
-                    <span className={styles.labelBefore}>{lang === "bg" ? "/ преди" : "/ before"}</span>
-                    <span className={styles.labelAfter}>{lang === "bg" ? "/ след" : "/ after"}</span>
+                    <span className={styles.labelBefore}>
+                      {lang === "bg" ? "/ преди" : "/ before"}
+                    </span>
+                    <span className={styles.labelAfter}>
+                      {lang === "bg" ? "/ след" : "/ after"}
+                    </span>
                   </div>
 
                   <div className={styles.imagesRow}>
                     <img
-                      src={fullMediaUrl(c.before_image_url) || "/figma/DT-Klausen-LS-135-12@2x.webp"}
+                      src={
+                        fullMediaUrl(c.before_image_url) ||
+                        "/figma/DT-Klausen-LS-135-12@2x.webp"
+                      }
                       alt="before"
                       className={styles.cardImg}
                       loading="lazy"
                     />
                     <img
-                      src={fullMediaUrl(c.after_image_url) || "/figma/DT-Klausen-LS-135-22@2x.webp"}
+                      src={
+                        fullMediaUrl(c.after_image_url) ||
+                        "/figma/DT-Klausen-LS-135-22@2x.webp"
+                      }
                       alt="after"
                       className={styles.cardImg}
                       loading="lazy"
@@ -300,16 +326,32 @@ const BeforeAfterSection = () => {
 
                   <div className={styles.cardFooter}>
                     <div className={styles.footerCell}>
-                      <span className={styles.footerLabel}>{lang === "bg" ? "Дата на поръчка" : "Order date"}</span>
-                      <span className={styles.footerValue}>{c.order_date || ""}</span>
+                      <span className={styles.footerLabel}>
+                        {lang === "bg" ? "Дата на поръчка" : "Order date"}
+                      </span>
+                      <span className={styles.footerValue}>
+                        {c.order_date || ""}
+                      </span>
                     </div>
                     <div className={styles.footerCell}>
-                      <span className={styles.footerLabel}>{lang === "bg" ? "Дата на готовия автомобил" : "The date of the finished car"}</span>
-                      <span className={styles.footerValue}>{c.finished_date || ""}</span>
+                      <span className={styles.footerLabel}>
+                        {lang === "bg"
+                          ? "Дата на готовия автомобил"
+                          : "The date of the finished car"}
+                      </span>
+                      <span className={styles.footerValue}>
+                        {c.finished_date || ""}
+                      </span>
                     </div>
                     <div className={styles.footerCell}>
-                      <span className={styles.footerLabel}>{lang === "bg" ? "Цена до ключ в България" : "Turnkey price in Bulgaria"}</span>
-                      <span className={styles.footerValue}>{c.price || ""}</span>
+                      <span className={styles.footerLabel}>
+                        {lang === "bg"
+                          ? "Цена до ключ в България"
+                          : "Turnkey price in Bulgaria"}
+                      </span>
+                      <span className={styles.footerValue}>
+                        {c.price || ""}
+                      </span>
                     </div>
                   </div>
                 </article>
@@ -326,7 +368,13 @@ const BeforeAfterSection = () => {
                 data-testid="ba-prev"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <path d="M9 1L3 7L9 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path
+                    d="M9 1L3 7L9 13"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
               </button>
 
@@ -349,7 +397,13 @@ const BeforeAfterSection = () => {
                 data-testid="ba-next"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <path d="M5 1L11 7L5 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path
+                    d="M5 1L11 7L5 13"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
               </button>
             </div>

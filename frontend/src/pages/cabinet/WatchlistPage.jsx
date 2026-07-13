@@ -7,26 +7,41 @@
  * arrive via Socket.IO `car_found` event — a toast pops up AND the matching
  * row flips to "notified".
  */
-import React, { useCallback, useEffect, useState } from 'react';
-import { Bell, Check, Trash2, ExternalLink, Loader2, Search } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
-import axios from 'axios';
-import { toast } from 'sonner';
-import { io } from 'socket.io-client';
-import { useLang } from '../../i18n';
-import { HelpTooltip } from '../../components/ui/HelpTooltip';
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  Bell,
+  Check,
+  Trash2,
+  ExternalLink,
+  Loader2,
+  Search,
+} from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import axios from "axios";
+import { toast } from "sonner";
+import { io } from "socket.io-client";
+import { useLang } from "../../i18n";
+import { HelpTooltip } from "../../components/ui/HelpTooltip";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 // Plain-language explanation of the two watchlist states — shown on hover.
 const WATCH_DESC = {
-  pending: { en: 'Pending — we are watching this VIN. You will be notified the moment it appears at auction.', bg: 'Изчакване — следим този VIN. Ще получите известие веднага щом се появи на търг.', uk: 'Очікування — ми відстежуємо цей VIN. Ви отримаєте сповіщення щойно він з’явиться на аукціоні.' },
-  matched: { en: 'Matched — this VIN has been found! Open it to see the details.', bg: 'Намерено — този VIN е намерен! Отворете, за да видите детайлите.', uk: 'Знайдено — цей VIN знайдено! Відкрийте, щоб побачити деталі.' },
+  pending: {
+    en: "Pending — we are watching this VIN. You will be notified the moment it appears at auction.",
+    bg: "Изчакване — следим този VIN. Ще получите известие веднага щом се появи на търг.",
+    uk: "Очікування — ми відстежуємо цей VIN. Ви отримаєте сповіщення щойно він з’явиться на аукціоні.",
+  },
+  matched: {
+    en: "Matched — this VIN has been found! Open it to see the details.",
+    bg: "Намерено — този VIN е намерен! Отворете, за да видите детайлите.",
+    uk: "Знайдено — цей VIN знайдено! Відкрийте, щоб побачити деталі.",
+  },
 };
-const watchPick = (m, l) => (m && (m[l] || m.en)) || '';
+const watchPick = (m, l) => (m && (m[l] || m.en)) || "";
 
 const fmtTime = (iso) => {
-  if (!iso) return '—';
+  if (!iso) return "—";
   try {
     const d = new Date(iso);
     return d.toLocaleString();
@@ -65,21 +80,23 @@ export default function WatchlistPage() {
     let socket;
     try {
       socket = io(API_URL, {
-        path: '/socket.io',
-        transports: ['websocket', 'polling'],
+        path: "/socket.io",
+        transports: ["websocket", "polling"],
       });
-      socket.on('connect', () => {
-        if (customerId) socket.emit('join', { room: `user_${customerId}` });
+      socket.on("connect", () => {
+        if (customerId) socket.emit("join", { room: `user_${customerId}` });
       });
-      socket.on('car_found', (payload) => {
+      socket.on("car_found", (payload) => {
         toast.success(
-          `Vehicle found — VIN ${payload.vin}${payload.title ? ' · ' + payload.title : ''}`,
-          { duration: 8000 }
+          `Vehicle found — VIN ${payload.vin}${payload.title ? " · " + payload.title : ""}`,
+          { duration: 8000 },
         );
         fetchList();
       });
-      socket.on('public:car_found', (payload) => {
-        toast.info(`New match: ${payload.title || payload.vin}`, { duration: 5000 });
+      socket.on("public:car_found", (payload) => {
+        toast.info(`New match: ${payload.title || payload.vin}`, {
+          duration: 5000,
+        });
       });
     } catch (_e) {
       /* socket unavailable */
@@ -94,15 +111,17 @@ export default function WatchlistPage() {
   const remove = async (id) => {
     setBusy(id);
     try {
-      const res = await axios.delete(`${API_URL}/api/public/search/watch/${id}`);
+      const res = await axios.delete(
+        `${API_URL}/api/public/search/watch/${id}`,
+      );
       if (res.data?.success) {
-        toast.success('Removed from watchlist');
+        toast.success("Removed from watchlist");
         setItems((prev) => prev.filter((it) => it.id !== id));
       } else {
-        toast.error('Could not remove');
+        toast.error("Could not remove");
       }
     } catch (e) {
-      toast.error('Could not remove');
+      toast.error("Could not remove");
     } finally {
       setBusy(null);
     }
@@ -130,19 +149,23 @@ export default function WatchlistPage() {
           <div>
             <h1 className="text-2xl font-bold text-[#18181B]">Watchlist</h1>
             <p className="text-[#71717A] text-[13px]">
-              {items.length} VIN{items.length === 1 ? '' : 's'} being watched ·{' '}
-              <span className="text-amber-700 font-semibold">{pending.length} pending</span>
+              {items.length} VIN{items.length === 1 ? "" : "s"} being watched ·{" "}
+              <span className="text-amber-700 font-semibold">
+                {pending.length} pending
+              </span>
               {notified.length > 0 ? (
                 <>
-                  {' · '}
-                  <span className="text-emerald-700 font-semibold">{notified.length} matched</span>
+                  {" · "}
+                  <span className="text-emerald-700 font-semibold">
+                    {notified.length} matched
+                  </span>
                 </>
               ) : null}
             </p>
           </div>
         </div>
         <button
-          onClick={() => navigate('/catalog')}
+          onClick={() => navigate("/catalog")}
           className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#FEAE00] text-[#18181B] text-[13px] font-semibold hover:bg-[#FFC347] transition-colors"
         >
           <Search size={16} />
@@ -157,18 +180,22 @@ export default function WatchlistPage() {
             <Bell size={13} className="text-amber-600" />
           </div>
           <HelpTooltip text={watchPick(WATCH_DESC.pending, lang)}>
-            <h2 className="font-semibold text-[#18181B] text-[14px] cursor-help" data-testid="watchlist-pending-header">
+            <h2
+              className="font-semibold text-[#18181B] text-[14px] cursor-help"
+              data-testid="watchlist-pending-header"
+            >
               Pending ({pending.length})
             </h2>
           </HelpTooltip>
           <span className="text-[11px] text-[#A1A1AA] ml-2">
-            We scan BidMotors every hour — you'll be pinged instantly when any of these appear.
+            We scan BidMotors every hour — you'll be pinged instantly when any
+            of these appear.
           </span>
         </div>
         {pending.length === 0 ? (
           <div className="px-5 py-10 text-center text-[#A1A1AA] text-[13px]">
-            No pending watchers. Paste a VIN into the search bar — when nothing is found,
-            you'll be offered to add it here.
+            No pending watchers. Paste a VIN into the search bar — when nothing
+            is found, you'll be offered to add it here.
           </div>
         ) : (
           <ul className="divide-y divide-[#F4F4F5]">
@@ -217,7 +244,10 @@ export default function WatchlistPage() {
               <Check size={13} className="text-emerald-600" />
             </div>
             <HelpTooltip text={watchPick(WATCH_DESC.matched, lang)}>
-              <h2 className="font-semibold text-[#18181B] text-[14px] cursor-help" data-testid="watchlist-matched-header">
+              <h2
+                className="font-semibold text-[#18181B] text-[14px] cursor-help"
+                data-testid="watchlist-matched-header"
+              >
                 Matched ({notified.length})
               </h2>
             </HelpTooltip>
@@ -237,7 +267,7 @@ export default function WatchlistPage() {
                       className="w-full h-full object-cover"
                       loading="lazy"
                       onError={(e) => {
-                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.style.display = "none";
                       }}
                     />
                   ) : (

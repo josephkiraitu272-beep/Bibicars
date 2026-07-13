@@ -10,10 +10,10 @@
  *
  * Backend: /api/team-lead/wishlist-deals  (require_admin, team_lead in ADMIN_ROLES)
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
-import { toast } from 'sonner';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle,
   XCircle,
@@ -24,69 +24,146 @@ import {
   Sparkle,
   Plus,
   X,
-} from '@phosphor-icons/react';
-import { useLang } from '../../i18n';
-import WishlistDealForm from '../../components/wishlist/WishlistDealForm';
+} from "@phosphor-icons/react";
+import { useLang } from "../../i18n";
+import WishlistDealForm from "../../components/wishlist/WishlistDealForm";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 const STATUS_PILL = {
-  pending:  { color: '#D97706', bg: '#FEF3C7', key: 'pending',  Icon: Clock },
-  approved: { color: '#059669', bg: '#D1FAE5', key: 'approved', Icon: CheckCircle },
-  rejected: { color: '#DC2626', bg: '#FEE2E2', key: 'rejected', Icon: XCircle },
+  pending: { color: "#D97706", bg: "#FEF3C7", key: "pending", Icon: Clock },
+  approved: {
+    color: "#059669",
+    bg: "#D1FAE5",
+    key: "approved",
+    Icon: CheckCircle,
+  },
+  rejected: { color: "#DC2626", bg: "#FEE2E2", key: "rejected", Icon: XCircle },
 };
 
 // Localized UI strings (en / uk / bg — no Russian).
 const L = {
-  header:        { en: 'Top Deals Approvals', uk: 'Затвердження топ пропозицій', bg: 'Одобрения на топ оферти' },
-  desc:          { en: 'Approve manager-curated wishlist cards for the homepage block. Bulk-approve to clear the queue in one click.', uk: 'Підтверджуйте картки добірки від менеджерів для блоку на головній. Масове підтвердження очищує чергу одним кліком.', bg: 'Одобрявайте картите от мениджърите за блока на началната страница. Груповото одобрение изчиства опашката с едно кликване.' },
-  pending:       { en: 'Pending',  uk: 'Очікує',        bg: 'Очаква' },
-  approved:      { en: 'Approved', uk: 'Підтверджено',  bg: 'Одобрено' },
-  rejected:      { en: 'Rejected', uk: 'Відхилено',     bg: 'Отказано' },
-  all:           { en: 'All',  uk: 'Усі',  bg: 'Всички' },
-  create_deal:   { en: 'Create Top Deal', uk: 'Створити топ пропозицію', bg: 'Създай топ оферта' },
-  approve_all:   { en: 'Approve ALL pending', uk: 'Підтвердити ВСІ очікувані', bg: 'Одобри ВСИЧКИ чакащи' },
-  select_all:    { en: 'Select all', uk: 'Вибрати всі', bg: 'Избери всички' },
-  deselect_all:  { en: 'Deselect all', uk: 'Зняти вибір', bg: 'Размаркирай всички' },
-  sel_deselect:  { en: 'selected — deselect all', uk: 'вибрано — зняти вибір', bg: 'избрани — размаркирай всички' },
-  of:            { en: 'of', uk: 'з', bg: 'от' },
-  selected_word: { en: 'selected', uk: 'вибрано', bg: 'избрани' },
-  cards:         { en: 'cards', uk: 'карток', bg: 'карти' },
-  card:          { en: 'card', uk: 'картка', bg: 'карта' },
-  approve_sel:   { en: 'Approve selected', uk: 'Підтвердити вибрані', bg: 'Одобри избраните' },
-  reject_sel:    { en: 'Reject selected', uk: 'Відхилити вибрані', bg: 'Откажи избраните' },
-  loading:       { en: 'Loading…', uk: 'Завантаження…', bg: 'Зареждане…' },
-  empty_pending: { en: 'No pending cards — everything is up to date.', uk: 'Немає карток в очікуванні — все актуально.', bg: 'Няма чакащи карти — всичко е актуално.' },
-  empty_view:    { en: 'No cards in this view.', uk: 'У цьому розділі немає карток.', bg: 'Няма карти в този изглед.' },
-  week:          { en: 'Week', uk: 'Тиждень', bg: 'Седмица' },
-  by:            { en: 'By', uk: 'Створив', bg: 'От' },
-  by_approved:   { en: 'approved by', uk: 'підтвердив', bg: 'одобрено от' },
-  by_rejected:   { en: 'rejected by', uk: 'відхилив', bg: 'отказано от' },
-  approve_title: { en: 'Approve', uk: 'Підтвердити', bg: 'Одобри' },
-  reject_title:  { en: 'Reject', uk: 'Відхилити', bg: 'Откажи' },
-  new_pick:      { en: 'New curated pick', uk: 'Нова курована добірка', bg: 'Нова селекция' },
+  header: {
+    en: "Top Deals Approvals",
+    uk: "Затвердження топ пропозицій",
+    bg: "Одобрения на топ оферти",
+  },
+  desc: {
+    en: "Approve manager-curated wishlist cards for the homepage block. Bulk-approve to clear the queue in one click.",
+    uk: "Підтверджуйте картки добірки від менеджерів для блоку на головній. Масове підтвердження очищує чергу одним кліком.",
+    bg: "Одобрявайте картите от мениджърите за блока на началната страница. Груповото одобрение изчиства опашката с едно кликване.",
+  },
+  pending: { en: "Pending", uk: "Очікує", bg: "Очаква" },
+  approved: { en: "Approved", uk: "Підтверджено", bg: "Одобрено" },
+  rejected: { en: "Rejected", uk: "Відхилено", bg: "Отказано" },
+  all: { en: "All", uk: "Усі", bg: "Всички" },
+  create_deal: {
+    en: "Create Top Deal",
+    uk: "Створити топ пропозицію",
+    bg: "Създай топ оферта",
+  },
+  approve_all: {
+    en: "Approve ALL pending",
+    uk: "Підтвердити ВСІ очікувані",
+    bg: "Одобри ВСИЧКИ чакащи",
+  },
+  select_all: { en: "Select all", uk: "Вибрати всі", bg: "Избери всички" },
+  deselect_all: {
+    en: "Deselect all",
+    uk: "Зняти вибір",
+    bg: "Размаркирай всички",
+  },
+  sel_deselect: {
+    en: "selected — deselect all",
+    uk: "вибрано — зняти вибір",
+    bg: "избрани — размаркирай всички",
+  },
+  of: { en: "of", uk: "з", bg: "от" },
+  selected_word: { en: "selected", uk: "вибрано", bg: "избрани" },
+  cards: { en: "cards", uk: "карток", bg: "карти" },
+  card: { en: "card", uk: "картка", bg: "карта" },
+  approve_sel: {
+    en: "Approve selected",
+    uk: "Підтвердити вибрані",
+    bg: "Одобри избраните",
+  },
+  reject_sel: {
+    en: "Reject selected",
+    uk: "Відхилити вибрані",
+    bg: "Откажи избраните",
+  },
+  loading: { en: "Loading…", uk: "Завантаження…", bg: "Зареждане…" },
+  empty_pending: {
+    en: "No pending cards — everything is up to date.",
+    uk: "Немає карток в очікуванні — все актуально.",
+    bg: "Няма чакащи карти — всичко е актуално.",
+  },
+  empty_view: {
+    en: "No cards in this view.",
+    uk: "У цьому розділі немає карток.",
+    bg: "Няма карти в този изглед.",
+  },
+  week: { en: "Week", uk: "Тиждень", bg: "Седмица" },
+  by: { en: "By", uk: "Створив", bg: "От" },
+  by_approved: { en: "approved by", uk: "підтвердив", bg: "одобрено от" },
+  by_rejected: { en: "rejected by", uk: "відхилив", bg: "отказано от" },
+  approve_title: { en: "Approve", uk: "Підтвердити", bg: "Одобри" },
+  reject_title: { en: "Reject", uk: "Відхилити", bg: "Откажи" },
+  new_pick: {
+    en: "New curated pick",
+    uk: "Нова курована добірка",
+    bg: "Нова селекция",
+  },
   // toasts / prompts
-  load_failed:   { en: 'Failed to load approval queue', uk: 'Не вдалося завантажити чергу', bg: 'Неуспешно зареждане на опашката' },
-  select_one:    { en: 'Select at least one card', uk: 'Виберіть щонайменше одну картку', bg: 'Изберете поне една карта' },
-  approved_n:    { en: 'Approved', uk: 'Підтверджено', bg: 'Одобрени' },
-  rejected_n:    { en: 'Rejected', uk: 'Відхилено', bg: 'Отказани' },
-  approve_failed:{ en: 'Approve failed', uk: 'Не вдалося підтвердити', bg: 'Неуспешно одобрение' },
-  reject_failed: { en: 'Reject failed', uk: 'Не вдалося відхилити', bg: 'Неуспешен отказ' },
-  reject_prompt_opt: { en: 'Optional reject reason:', uk: 'Причина відхилення (необовʼязково):', bg: 'Причина за отказ (по избор):' },
-  reject_prompt: { en: 'Reject reason:', uk: 'Причина відхилення:', bg: 'Причина за отказ:' },
-  approved_one:  { en: 'Approved', uk: 'Підтверджено', bg: 'Одобрено' },
-  rejected_one:  { en: 'Rejected', uk: 'Відхилено', bg: 'Отказано' },
+  load_failed: {
+    en: "Failed to load approval queue",
+    uk: "Не вдалося завантажити чергу",
+    bg: "Неуспешно зареждане на опашката",
+  },
+  select_one: {
+    en: "Select at least one card",
+    uk: "Виберіть щонайменше одну картку",
+    bg: "Изберете поне една карта",
+  },
+  approved_n: { en: "Approved", uk: "Підтверджено", bg: "Одобрени" },
+  rejected_n: { en: "Rejected", uk: "Відхилено", bg: "Отказани" },
+  approve_failed: {
+    en: "Approve failed",
+    uk: "Не вдалося підтвердити",
+    bg: "Неуспешно одобрение",
+  },
+  reject_failed: {
+    en: "Reject failed",
+    uk: "Не вдалося відхилити",
+    bg: "Неуспешен отказ",
+  },
+  reject_prompt_opt: {
+    en: "Optional reject reason:",
+    uk: "Причина відхилення (необовʼязково):",
+    bg: "Причина за отказ (по избор):",
+  },
+  reject_prompt: {
+    en: "Reject reason:",
+    uk: "Причина відхилення:",
+    bg: "Причина за отказ:",
+  },
+  approved_one: { en: "Approved", uk: "Підтверджено", bg: "Одобрено" },
+  rejected_one: { en: "Rejected", uk: "Відхилено", bg: "Отказано" },
 };
 
 const TeamWishlistApprovalsPage = () => {
   const { t, lang } = useLang();
   const tr = (k) => (L[k] && (L[k][lang] || L[k].en)) || k;
   const [items, setItems] = useState([]);
-  const [counts, setCounts] = useState({ pending: 0, approved: 0, rejected: 0 });
+  const [counts, setCounts] = useState({
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState(new Set());
-  const [tab, setTab] = useState('pending');
+  const [tab, setTab] = useState("pending");
   // Create modal: a team-lead mostly approves, but can also create a card
   // right here with the same button — without navigating to a separate page.
   const [createOpen, setCreateOpen] = useState(false);
@@ -98,20 +175,25 @@ const TeamWishlistApprovalsPage = () => {
       // VALID_STATUSES (e.g. "all") as "no filter", whereas an *omitted*
       // status parameter falls back to "pending" — which would make our
       // All/Approved/Rejected tabs all look empty.
-      const { data } = await axios.get(`${API_URL}/api/team-lead/wishlist-deals`, {
-        params: { status: tab },
-      });
+      const { data } = await axios.get(
+        `${API_URL}/api/team-lead/wishlist-deals`,
+        {
+          params: { status: tab },
+        },
+      );
       setItems(Array.isArray(data?.data) ? data.data : []);
       setCounts(data?.counts || { pending: 0, approved: 0, rejected: 0 });
       setSelected(new Set());
     } catch {
-      toast.error(t('loadingError') || tr('load_failed'));
+      toast.error(t("loadingError") || tr("load_failed"));
     } finally {
       setLoading(false);
     }
   }, [tab, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { fetchItems(); }, [fetchItems]);
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
 
   /* ── selection helpers ─────────────────────────────────────────── */
   const allSelected = items.length > 0 && selected.size === items.length;
@@ -135,7 +217,7 @@ const TeamWishlistApprovalsPage = () => {
   const bulkApprove = async (allPending = false) => {
     const ids = allPending ? null : Array.from(selected);
     if (!allPending && ids.length === 0) {
-      toast.error(tr('select_one'));
+      toast.error(tr("select_one"));
       return;
     }
     setBusy(true);
@@ -145,10 +227,10 @@ const TeamWishlistApprovalsPage = () => {
         `${API_URL}/api/team-lead/wishlist-deals/approve`,
         body,
       );
-      toast.success(`${tr('approved_n')}: ${data?.approved || 0}`);
+      toast.success(`${tr("approved_n")}: ${data?.approved || 0}`);
       fetchItems();
     } catch (err) {
-      toast.error(err?.response?.data?.detail || tr('approve_failed'));
+      toast.error(err?.response?.data?.detail || tr("approve_failed"));
     } finally {
       setBusy(false);
     }
@@ -157,20 +239,20 @@ const TeamWishlistApprovalsPage = () => {
   const bulkReject = async () => {
     const ids = Array.from(selected);
     if (ids.length === 0) {
-      toast.error(tr('select_one'));
+      toast.error(tr("select_one"));
       return;
     }
-    const reason = window.prompt(tr('reject_prompt_opt')) || '';
+    const reason = window.prompt(tr("reject_prompt_opt")) || "";
     setBusy(true);
     try {
       const { data } = await axios.post(
         `${API_URL}/api/team-lead/wishlist-deals/reject`,
         { ids, reason },
       );
-      toast.success(`${tr('rejected_n')}: ${data?.rejected || 0}`);
+      toast.success(`${tr("rejected_n")}: ${data?.rejected || 0}`);
       fetchItems();
     } catch (err) {
-      toast.error(err?.response?.data?.detail || tr('reject_failed'));
+      toast.error(err?.response?.data?.detail || tr("reject_failed"));
     } finally {
       setBusy(false);
     }
@@ -180,39 +262,53 @@ const TeamWishlistApprovalsPage = () => {
     setBusy(true);
     try {
       await axios.post(`${API_URL}/api/team-lead/wishlist-deals/${id}/approve`);
-      toast.success(tr('approved_one'));
+      toast.success(tr("approved_one"));
       fetchItems();
     } catch (err) {
-      toast.error(err?.response?.data?.detail || tr('approve_failed'));
+      toast.error(err?.response?.data?.detail || tr("approve_failed"));
     } finally {
       setBusy(false);
     }
   };
 
   const singleReject = async (id) => {
-    const reason = window.prompt(tr('reject_prompt')) || '';
+    const reason = window.prompt(tr("reject_prompt")) || "";
     setBusy(true);
     try {
-      await axios.post(
-        `${API_URL}/api/team-lead/wishlist-deals/${id}/reject`,
-        { reason },
-      );
-      toast.success(tr('rejected_one'));
+      await axios.post(`${API_URL}/api/team-lead/wishlist-deals/${id}/reject`, {
+        reason,
+      });
+      toast.success(tr("rejected_one"));
       fetchItems();
     } catch (err) {
-      toast.error(err?.response?.data?.detail || tr('reject_failed'));
+      toast.error(err?.response?.data?.detail || tr("reject_failed"));
     } finally {
       setBusy(false);
     }
   };
 
   /* ── render ────────────────────────────────────────────────────── */
-  const tabs = useMemo(() => ([
-    { id: 'pending',  label: `${tr('pending')} (${counts.pending})`,  color: '#D97706' },
-    { id: 'approved', label: `${tr('approved')} (${counts.approved})`, color: '#059669' },
-    { id: 'rejected', label: `${tr('rejected')} (${counts.rejected})`, color: '#DC2626' },
-    { id: 'all',      label: tr('all'), color: '#18181B' },
-  ]), [counts, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  const tabs = useMemo(
+    () => [
+      {
+        id: "pending",
+        label: `${tr("pending")} (${counts.pending})`,
+        color: "#D97706",
+      },
+      {
+        id: "approved",
+        label: `${tr("approved")} (${counts.approved})`,
+        color: "#059669",
+      },
+      {
+        id: "rejected",
+        label: `${tr("rejected")} (${counts.rejected})`,
+        color: "#DC2626",
+      },
+      { id: "all", label: tr("all"), color: "#18181B" },
+    ],
+    [counts, lang],
+  ); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <motion.div
@@ -228,14 +324,15 @@ const TeamWishlistApprovalsPage = () => {
             <Sparkle size={20} className="text-amber-500" weight="fill" />
             <h1
               className="text-2xl font-bold text-[#18181B]"
-              style={{ fontFamily: 'Mazzard, Mazzard H, Mazzard M, system-ui, sans-serif' }}
+              style={{
+                fontFamily:
+                  "Mazzard, Mazzard H, Mazzard M, system-ui, sans-serif",
+              }}
             >
-              {tr('header')}
+              {tr("header")}
             </h1>
           </div>
-          <p className="text-sm text-[#71717A]">
-            {tr('desc')}
-          </p>
+          <p className="text-sm text-[#71717A]">{tr("desc")}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button
@@ -243,7 +340,7 @@ const TeamWishlistApprovalsPage = () => {
             data-testid="open-create-top-deal"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-400 text-[#18181B] font-semibold hover:bg-amber-300 transition"
           >
-            <Plus size={16} weight="bold" /> {tr('create_deal')}
+            <Plus size={16} weight="bold" /> {tr("create_deal")}
           </button>
           <button
             onClick={() => bulkApprove(true)}
@@ -251,7 +348,8 @@ const TeamWishlistApprovalsPage = () => {
             data-testid="approve-all-pending"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-500 disabled:opacity-50 transition"
           >
-            <CheckCircle size={16} weight="fill" /> {tr('approve_all')} ({counts.pending})
+            <CheckCircle size={16} weight="fill" /> {tr("approve_all")} (
+            {counts.pending})
           </button>
         </div>
       </div>
@@ -265,8 +363,8 @@ const TeamWishlistApprovalsPage = () => {
             data-testid={`tab-${tt.id}`}
             className={`px-4 py-2 rounded-xl text-sm font-medium border transition ${
               tab === tt.id
-                ? 'text-white border-transparent'
-                : 'bg-white text-[#18181B] border-[#E4E4E7] hover:border-[#A1A1AA]'
+                ? "text-white border-transparent"
+                : "bg-white text-[#18181B] border-[#E4E4E7] hover:border-[#A1A1AA]"
             }`}
             style={tab === tt.id ? { background: tt.color } : undefined}
           >
@@ -278,7 +376,7 @@ const TeamWishlistApprovalsPage = () => {
       {/* Action bar (sticky) */}
       <div
         className={`sticky top-0 z-10 bg-white rounded-2xl border border-[#E4E4E7] px-4 py-3 flex items-center gap-3 flex-wrap transition ${
-          selected.size > 0 ? 'shadow-sm' : ''
+          selected.size > 0 ? "shadow-sm" : ""
         }`}
       >
         <button
@@ -287,17 +385,27 @@ const TeamWishlistApprovalsPage = () => {
           data-testid="select-all-toggle"
           className="inline-flex items-center gap-2 text-sm font-medium text-[#18181B] disabled:opacity-50"
         >
+          {allSelected ? (
+            <CheckSquare size={18} weight="fill" className="text-amber-500" />
+          ) : someSelected ? (
+            <CheckSquare
+              size={18}
+              weight="duotone"
+              className="text-amber-500"
+            />
+          ) : (
+            <Square size={18} className="text-[#A1A1AA]" />
+          )}
           {allSelected
-            ? <CheckSquare size={18} weight="fill" className="text-amber-500" />
+            ? tr("deselect_all")
             : someSelected
-              ? <CheckSquare size={18} weight="duotone" className="text-amber-500" />
-              : <Square size={18} className="text-[#A1A1AA]" />}
-          {allSelected ? tr('deselect_all') : someSelected ? `${selected.size} ${tr('sel_deselect')}` : tr('select_all')}
+              ? `${selected.size} ${tr("sel_deselect")}`
+              : tr("select_all")}
         </button>
         <div className="text-xs text-[#71717A]">
           {selected.size > 0
-            ? `${selected.size} ${tr('of')} ${items.length} ${tr('selected_word')}`
-            : `${items.length} ${items.length === 1 ? tr('card') : tr('cards')}`}
+            ? `${selected.size} ${tr("of")} ${items.length} ${tr("selected_word")}`
+            : `${items.length} ${items.length === 1 ? tr("card") : tr("cards")}`}
         </div>
         <div className="flex-1" />
         <button
@@ -306,7 +414,7 @@ const TeamWishlistApprovalsPage = () => {
           data-testid="bulk-approve-selected"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50 transition"
         >
-          <CheckCircle size={14} weight="fill" /> {tr('approve_sel')}
+          <CheckCircle size={14} weight="fill" /> {tr("approve_sel")}
         </button>
         <button
           onClick={bulkReject}
@@ -314,22 +422,25 @@ const TeamWishlistApprovalsPage = () => {
           data-testid="bulk-reject-selected"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-semibold hover:bg-rose-500 disabled:opacity-50 transition"
         >
-          <XCircle size={14} weight="fill" /> {tr('reject_sel')}
+          <XCircle size={14} weight="fill" /> {tr("reject_sel")}
         </button>
       </div>
 
       {/* List */}
       <div className="bg-white rounded-2xl border border-[#E4E4E7] overflow-hidden">
         {loading ? (
-          <div className="p-10 text-center text-sm text-[#71717A]">{tr('loading')}</div>
+          <div className="p-10 text-center text-sm text-[#71717A]">
+            {tr("loading")}
+          </div>
         ) : items.length === 0 ? (
           <div className="p-10 text-center text-sm text-[#71717A]">
-            {tab === 'pending'
-              ? tr('empty_pending')
-              : tr('empty_view')}
+            {tab === "pending" ? tr("empty_pending") : tr("empty_view")}
           </div>
         ) : (
-          <div className="divide-y divide-[#E4E4E7]" data-testid="approvals-list">
+          <div
+            className="divide-y divide-[#E4E4E7]"
+            data-testid="approvals-list"
+          >
             {items.map((it) => {
               const pill = STATUS_PILL[it.status] || STATUS_PILL.pending;
               const Icon = pill.Icon;
@@ -338,7 +449,7 @@ const TeamWishlistApprovalsPage = () => {
               return (
                 <div
                   key={it.id}
-                  className={`p-4 flex items-center gap-4 hover:bg-[#FAFAFA] ${checked ? 'bg-amber-50/40' : ''}`}
+                  className={`p-4 flex items-center gap-4 hover:bg-[#FAFAFA] ${checked ? "bg-amber-50/40" : ""}`}
                   data-testid={`approval-row-${it.id}`}
                 >
                   <button
@@ -346,12 +457,22 @@ const TeamWishlistApprovalsPage = () => {
                     data-testid={`row-check-${it.id}`}
                     className="text-[#A1A1AA] hover:text-amber-500"
                   >
-                    {checked
-                      ? <CheckSquare size={20} weight="fill" className="text-amber-500" />
-                      : <Square size={20} />}
+                    {checked ? (
+                      <CheckSquare
+                        size={20}
+                        weight="fill"
+                        className="text-amber-500"
+                      />
+                    ) : (
+                      <Square size={20} />
+                    )}
                   </button>
                   {s.image ? (
-                    <img src={s.image} alt={it.vin} className="w-20 h-14 rounded-lg object-cover bg-[#F4F4F5]" />
+                    <img
+                      src={s.image}
+                      alt={it.vin}
+                      className="w-20 h-14 rounded-lg object-cover bg-[#F4F4F5]"
+                    />
                   ) : (
                     <div className="w-20 h-14 rounded-lg bg-[#F4F4F5] flex items-center justify-center">
                       <Car size={20} className="text-[#A1A1AA]" />
@@ -360,7 +481,9 @@ const TeamWishlistApprovalsPage = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-medium text-[#18181B] truncate">
-                        {[s.year, s.make, s.model].filter(Boolean).join(' ') || s.title || it.vin}
+                        {[s.year, s.make, s.model].filter(Boolean).join(" ") ||
+                          s.title ||
+                          it.vin}
                       </span>
                       <span
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
@@ -370,23 +493,26 @@ const TeamWishlistApprovalsPage = () => {
                       </span>
                     </div>
                     <div className="text-xs text-[#71717A] truncate">
-                      VIN {it.vin} · {it.category} · {it.budget} · {tr('week')} {it.week_start}
-                      {it.note ? ` · "${it.note}"` : ''}
+                      VIN {it.vin} · {it.category} · {it.budget} · {tr("week")}{" "}
+                      {it.week_start}
+                      {it.note ? ` · "${it.note}"` : ""}
                     </div>
                     <div className="text-[10px] text-[#A1A1AA] mt-0.5">
-                      {tr('by')} {it.created_by_name || it.created_by}
-                      {it.approved_by_name ? ` · ${it.status === 'rejected' ? tr('by_rejected') : tr('by_approved')} ${it.approved_by_name}` : ''}
-                      {it.reject_reason ? ` · ${it.reject_reason}` : ''}
+                      {tr("by")} {it.created_by_name || it.created_by}
+                      {it.approved_by_name
+                        ? ` · ${it.status === "rejected" ? tr("by_rejected") : tr("by_approved")} ${it.approved_by_name}`
+                        : ""}
+                      {it.reject_reason ? ` · ${it.reject_reason}` : ""}
                     </div>
                   </div>
-                  {it.status === 'pending' && (
+                  {it.status === "pending" && (
                     <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => singleApprove(it.id)}
                         disabled={busy}
                         data-testid={`single-approve-${it.id}`}
                         className="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
-                        title={tr('approve_title')}
+                        title={tr("approve_title")}
                       >
                         <CheckCircle size={18} weight="fill" />
                       </button>
@@ -395,7 +521,7 @@ const TeamWishlistApprovalsPage = () => {
                         disabled={busy}
                         data-testid={`single-reject-${it.id}`}
                         className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 disabled:opacity-50"
-                        title={tr('reject_title')}
+                        title={tr("reject_title")}
                       >
                         <XCircle size={18} weight="fill" />
                       </button>
@@ -430,7 +556,9 @@ const TeamWishlistApprovalsPage = () => {
               <div className="px-5 py-4 border-b border-[#E4E4E7] flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Sparkle size={18} className="text-amber-500" weight="fill" />
-                  <h3 className="font-semibold text-[#18181B] text-lg">{tr('new_pick')}</h3>
+                  <h3 className="font-semibold text-[#18181B] text-lg">
+                    {tr("new_pick")}
+                  </h3>
                 </div>
                 <button
                   onClick={() => setCreateOpen(false)}
@@ -449,7 +577,7 @@ const TeamWishlistApprovalsPage = () => {
                     setCreateOpen(false);
                     // Freshly created card has status=pending → switch to the
                     // Pending tab and refresh the list.
-                    setTab('pending');
+                    setTab("pending");
                     fetchItems();
                   }}
                 />

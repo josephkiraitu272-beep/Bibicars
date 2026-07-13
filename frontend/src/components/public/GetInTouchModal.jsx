@@ -27,7 +27,7 @@ import React, {
 import axios from "axios";
 import { usePolicyModal } from "./PolicyModal";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || "";
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 // Strict Bulgarian phone — must be "+359" followed by exactly 9 digits.
 // Same regex used by CatalogConsultationBlock so the validation behaviour
@@ -342,8 +342,19 @@ function GetInTouchModal({ onClose, initial }) {
         ) : (
           <div className="git-success" data-testid="git-success">
             <div className="git-success-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M5 12.5l4.5 4.5L19 7.5" strokeLinecap="round" strokeLinejoin="round" />
+              <svg
+                viewBox="0 0 24 24"
+                width="48"
+                height="48"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
+                <path
+                  d="M5 12.5l4.5 4.5L19 7.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             </div>
             <h2 className="git-success-title">Request sent successfully</h2>

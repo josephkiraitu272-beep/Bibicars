@@ -18,56 +18,61 @@ import React, {
   useMemo,
   useRef,
   useState,
-} from 'react';
-import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
-import { Search, Loader2, Hash, MapPin, Bell, Check } from 'lucide-react';
+} from "react";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import { Search, Loader2, Hash, MapPin, Bell, Check } from "lucide-react";
 
-import FavoriteButton from '../engagement/FavoriteButton';
+import FavoriteButton from "../engagement/FavoriteButton";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 /** Upper-case and strip spaces/dashes (VIN/LOT friendly). URLs are passed through. */
 const normalize = (raw) => {
-  const s = (raw || '').trim();
-  if (!s) return '';
+  const s = (raw || "").trim();
+  if (!s) return "";
   if (/^https?:\/\//i.test(s)) return s;
-  return s.toUpperCase().replace(/[\s-]/g, '');
+  return s.toUpperCase().replace(/[\s-]/g, "");
 };
 
 const fmtPrice = (v) => {
-  if (v == null || v === '') return null;
+  if (v == null || v === "") return null;
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
   try {
-    return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    return `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
   } catch (_) {
     return `$${Math.round(n)}`;
   }
 };
 
 const fmtOdo = (v, unit) => {
-  if (v == null || v === '') return null;
+  if (v == null || v === "") return null;
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
-  return `${n.toLocaleString('en-US')} ${unit || 'mi'}`;
+  return `${n.toLocaleString("en-US")} ${unit || "mi"}`;
 };
 
 /* ------------------------------ Mini-card --------------------------------- */
 
-const MiniCard = React.memo(function MiniCard({ item, active, onMouseEnter, onClick }) {
+const MiniCard = React.memo(function MiniCard({
+  item,
+  active,
+  onMouseEnter,
+  onClick,
+}) {
   const img = item.image;
   const title =
     item.title ||
-    [item.year, item.make, item.model, item.trim].filter(Boolean).join(' ') ||
+    [item.year, item.make, item.model, item.trim].filter(Boolean).join(" ") ||
     item.vin;
   const price = fmtPrice(item.price);
   const odo = fmtOdo(item.odometer, item.odometer_unit);
-  const isLive = item._src === 'live';
-  const isWestMotors = item._src === 'westmotors';
+  const isLive = item._src === "live";
+  const isWestMotors = item._src === "westmotors";
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
+    if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       onClick?.();
     }
@@ -84,8 +89,8 @@ const MiniCard = React.memo(function MiniCard({ item, active, onMouseEnter, onCl
       onKeyDown={handleKeyDown}
       className={`group relative cursor-pointer w-full text-left flex gap-3 items-stretch px-3 py-2.5 transition-colors border-l-2 ${
         active
-          ? 'bg-[#17150D] border-[#FEAE00]'
-          : 'bg-transparent border-transparent hover:bg-[#17150D]/60 hover:border-[#FEAE00]/40'
+          ? "bg-[#17150D] border-[#FEAE00]"
+          : "bg-transparent border-transparent hover:bg-[#17150D]/60 hover:border-[#FEAE00]/40"
       }`}
       data-testid={`vin-suggest-item-${item.vin || item.lot_number}`}
     >
@@ -98,7 +103,7 @@ const MiniCard = React.memo(function MiniCard({ item, active, onMouseEnter, onCl
             className="w-full h-full object-cover"
             loading="lazy"
             onError={(e) => {
-              e.currentTarget.style.display = 'none';
+              e.currentTarget.style.display = "none";
               const p = e.currentTarget.parentElement;
               if (p) {
                 p.innerHTML =
@@ -107,7 +112,9 @@ const MiniCard = React.memo(function MiniCard({ item, active, onMouseEnter, onCl
             }}
           />
         ) : (
-          <span className="text-[9px] text-[#5E5E5E] uppercase tracking-wider">No photo</span>
+          <span className="text-[9px] text-[#5E5E5E] uppercase tracking-wider">
+            No photo
+          </span>
         )}
       </div>
 
@@ -141,7 +148,7 @@ const MiniCard = React.memo(function MiniCard({ item, active, onMouseEnter, onCl
         {/* Row 2 — VIN · LOT */}
         <div className="flex items-center gap-2 text-[10.5px] text-[#B5B5B3] font-mono uppercase min-w-0">
           <span className="truncate min-w-0">
-            VIN: <span className="text-[#FEAE00]">{item.vin || '—'}</span>
+            VIN: <span className="text-[#FEAE00]">{item.vin || "—"}</span>
           </span>
           {item.lot_number ? (
             <span className="inline-flex items-center gap-1 flex-shrink-0">
@@ -214,18 +221,23 @@ const MiniCard = React.memo(function MiniCard({ item, active, onMouseEnter, onCl
 
 export default function VinSearchAutocomplete({
   width = 278,
-  className = '',
-  placeholder = 'SEARCH BY VIN OR LOT NUMBER',
-  testId = 'header-vin-search',
+  className = "",
+  placeholder = "SEARCH BY VIN OR LOT NUMBER",
+  testId = "header-vin-search",
 }) {
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState("");
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [cursor, setCursor] = useState(-1); // keyboard-selected index
-  const [meta, setMeta] = useState({ source: null, live_used: false, cache_hit: false, response_time_ms: 0 });
+  const [meta, setMeta] = useState({
+    source: null,
+    live_used: false,
+    cache_hit: false,
+    response_time_ms: 0,
+  });
   // Watchlist mini-form state (for empty-state)
-  const [watchEmail, setWatchEmail] = useState('');
+  const [watchEmail, setWatchEmail] = useState("");
   const [watchSubmitting, setWatchSubmitting] = useState(false);
   const [watchDone, setWatchDone] = useState(false);
   const navigate = useNavigate();
@@ -234,7 +246,7 @@ export default function VinSearchAutocomplete({
   const inputRef = useRef(null);
   const abortRef = useRef(null);
   const debounceRef = useRef(null);
-  const lastQueryRef = useRef('');
+  const lastQueryRef = useRef("");
 
   /* ---------- Debounced fetch ---------- */
   const fetchSuggestions = useCallback(async (q) => {
@@ -270,10 +282,15 @@ export default function VinSearchAutocomplete({
         });
       } else {
         setItems([]);
-        setMeta({ source: null, live_used: false, cache_hit: false, response_time_ms: 0 });
+        setMeta({
+          source: null,
+          live_used: false,
+          cache_hit: false,
+          response_time_ms: 0,
+        });
       }
     } catch (e) {
-      if (!axios.isCancel?.(e) && e?.name !== 'CanceledError') {
+      if (!axios.isCancel?.(e) && e?.name !== "CanceledError") {
         // network / server error — keep list empty, don't spam the user
         setItems([]);
       }
@@ -295,29 +312,26 @@ export default function VinSearchAutocomplete({
     setWatchDone(false);
   }, [value]);
 
-  const submitWatch = useCallback(
-    async (rawVin, email) => {
-      const vin = normalize(rawVin);
-      const clean = (email || '').trim().toLowerCase();
-      if (!vin) return;
-      if (!clean || clean.length < 4 || !clean.includes('@')) return;
-      setWatchSubmitting(true);
-      try {
-        const res = await axios.post(`${API_URL}/api/public/search/watch`, {
-          vin,
-          email: clean,
-        });
-        if (res.data?.success) {
-          setWatchDone(true);
-        }
-      } catch (_e) {
-        /* toast handled elsewhere if needed */
-      } finally {
-        setWatchSubmitting(false);
+  const submitWatch = useCallback(async (rawVin, email) => {
+    const vin = normalize(rawVin);
+    const clean = (email || "").trim().toLowerCase();
+    if (!vin) return;
+    if (!clean || clean.length < 4 || !clean.includes("@")) return;
+    setWatchSubmitting(true);
+    try {
+      const res = await axios.post(`${API_URL}/api/public/search/watch`, {
+        vin,
+        email: clean,
+      });
+      if (res.data?.success) {
+        setWatchDone(true);
       }
-    },
-    []
-  );
+    } catch (_e) {
+      /* toast handled elsewhere if needed */
+    } finally {
+      setWatchSubmitting(false);
+    }
+  }, []);
 
   /* ---------- Outside-click / escape ---------- */
   useEffect(() => {
@@ -327,16 +341,16 @@ export default function VinSearchAutocomplete({
       }
     };
     const onKey = (e) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         setOpen(false);
         inputRef.current?.blur();
       }
     };
-    document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKey);
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKey);
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
     };
   }, []);
 
@@ -344,12 +358,12 @@ export default function VinSearchAutocomplete({
   const goToItem = useCallback(
     (item) => {
       if (!item) return;
-      const v = (item.vin || '').toUpperCase();
+      const v = (item.vin || "").toUpperCase();
       if (!v) return;
       setOpen(false);
       navigate(`/vin/${encodeURIComponent(v)}`);
     },
-    [navigate]
+    [navigate],
   );
 
   const submitQuery = useCallback(() => {
@@ -362,32 +376,34 @@ export default function VinSearchAutocomplete({
   /* ---------- Input events ---------- */
   const onKeyDown = (e) => {
     if (!open) {
-      if (e.key === 'ArrowDown' && items.length > 0) {
+      if (e.key === "ArrowDown" && items.length > 0) {
         setOpen(true);
         setCursor(0);
         e.preventDefault();
         return;
       }
-      if (e.key === 'Enter') {
+      if (e.key === "Enter") {
         e.preventDefault();
         submitQuery();
       }
       return;
     }
-    if (e.key === 'ArrowDown') {
+    if (e.key === "ArrowDown") {
       e.preventDefault();
       setCursor((c) => (items.length ? (c + 1) % items.length : -1));
-    } else if (e.key === 'ArrowUp') {
+    } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setCursor((c) => (items.length ? (c - 1 + items.length) % items.length : -1));
-    } else if (e.key === 'Enter') {
+      setCursor((c) =>
+        items.length ? (c - 1 + items.length) % items.length : -1,
+      );
+    } else if (e.key === "Enter") {
       e.preventDefault();
       if (cursor >= 0 && items[cursor]) {
         goToItem(items[cursor]);
       } else {
         submitQuery();
       }
-    } else if (e.key === 'Tab') {
+    } else if (e.key === "Tab") {
       setOpen(false);
     }
   };
@@ -399,7 +415,7 @@ export default function VinSearchAutocomplete({
 
   const emptyState = useMemo(
     () => !loading && items.length === 0 && normalize(value).length >= 2,
-    [loading, items, value]
+    [loading, items, value],
   );
 
   return (
@@ -417,7 +433,9 @@ export default function VinSearchAutocomplete({
           else submitQuery();
         }}
         className={`flex items-center gap-2 rounded-lg border bg-transparent px-3 h-10 transition-colors ${
-          showDropdown ? 'border-[#FEAE00]' : 'border-[#555452] focus-within:border-[#FEAE00]'
+          showDropdown
+            ? "border-[#FEAE00]"
+            : "border-[#555452] focus-within:border-[#FEAE00]"
         }`}
       >
         <button
@@ -467,37 +485,43 @@ export default function VinSearchAutocomplete({
           <div className="px-3 py-2 border-b border-[#2A2A28] flex items-center justify-between bg-[#111110]">
             <span className="text-[10px] uppercase tracking-[0.2em] text-[#FEAE00] font-bold flex items-center gap-2">
               {loading
-                ? 'Searching…'
+                ? "Searching…"
                 : items.length > 0
-                ? `${items.length} match${items.length === 1 ? '' : 'es'}`
-                : 'No matches'}
-              {!loading && meta.source && items.length > 0 ? (() => {
-                const src = String(meta.source).toUpperCase();
-                const palette =
-                  src === 'LIVE'
-                    ? 'bg-[#22C55E]/15 text-[#22C55E] border-[#22C55E]/40'
-                    : src === 'CACHE'
-                    ? 'bg-[#FEAE00]/15 text-[#FEAE00] border-[#FEAE00]/40'
-                    : src === 'WESTMOTORS' || src === 'WM'
-                    ? 'bg-[#3B82F6]/15 text-[#3B82F6] border-[#3B82F6]/40'
-                    : src === 'STALE_FALLBACK' || src === 'STALE'
-                    ? 'bg-[#EF4444]/15 text-[#EF4444] border-[#EF4444]/40'
-                    : 'bg-[#737373]/10 text-[#A3A3A3] border-[#737373]/30';
-                const label =
-                  src === 'STALE_FALLBACK' ? '🔴 OFFLINE'
-                  : src === 'CACHE' ? '🟡 CACHE'
-                  : src === 'LIVE' ? '🟢 LIVE'
-                  : src === 'WESTMOTORS' ? '🔵 WM'
-                  : src;
-                return (
-                  <span
-                    className={`ml-1 px-1.5 py-0.5 rounded-sm text-[8.5px] font-bold tracking-wider border ${palette}`}
-                    title={`Source: ${meta.source} · ${meta.response_time_ms} ms${meta.warning ? ' · ' + meta.warning : ''}`}
-                  >
-                    {label}
-                  </span>
-                );
-              })() : null}
+                  ? `${items.length} match${items.length === 1 ? "" : "es"}`
+                  : "No matches"}
+              {!loading && meta.source && items.length > 0
+                ? (() => {
+                    const src = String(meta.source).toUpperCase();
+                    const palette =
+                      src === "LIVE"
+                        ? "bg-[#22C55E]/15 text-[#22C55E] border-[#22C55E]/40"
+                        : src === "CACHE"
+                          ? "bg-[#FEAE00]/15 text-[#FEAE00] border-[#FEAE00]/40"
+                          : src === "WESTMOTORS" || src === "WM"
+                            ? "bg-[#3B82F6]/15 text-[#3B82F6] border-[#3B82F6]/40"
+                            : src === "STALE_FALLBACK" || src === "STALE"
+                              ? "bg-[#EF4444]/15 text-[#EF4444] border-[#EF4444]/40"
+                              : "bg-[#737373]/10 text-[#A3A3A3] border-[#737373]/30";
+                    const label =
+                      src === "STALE_FALLBACK"
+                        ? "🔴 OFFLINE"
+                        : src === "CACHE"
+                          ? "🟡 CACHE"
+                          : src === "LIVE"
+                            ? "🟢 LIVE"
+                            : src === "WESTMOTORS"
+                              ? "🔵 WM"
+                              : src;
+                    return (
+                      <span
+                        className={`ml-1 px-1.5 py-0.5 rounded-sm text-[8.5px] font-bold tracking-wider border ${palette}`}
+                        title={`Source: ${meta.source} · ${meta.response_time_ms} ms${meta.warning ? " · " + meta.warning : ""}`}
+                      >
+                        {label}
+                      </span>
+                    );
+                  })()
+                : null}
             </span>
             <span className="text-[10px] uppercase tracking-wide text-[#5E5E5E]">
               press <span className="text-[#E4E3DF]">↵</span> to open
@@ -533,8 +557,9 @@ export default function VinSearchAutocomplete({
                 Nothing matched "{value}"
               </div>
               <div className="text-[11px] mb-3">
-                Press <span className="text-[#FEAE00] font-bold">Enter</span> to run a full
-                search (VIN / LOT / URL) or source this vehicle manually.
+                Press <span className="text-[#FEAE00] font-bold">Enter</span> to
+                run a full search (VIN / LOT / URL) or source this vehicle
+                manually.
               </div>
               {/* Notify-when-found mini-form. Only offered for VIN-like inputs (>=11 chars) */}
               {normalize(value).length >= 11 ? (
@@ -545,8 +570,11 @@ export default function VinSearchAutocomplete({
                   >
                     <Check size={13} />
                     <span>
-                      We'll email you as soon as{' '}
-                      <span className="font-mono text-[#FEAE00]">{normalize(value)}</span> shows up.
+                      We'll email you as soon as{" "}
+                      <span className="font-mono text-[#FEAE00]">
+                        {normalize(value)}
+                      </span>{" "}
+                      shows up.
                     </span>
                   </div>
                 ) : (

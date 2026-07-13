@@ -1,10 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import axios from 'axios';
-import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
-import BibiSelect from '../ui/BibiSelect';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
+import BibiSelect from "../ui/BibiSelect";
 
-const API = process.env.REACT_APP_BACKEND_URL || '';
+const API = "https://backend-production-ae6d.up.railway.app";
 
 /**
  * CarCalculator — fully functional public calculator wired to
@@ -20,11 +26,11 @@ const API = process.env.REACT_APP_BACKEND_URL || '';
  */
 
 const DEFAULTS = {
-  vin: '',
-  origin: 'usa',
-  auction: 'copart',
-  vehicleType: 'sedan',
-  port: 'odessa',
+  vin: "",
+  origin: "usa",
+  auction: "copart",
+  vehicleType: "sedan",
+  port: "odessa",
   price: 15000,
   invoicePrice: 0,
   additionalFees: 0,
@@ -32,32 +38,32 @@ const DEFAULTS = {
 };
 
 const FALLBACK_ORIGINS = [
-  { code: 'usa', name: 'USA → Bulgaria' },
-  { code: 'korea', name: 'Korea → Romania → Bulgaria' },
+  { code: "usa", name: "USA → Bulgaria" },
+  { code: "korea", name: "Korea → Romania → Bulgaria" },
 ];
 
 const FALLBACK_VEHICLE_TYPES = [
-  { code: 'sedan', name: 'Sedan' },
-  { code: 'suv', name: 'SUV / Crossover' },
-  { code: 'bigSUV', name: 'Big SUV / 4x4' },
-  { code: 'pickup', name: 'Pickup' },
+  { code: "sedan", name: "Sedan" },
+  { code: "suv", name: "SUV / Crossover" },
+  { code: "bigSUV", name: "Big SUV / 4x4" },
+  { code: "pickup", name: "Pickup" },
 ];
 
 const FALLBACK_PORTS = [
-  { code: 'odessa', name: 'Odessa', country: 'UA' },
-  { code: 'klaipeda', name: 'Klaipeda', country: 'LT' },
-  { code: 'gdansk', name: 'Gdansk', country: 'PL' },
-  { code: 'bremerhaven', name: 'Bremerhaven', country: 'DE' },
+  { code: "odessa", name: "Odessa", country: "UA" },
+  { code: "klaipeda", name: "Klaipeda", country: "LT" },
+  { code: "gdansk", name: "Gdansk", country: "PL" },
+  { code: "bremerhaven", name: "Bremerhaven", country: "DE" },
 ];
 
 const FALLBACK_AUCTIONS = [
-  { code: 'copart', name: 'Copart' },
-  { code: 'iaai', name: 'IAAI' },
+  { code: "copart", name: "Copart" },
+  { code: "iaai", name: "IAAI" },
 ];
 
-const fmt = (v, currency = 'USD') =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
+const fmt = (v, currency = "USD") =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
     currency,
     maximumFractionDigits: 0,
   }).format(Number(v) || 0);
@@ -66,15 +72,22 @@ const fmt = (v, currency = 'USD') =>
 /* Sub-components                                                      */
 /* ------------------------------------------------------------------ */
 
-const DottedRow = ({ label, value, valueClass = 'text-white', bold = false }) => (
+const DottedRow = ({
+  label,
+  value,
+  valueClass = "text-white",
+  bold = false,
+}) => (
   <div className="flex items-baseline gap-3 py-[11px]">
-    <span className={`text-[13px] md:text-[15px] text-white whitespace-nowrap ${bold ? 'font-semibold' : ''}`}>
+    <span
+      className={`text-[13px] md:text-[15px] text-white whitespace-nowrap ${bold ? "font-semibold" : ""}`}
+    >
       {label}
     </span>
     <span
       aria-hidden="true"
       className="flex-1 self-end mb-[5px]"
-      style={{ borderBottom: '1px dotted rgba(255,255,255,0.28)', height: 1 }}
+      style={{ borderBottom: "1px dotted rgba(255,255,255,0.28)", height: 1 }}
     />
     <span
       className={`text-[13px] md:text-[15px] font-medium uppercase whitespace-nowrap ${valueClass}`}
@@ -84,9 +97,19 @@ const DottedRow = ({ label, value, valueClass = 'text-white', bold = false }) =>
   </div>
 );
 
-const FieldInput = ({ label, value, onChange, placeholder, type = 'text', testId, suffix }) => (
+const FieldInput = ({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  testId,
+  suffix,
+}) => (
   <div className="mb-5">
-    <label className="block text-[12px] uppercase tracking-wider text-[#8A8A8A] mb-2">{label}</label>
+    <label className="block text-[12px] uppercase tracking-wider text-[#8A8A8A] mb-2">
+      {label}
+    </label>
     <div className="relative">
       <input
         value={value}
@@ -109,7 +132,11 @@ const FieldInput = ({ label, value, onChange, placeholder, type = 'text', testId
 /* Main component                                                      */
 /* ------------------------------------------------------------------ */
 
-export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null }) => {
+export const CarCalculator = ({
+  vehicle,
+  initialVin = "",
+  initialPrice = null,
+}) => {
   // Config
   const [ports, setPorts] = useState(FALLBACK_PORTS);
   const [vehicleTypes, setVehicleTypes] = useState(FALLBACK_VEHICLE_TYPES);
@@ -117,24 +144,32 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
   const [origins, setOrigins] = useState(FALLBACK_ORIGINS);
 
   // Form
-  const [vin, setVin] = useState(initialVin || vehicle?.vin || '');
+  const [vin, setVin] = useState(initialVin || vehicle?.vin || "");
   const [origin, setOrigin] = useState(DEFAULTS.origin);
   const [auction, setAuction] = useState(vehicle?.auction || DEFAULTS.auction);
-  const [vehicleType, setVehicleType] = useState(vehicle?.vehicleType || DEFAULTS.vehicleType);
+  const [vehicleType, setVehicleType] = useState(
+    vehicle?.vehicleType || DEFAULTS.vehicleType,
+  );
   const [port, setPort] = useState(DEFAULTS.port);
   const [price, setPrice] = useState(
     initialPrice != null
       ? String(initialPrice)
       : vehicle?.price
         ? String(vehicle.price)
-        : String(DEFAULTS.price)
+        : String(DEFAULTS.price),
   );
   // Korea-specific extras
-  const [invoicePrice, setInvoicePrice] = useState(String(DEFAULTS.invoicePrice));
-  const [additionalFees, setAdditionalFees] = useState(String(DEFAULTS.additionalFees));
-  const [useLogisticsPackage, setUseLogisticsPackage] = useState(DEFAULTS.useLogisticsPackage);
-  const [phone, setPhone] = useState('');
-  const [brand, setBrand] = useState(vehicle?.title || vehicle?.make || '');
+  const [invoicePrice, setInvoicePrice] = useState(
+    String(DEFAULTS.invoicePrice),
+  );
+  const [additionalFees, setAdditionalFees] = useState(
+    String(DEFAULTS.additionalFees),
+  );
+  const [useLogisticsPackage, setUseLogisticsPackage] = useState(
+    DEFAULTS.useLogisticsPackage,
+  );
+  const [phone, setPhone] = useState("");
+  const [brand, setBrand] = useState(vehicle?.title || vehicle?.make || "");
 
   // Calc state
   const [calc, setCalc] = useState(null);
@@ -151,11 +186,16 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
       try {
         const { data } = await axios.get(`${API}/api/calculator/ports`);
         if (cancelled || !data?.success) return;
-        if (Array.isArray(data.ports) && data.ports.length) setPorts(data.ports);
-        if (Array.isArray(data.vehicleTypes) && data.vehicleTypes.length) setVehicleTypes(data.vehicleTypes);
-        if (Array.isArray(data.auctions) && data.auctions.length) setAuctions(data.auctions);
-        if (Array.isArray(data.origins) && data.origins.length) setOrigins(data.origins);
-        const def = (data.ports || []).find((p) => p.default) || (data.ports || [])[0];
+        if (Array.isArray(data.ports) && data.ports.length)
+          setPorts(data.ports);
+        if (Array.isArray(data.vehicleTypes) && data.vehicleTypes.length)
+          setVehicleTypes(data.vehicleTypes);
+        if (Array.isArray(data.auctions) && data.auctions.length)
+          setAuctions(data.auctions);
+        if (Array.isArray(data.origins) && data.origins.length)
+          setOrigins(data.origins);
+        const def =
+          (data.ports || []).find((p) => p.default) || (data.ports || [])[0];
         if (def?.code) setPort((prev) => prev || def.code);
       } catch (_) {
         /* silent — keep fallbacks */
@@ -168,7 +208,7 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
 
   // Debounced calc on any input change
   const recalc = useCallback(async () => {
-    const numericPrice = Number(String(price).replace(/[^0-9.]/g, '')) || 0;
+    const numericPrice = Number(String(price).replace(/[^0-9.]/g, "")) || 0;
     if (numericPrice <= 0) {
       setCalc(null);
       return;
@@ -186,23 +226,35 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
         vehicleType,
         vin: vin || null,
       };
-      if (origin === 'korea') {
-        payload.invoicePrice = Number(String(invoicePrice).replace(/[^0-9.]/g, '')) || 0;
-        payload.additionalFees = Number(String(additionalFees).replace(/[^0-9.]/g, '')) || 0;
+      if (origin === "korea") {
+        payload.invoicePrice =
+          Number(String(invoicePrice).replace(/[^0-9.]/g, "")) || 0;
+        payload.additionalFees =
+          Number(String(additionalFees).replace(/[^0-9.]/g, "")) || 0;
         payload.useLogisticsPackage = useLogisticsPackage;
       }
       const { data } = await axios.post(
         `${API}/api/calculator/calculate`,
         payload,
-        { signal: ctrl.signal }
+        { signal: ctrl.signal },
       );
       if (data?.success && data.calculation) setCalc(data.calculation);
     } catch (err) {
-      if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') return;
+      if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") return;
     } finally {
       setLoading(false);
     }
-  }, [price, port, auction, vehicleType, vin, origin, invoicePrice, additionalFees, useLogisticsPackage]);
+  }, [
+    price,
+    port,
+    auction,
+    vehicleType,
+    vin,
+    origin,
+    invoicePrice,
+    additionalFees,
+    useLogisticsPackage,
+  ]);
 
   useEffect(() => {
     const t = setTimeout(recalc, 300);
@@ -210,21 +262,24 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
   }, [recalc]);
 
   // Derived
-  const currency = calc?.currency || 'USD';
+  const currency = calc?.currency || "USD";
   const total = calc?.total ?? 0;
   const vehiclePrice = calc?.vehiclePrice ?? 0;
   const auctionTotal = calc?.auctionTotal ?? 0;
   const deliveryTotal = calc?.deliveryTotal ?? 0;
-  const breakdown = useMemo(() => (Array.isArray(calc?.breakdown) ? calc.breakdown : []), [calc]);
+  const breakdown = useMemo(
+    () => (Array.isArray(calc?.breakdown) ? calc.breakdown : []),
+    [calc],
+  );
 
   // Build options for BibiSelect
   const auctionOptions = useMemo(
     () => auctions.map((a) => ({ value: a.code, label: a.name })),
-    [auctions]
+    [auctions],
   );
   const vehicleTypeOptions = useMemo(
     () => vehicleTypes.map((v) => ({ value: v.code, label: v.name })),
-    [vehicleTypes]
+    [vehicleTypes],
   );
   const portOptions = useMemo(
     () =>
@@ -233,18 +288,18 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
         label: p.name,
         hint: p.country || undefined,
       })),
-    [ports]
+    [ports],
   );
   const originOptions = useMemo(
     () => origins.map((o) => ({ value: o.code, label: o.name })),
-    [origins]
+    [origins],
   );
-  const isKorea = origin === 'korea';
+  const isKorea = origin === "korea";
 
   // Actions
   const saveQuote = async () => {
     if (!calc) {
-      toast.error('Nothing to save — enter vehicle price first');
+      toast.error("Nothing to save — enter vehicle price first");
       return;
     }
     try {
@@ -256,17 +311,17 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
         auction,
         vehicleType,
         origin,
-        scenario: 'standard',
+        scenario: "standard",
         calculation: calc,
       });
       if (data?.success && data?.quote?.id) {
         setLastQuoteId(data.quote.id);
-        toast.success('Quote saved');
+        toast.success("Quote saved");
       } else {
-        toast.error('Quote was not saved');
+        toast.error("Quote was not saved");
       }
     } catch (_) {
-      toast.error('Could not save quote');
+      toast.error("Could not save quote");
     } finally {
       setSavingQuote(false);
     }
@@ -274,11 +329,11 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
 
   const submitLead = async () => {
     if (!phone.trim()) {
-      toast.error('Enter phone number');
+      toast.error("Enter phone number");
       return;
     }
     if (!calc) {
-      toast.error('Calculate first, then submit');
+      toast.error("Calculate first, then submit");
       return;
     }
     try {
@@ -292,7 +347,7 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
             port,
             auction,
             vehicleType,
-            scenario: 'standard',
+            scenario: "standard",
             calculation: calc,
           });
           if (data?.success) quoteId = data?.quote?.id || null;
@@ -302,26 +357,26 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
         }
       }
       await axios.post(`${API}/api/public/leads/quick`, {
-        name: 'Calculator Lead',
+        name: "Calculator Lead",
         phone,
-        desiredCar: brand || vehicle?.title || vin || '',
+        desiredCar: brand || vehicle?.title || vin || "",
         budget: String(total),
-        source: 'calculator',
+        source: "calculator",
         quoteId,
         calculation: calc,
       });
-      toast.success('Request sent — we will contact you shortly');
-      setPhone('');
+      toast.success("Request sent — we will contact you shortly");
+      setPhone("");
     } catch (_) {
-      toast.error('Could not send request');
+      toast.error("Could not send request");
     } finally {
       setSubmitting(false);
     }
   };
 
   const reset = () => {
-    setVin('');
-    setBrand('');
+    setVin("");
+    setBrand("");
     setPrice(String(DEFAULTS.price));
     setOrigin(DEFAULTS.origin);
     setAuction(DEFAULTS.auction);
@@ -339,7 +394,9 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
       data-testid="car-calculator"
     >
       <div className="flex items-center justify-between mb-10 gap-4 flex-wrap">
-        <h3 className="text-[28px] md:text-[40px] font-bold text-white">Car calculator</h3>
+        <h3 className="text-[28px] md:text-[40px] font-bold text-white">
+          Car calculator
+        </h3>
         <div className="flex items-center gap-3 text-[12px] uppercase tracking-wider text-[#8A8A8A]">
           {loading ? (
             <span className="inline-flex items-center gap-2 text-[#FEAE00]">
@@ -367,7 +424,10 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
             <label className="block text-[12px] uppercase tracking-wider text-[#8A8A8A] mb-2">
               Route
             </label>
-            <div className="grid grid-cols-2 gap-2" data-testid="calc-origin-toggle">
+            <div
+              className="grid grid-cols-2 gap-2"
+              data-testid="calc-origin-toggle"
+            >
               {originOptions.map((opt) => (
                 <button
                   key={opt.value}
@@ -376,8 +436,8 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
                   data-testid={`calc-origin-${opt.value}`}
                   className={`h-12 rounded border text-[12px] uppercase tracking-wider font-semibold transition-colors ${
                     origin === opt.value
-                      ? 'bg-[#FEAE00] text-black border-[#FEAE00]'
-                      : 'bg-transparent text-white border-[#555452] hover:border-[#FEAE00]'
+                      ? "bg-[#FEAE00] text-black border-[#FEAE00]"
+                      : "bg-transparent text-white border-[#555452] hover:border-[#FEAE00]"
                   }`}
                 >
                   {opt.label}
@@ -406,11 +466,11 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
             ) : (
               <BibiSelect
                 label="Logistics"
-                value={useLogisticsPackage ? 'package' : 'itemized'}
-                onChange={(v) => setUseLogisticsPackage(v === 'package')}
+                value={useLogisticsPackage ? "package" : "itemized"}
+                onChange={(v) => setUseLogisticsPackage(v === "package")}
                 options={[
-                  { value: 'package', label: 'Fixed package ($3850)' },
-                  { value: 'itemized', label: 'Itemized' },
+                  { value: "package", label: "Fixed package ($3850)" },
+                  { value: "itemized", label: "Itemized" },
                 ]}
                 testId="calc-korea-logistics"
               />
@@ -440,7 +500,7 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
             <FieldInput
               label="Vehicle price"
               value={price}
-              onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, ''))}
+              onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, ""))}
               placeholder="15000"
               type="text"
               testId="calc-price"
@@ -454,7 +514,9 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
                 <FieldInput
                   label="Invoice price (for customs base, optional)"
                   value={invoicePrice}
-                  onChange={(e) => setInvoicePrice(e.target.value.replace(/[^0-9.]/g, ''))}
+                  onChange={(e) =>
+                    setInvoicePrice(e.target.value.replace(/[^0-9.]/g, ""))
+                  }
                   placeholder="0"
                   type="text"
                   testId="calc-invoice-price"
@@ -465,7 +527,9 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
                 <FieldInput
                   label="Additional fees"
                   value={additionalFees}
-                  onChange={(e) => setAdditionalFees(e.target.value.replace(/[^0-9.]/g, ''))}
+                  onChange={(e) =>
+                    setAdditionalFees(e.target.value.replace(/[^0-9.]/g, ""))
+                  }
                   placeholder="0"
                   type="text"
                   testId="calc-additional-fees"
@@ -477,15 +541,29 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
 
           {/* Summary */}
           <div className="mt-2 border-t border-[#3a3a38] pt-5">
-            <DottedRow label="Vehicle price" value={fmt(vehiclePrice, currency)} />
-            <DottedRow label="Auction fees" value={fmt(auctionTotal, currency)} />
-            <DottedRow label="Delivery & services" value={fmt(deliveryTotal, currency)} />
+            <DottedRow
+              label="Vehicle price"
+              value={fmt(vehiclePrice, currency)}
+            />
+            <DottedRow
+              label="Auction fees"
+              value={fmt(auctionTotal, currency)}
+            />
+            <DottedRow
+              label="Delivery & services"
+              value={fmt(deliveryTotal, currency)}
+            />
             <div className="flex items-baseline gap-3 py-[14px]">
-              <span className="text-[14px] md:text-[15px] text-white whitespace-nowrap">Car in Bulgaria</span>
+              <span className="text-[14px] md:text-[15px] text-white whitespace-nowrap">
+                Car in Bulgaria
+              </span>
               <span
                 aria-hidden="true"
                 className="flex-1 self-end mb-[5px]"
-                style={{ borderBottom: '1px dotted rgba(255,255,255,0.35)', height: 1 }}
+                style={{
+                  borderBottom: "1px dotted rgba(255,255,255,0.35)",
+                  height: 1,
+                }}
               />
               <span
                 className="text-[18px] md:text-[22px] font-bold uppercase text-[#FEAE00] whitespace-nowrap"
@@ -504,13 +582,16 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
             className="btn-amber w-full mt-6 h-[52px] disabled:opacity-60 disabled:cursor-not-allowed"
             data-testid="calc-submit"
           >
-            {savingQuote ? 'Saving…' : 'Save & get complete calculation'}
+            {savingQuote ? "Saving…" : "Save & get complete calculation"}
           </button>
 
           {lastQuoteId ? (
             <div className="mt-3 text-[12px] text-[#8A8A8A]">
-              Quote saved:{' '}
-              <span className="text-[#FEAE00] font-mono" data-testid="calc-quote-id">
+              Quote saved:{" "}
+              <span
+                className="text-[#FEAE00] font-mono"
+                data-testid="calc-quote-id"
+              >
                 {lastQuoteId}
               </span>
             </div>
@@ -527,7 +608,7 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
                 aria-label="Bulgaria"
                 style={{
                   background:
-                    'linear-gradient(to bottom, #FFFFFF 0%, #FFFFFF 33.33%, #00966E 33.33%, #00966E 66.66%, #D62612 66.66%, #D62612 100%)',
+                    "linear-gradient(to bottom, #FFFFFF 0%, #FFFFFF 33.33%, #00966E 33.33%, #00966E 66.66%, #D62612 66.66%, #D62612 100%)",
                 }}
               />
             </div>
@@ -547,7 +628,7 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
             className="w-full mt-4 h-[52px] border border-[#FEAE00] text-[#FEAE00] text-[13px] uppercase tracking-[0.2em] font-semibold hover:bg-[#FEAE00] hover:text-black transition-colors rounded disabled:opacity-60 disabled:cursor-not-allowed"
             data-testid="calc-lead-submit"
           >
-            {submitting ? 'Sending…' : 'Request a callback'}
+            {submitting ? "Sending…" : "Request a callback"}
           </button>
 
           <button
@@ -555,7 +636,7 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
             className="mt-10 self-start text-[13px] md:text-[14px] font-medium uppercase underline text-[#FEAE00] hover:brightness-110 tracking-wider"
             data-testid="calc-find-similar"
             onClick={() => {
-              window.location.href = '/catalog';
+              window.location.href = "/catalog";
             }}
           >
             Find similar car
@@ -565,7 +646,7 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
         {/* ==================== RIGHT COLUMN — BREAKDOWN ==================== */}
         <div className="flex flex-col">
           <div className="text-[12px] uppercase tracking-[0.2em] text-[#FEAE00] mb-4">
-            [ {isKorea ? 'korea → romania → bulgaria' : 'turnkey breakdown'} ]
+            [ {isKorea ? "korea → romania → bulgaria" : "turnkey breakdown"} ]
           </div>
           {breakdown.length === 0 ? (
             <div className="text-[14px] text-[#8A8A8A] italic py-10">
@@ -573,7 +654,11 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
             </div>
           ) : (
             breakdown.map((row) => (
-              <DottedRow key={row.key} label={row.label} value={fmt(row.value, currency)} />
+              <DottedRow
+                key={row.key}
+                label={row.label}
+                value={fmt(row.value, currency)}
+              />
             ))
           )}
 
@@ -588,12 +673,13 @@ export const CarCalculator = ({ vehicle, initialVin = '', initialPrice = null })
               {isKorea && calc?.totalEur ? (
                 <DottedRow
                   label="Total in EUR"
-                  value={fmt(calc.totalEur, 'EUR')}
+                  value={fmt(calc.totalEur, "EUR")}
                   valueClass="text-white text-[14px]"
                 />
               ) : null}
               <p className="mt-3 text-[11px] uppercase tracking-wider text-[#6A6A6A]">
-                Indicative estimate. Final price is locked by a manager after VIN verification.
+                Indicative estimate. Final price is locked by a manager after
+                VIN verification.
               </p>
             </div>
           ) : null}

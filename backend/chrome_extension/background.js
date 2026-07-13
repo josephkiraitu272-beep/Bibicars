@@ -13,20 +13,25 @@
  *   3. Maintain a heartbeat to /api/v3/heartbeat for legacy panels.
  */
 
-const BACKEND_BASE_KEY = 'bibi_backend_url';
-const CLIENT_ID_KEY = 'bibi_ext_client_id';
-const CLIENT_SECRET_KEY = 'bibi_ext_client_secret';
-const CLIENT_LABEL_KEY = 'bibi_ext_client_label';
+const BACKEND_BASE_KEY = "bibi_backend_url";
+const CLIENT_ID_KEY = "bibi_ext_client_id";
+const CLIENT_SECRET_KEY = "bibi_ext_client_secret";
+const CLIENT_LABEL_KEY = "bibi_ext_client_label";
 // DEFAULT_BACKEND intentionally empty — the operator MUST paste the CRM
 // URL into the popup ("Backend URL" field) on first install.  Storing the
 // URL in chrome.storage.local keeps the extension portable across
 // staging / preview / production deployments.
-const DEFAULT_BACKEND = '';
+const DEFAULT_BACKEND = "";
 const POLL_INTERVAL_SEC = 8;
 const JOB_TAB_LIFETIME_MS = 8000;
 const HEARTBEAT_INTERVAL_SEC = 60;
-const EXT_VERSION = '4.1.0';
-const CAPABILITIES = ['poctra', 'carsfromwest', 'autoauctionhistory', 'salvagebid'];
+const EXT_VERSION = "4.1.0";
+const CAPABILITIES = [
+  "poctra",
+  "carsfromwest",
+  "autoauctionhistory",
+  "salvagebid",
+];
 
 // Phase 9.3 — active-job limiter to prevent Chrome overheat
 const MAX_ACTIVE_JOBS = 3;
@@ -38,10 +43,11 @@ const SITE_URL_BUILDERS = {
     `https://carsfromwest.com/en/search?keyword=${encodeURIComponent(vin)}`,
   autoauctionhistory: (vin) =>
     `https://autoauctionhistory.com/?s=${encodeURIComponent(vin)}`,
-  salvagebid: (vin) => `https://www.salvagebid.com/search?q=${encodeURIComponent(vin)}`,
+  salvagebid: (vin) =>
+    `https://www.salvagebid.com/search?q=${encodeURIComponent(vin)}`,
 };
 
-async function getStoredString(key, fallback = '') {
+async function getStoredString(key, fallback = "") {
   return new Promise((res) =>
     chrome.storage.local.get([key], (out) => res(out[key] || fallback)),
   );
@@ -55,23 +61,25 @@ async function getBackendUrl() {
   return getStoredString(BACKEND_BASE_KEY, DEFAULT_BACKEND);
 }
 async function getOrCreateClientId() {
-  let cid = await getStoredString(CLIENT_ID_KEY, '');
+  let cid = await getStoredString(CLIENT_ID_KEY, "");
   if (!cid) {
     cid =
-      'bibi-' +
+      "bibi-" +
       (crypto.randomUUID
         ? crypto.randomUUID()
-        : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8));
+        : Date.now().toString(36) +
+          "-" +
+          Math.random().toString(36).slice(2, 8));
     await setStoredString(CLIENT_ID_KEY, cid);
   }
   return cid;
 }
 async function getClientLabel() {
-  const lbl = await getStoredString(CLIENT_LABEL_KEY, '');
-  return lbl || `chrome-${navigator.platform || 'unknown'}`;
+  const lbl = await getStoredString(CLIENT_LABEL_KEY, "");
+  return lbl || `chrome-${navigator.platform || "unknown"}`;
 }
 async function getClientSecret() {
-  return getStoredString(CLIENT_SECRET_KEY, '');
+  return getStoredString(CLIENT_SECRET_KEY, "");
 }
 
 // HMAC-SHA256 helper. Mirrors backend/security.py format:
@@ -81,44 +89,53 @@ async function hmacSign({ method, path, body }) {
   if (!secret) return { skip: true };
   const ts = Math.floor(Date.now() / 1000).toString();
   const enc = new TextEncoder();
-  const bodyBytes = enc.encode(body || '');
-  const bodyHashBuf = await crypto.subtle.digest('SHA-256', bodyBytes);
+  const bodyBytes = enc.encode(body || "");
+  const bodyHashBuf = await crypto.subtle.digest("SHA-256", bodyBytes);
   const bodyHashHex = Array.from(new Uint8Array(bodyHashBuf))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
   const msg = `${ts}\n${method.toUpperCase()}\n${path}\n${bodyHashHex}`;
   const key = await crypto.subtle.importKey(
-    'raw',
+    "raw",
     enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
+    { name: "HMAC", hash: "SHA-256" },
     false,
-    ['sign'],
+    ["sign"],
   );
-  const sigBuf = await crypto.subtle.sign('HMAC', key, enc.encode(msg));
+  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(msg));
   const sig = Array.from(new Uint8Array(sigBuf))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-  const nonce =
-    crypto.randomUUID ? crypto.randomUUID() : `${ts}-${Math.random()}`;
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  const nonce = crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${ts}-${Math.random()}`;
   return {
     skip: false,
     headers: {
-      'X-Ext-Timestamp': ts,
-      'X-Ext-Signature': sig,
-      'X-Ext-Client': await getOrCreateClientId(),
-      'X-Ext-Nonce': nonce,
+      "X-Ext-Timestamp": ts,
+      "X-Ext-Signature": sig,
+      "X-Ext-Client": await getOrCreateClientId(),
+      "X-Ext-Nonce": nonce,
     },
   };
 }
 
 async function backendFetch(path, init = {}) {
   const base = await getBackendUrl();
-  const url = base.replace(/\/$/, '') + path;
-  const method = (init.method || 'GET').toUpperCase();
-  const body = init.body || '';
-  const sign = await hmacSign({ method, path, body });
+  const url = base.replace(/\/$/, "") + path;
+  const method = (init.method || "GET").toUpperCase();
+  const body = init.body || "";
+  // Canonical signing path must NOT include query string.
+  const signPath = (() => {
+    try {
+      return new URL(url).pathname;
+    } catch (_e) {
+      return String(path || "").split("?")[0] || "/";
+    }
+  })();
+  const sign = await hmacSign({ method, path: signPath, body });
   const headers = Object.assign(
-    { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    { "Content-Type": "application/json", Accept: "application/json" },
     init.headers || {},
     sign.skip ? {} : sign.headers,
   );
@@ -138,10 +155,10 @@ async function selfRegister() {
       version: EXT_VERSION,
       capabilities: CAPABILITIES,
     });
-    await backendFetch('/api/ext/register', { method: 'POST', body });
-    console.log('[BIBIv4.1] registered as', cid);
+    await backendFetch("/api/ext/register", { method: "POST", body });
+    console.log("[BIBIv4.1] registered as", cid);
   } catch (err) {
-    console.warn('[BIBIv4.1] register failed', err);
+    console.warn("[BIBIv4.1] register failed", err);
   }
 }
 
@@ -154,9 +171,9 @@ async function sendClientHeartbeat() {
       version: EXT_VERSION,
       capabilities: CAPABILITIES,
     });
-    await backendFetch('/api/ext/heartbeat', { method: 'POST', body });
+    await backendFetch("/api/ext/heartbeat", { method: "POST", body });
   } catch (err) {
-    console.warn('[BIBIv4.1] heartbeat failed', err);
+    console.warn("[BIBIv4.1] heartbeat failed", err);
   }
 }
 
@@ -175,20 +192,32 @@ async function pickJobs() {
     const j = await r.json();
     return Array.isArray(j.jobs) ? j.jobs : [];
   } catch (err) {
-    console.warn('[BIBIv4.1] /api/ext/jobs failed', err);
+    console.warn("[BIBIv4.1] /api/ext/jobs failed", err);
     return [];
   }
 }
 
 async function dispatchJob(job) {
   if (activeJobs.size >= MAX_ACTIVE_JOBS) {
-    console.log('[BIBIv4.1] limiter — skipping', job.request_id, 'active=', activeJobs.size);
+    console.log(
+      "[BIBIv4.1] limiter — skipping",
+      job.request_id,
+      "active=",
+      activeJobs.size,
+    );
     return;
   }
   const sources = (job.sources || []).filter((s) => SITE_URL_BUILDERS[s]);
   if (!sources.length) return;
   activeJobs.add(job.request_id);
-  console.log('[BIBIv4.1] dispatch', job.request_id, job.vin, sources, 'active=', activeJobs.size);
+  console.log(
+    "[BIBIv4.1] dispatch",
+    job.request_id,
+    job.vin,
+    sources,
+    "active=",
+    activeJobs.size,
+  );
   try {
     await Promise.all(
       sources.map(async (site) => {
@@ -206,13 +235,16 @@ async function dispatchJob(job) {
             chrome.tabs.remove(tab.id).catch(() => {});
           }, JOB_TAB_LIFETIME_MS);
         } catch (err) {
-          console.warn('[BIBIv4.1] tab open failed for', site, err);
+          console.warn("[BIBIv4.1] tab open failed for", site, err);
         }
       }),
     );
   } finally {
     // Release the slot a bit after the lifetime to avoid races.
-    setTimeout(() => activeJobs.delete(job.request_id), JOB_TAB_LIFETIME_MS + 500);
+    setTimeout(
+      () => activeJobs.delete(job.request_id),
+      JOB_TAB_LIFETIME_MS + 500,
+    );
   }
 }
 
@@ -221,13 +253,15 @@ async function dispatchJob(job) {
 // bypass CORS on the destination domain.
 // ───────────────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg && msg.type === 'BIBI_PUSH') {
+  if (msg && msg.type === "BIBI_PUSH") {
     (async () => {
       try {
         const cid = await getOrCreateClientId();
-        const enriched = Object.assign({}, msg.payload || {}, { client_id: cid });
+        const enriched = Object.assign({}, msg.payload || {}, {
+          client_id: cid,
+        });
         const body = JSON.stringify(enriched);
-        const r = await backendFetch('/api/ext/push', { method: 'POST', body });
+        const r = await backendFetch("/api/ext/push", { method: "POST", body });
         sendResponse({ ok: true, response: await r.json() });
       } catch (e) {
         sendResponse({ ok: false, error: String(e) });
@@ -235,14 +269,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     })();
     return true; // async
   }
-  if (msg && msg.type === 'BIBI_OBSERVATION') {
+  if (msg && msg.type === "BIBI_OBSERVATION") {
     (async () => {
       try {
         const cid = await getOrCreateClientId();
-        const enriched = Object.assign({}, msg.payload || {}, { client_id: cid });
+        const enriched = Object.assign({}, msg.payload || {}, {
+          client_id: cid,
+        });
         const body = JSON.stringify(enriched);
-        const r = await backendFetch('/api/ext/observation', {
-          method: 'POST',
+        const r = await backendFetch("/api/ext/observation", {
+          method: "POST",
           body,
         });
         sendResponse({ ok: true, response: await r.json() });
@@ -252,14 +288,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     })();
     return true;
   }
-  if (msg && msg.type === 'BIBI_HEALTH_GET') {
-    backendFetch('/api/ext/health')
+  if (msg && msg.type === "BIBI_HEALTH_GET") {
+    backendFetch("/api/ext/health")
       .then((r) => r.json())
       .then((j) => sendResponse(j))
       .catch((e) => sendResponse({ error: String(e) }));
     return true;
   }
-  if (msg && msg.type === 'BIBI_CLIENT_INFO') {
+  if (msg && msg.type === "BIBI_CLIENT_INFO") {
     (async () => {
       sendResponse({
         client_id: await getOrCreateClientId(),
@@ -279,29 +315,29 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // ───────────────────────────────────────────────────────────────────
 // Polling + heartbeat alarms
 // ───────────────────────────────────────────────────────────────────
-chrome.alarms.create('bibi_pull', {
+chrome.alarms.create("bibi_pull", {
   delayInMinutes: 0.05,
   periodInMinutes: POLL_INTERVAL_SEC / 60,
 });
-chrome.alarms.create('bibi_heartbeat', {
+chrome.alarms.create("bibi_heartbeat", {
   delayInMinutes: 0.05,
   periodInMinutes: HEARTBEAT_INTERVAL_SEC / 60,
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === 'bibi_pull') {
+  if (alarm.name === "bibi_pull") {
     const jobs = await pickJobs();
     for (const j of jobs) {
-      dispatchJob(j).catch((e) => console.warn('[BIBIv4.1] dispatch err', e));
+      dispatchJob(j).catch((e) => console.warn("[BIBIv4.1] dispatch err", e));
     }
   }
-  if (alarm.name === 'bibi_heartbeat') {
+  if (alarm.name === "bibi_heartbeat") {
     sendClientHeartbeat();
     try {
-      await backendFetch('/api/v3/heartbeat', {
-        method: 'POST',
+      await backendFetch("/api/v3/heartbeat", {
+        method: "POST",
         body: JSON.stringify({
-          extension: 'BIBI Cars Parser',
+          extension: "BIBI Cars Parser",
           version: EXT_VERSION,
           ts: Date.now(),
         }),
@@ -312,4 +348,4 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 });
 
-console.log('[BIBIv4.1] background ready, poll=' + POLL_INTERVAL_SEC + 's');
+console.log("[BIBIv4.1] background ready, poll=" + POLL_INTERVAL_SEC + "s");

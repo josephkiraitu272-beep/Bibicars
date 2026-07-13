@@ -20,65 +20,78 @@
  *
  * All endpoints under /api/admin/blog/* require admin or master_admin role.
  */
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import axios from 'axios';
-import { toast } from 'sonner';
-import RichTextEditor from '../../components/admin/blog/RichTextEditor';
-import WhiteDatePicker from '../../components/ui/WhiteDatePicker';
-import { useLang } from '../../i18n';
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import RichTextEditor from "../../components/admin/blog/RichTextEditor";
+import WhiteDatePicker from "../../components/ui/WhiteDatePicker";
+import { useLang } from "../../i18n";
 import {
-  Plus, Trash, FloppyDisk, ArrowsClockwise, PencilSimple, UploadSimple,
-  Eye, EyeSlash, CheckCircle, MagnifyingGlass, X, Globe, Image as ImageIcon,
-  Tag as TagIcon, Calendar,
-} from '@phosphor-icons/react';
-import WhiteSelect from '../../components/ui/WhiteSelect';
-import RefreshButton from '../../components/ui/RefreshButton';
+  Plus,
+  Trash,
+  FloppyDisk,
+  ArrowsClockwise,
+  PencilSimple,
+  UploadSimple,
+  Eye,
+  EyeSlash,
+  CheckCircle,
+  MagnifyingGlass,
+  X,
+  Globe,
+  Image as ImageIcon,
+  Tag as TagIcon,
+  Calendar,
+} from "@phosphor-icons/react";
+import WhiteSelect from "../../components/ui/WhiteSelect";
+import RefreshButton from "../../components/ui/RefreshButton";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 const CATEGORIES = [
-  { value: 'analysis', label: 'Market Analysis' },
-  { value: 'guides',   label: 'Import Guides'   },
-  { value: 'news',     label: 'News'            },
-  { value: 'reviews',  label: 'Car Reviews'     },
-  { value: 'tips',     label: 'Auction Tips'    },
-  { value: 'costs',    label: 'Costs'           },
+  { value: "analysis", label: "Market Analysis" },
+  { value: "guides", label: "Import Guides" },
+  { value: "news", label: "News" },
+  { value: "reviews", label: "Car Reviews" },
+  { value: "tips", label: "Auction Tips" },
+  { value: "costs", label: "Costs" },
 ];
 
 const LANGS = [
-  { code: 'en', label: 'English' },
-  { code: 'bg', label: 'Bulgarian' },
+  { code: "en", label: "English" },
+  { code: "bg", label: "Bulgarian" },
 ];
 
 // Auth headers
 function authHeaders() {
-  const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+  const token =
+    localStorage.getItem("token") || localStorage.getItem("access_token");
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 // Empty article scaffold
 function emptyArticle() {
   return {
-    id: '',
-    slug: '',
-    category: 'news',
-    cover_image_url: '',
-    title:   { en: '', bg: '' },
-    excerpt: { en: '', bg: '' },
-    body:    { en: '', bg: '' },
+    id: "",
+    slug: "",
+    category: "news",
+    cover_image_url: "",
+    title: { en: "", bg: "" },
+    excerpt: { en: "", bg: "" },
+    body: { en: "", bg: "" },
     tags: [],
     related_ids: [],
     read_time_minutes: 1,
     published: false,
-    published_at: '',
+    published_at: "",
   };
 }
 
 const inputCls =
-  'w-full bg-white border border-[#E4E4E7] rounded-md px-3 py-2 text-sm ' +
-  'text-[#18181B] placeholder-[#A1A1AA] focus:outline-none focus:border-amber-500';
+  "w-full bg-white border border-[#E4E4E7] rounded-md px-3 py-2 text-sm " +
+  "text-[#18181B] placeholder-[#A1A1AA] focus:outline-none focus:border-amber-500";
 
-const labelCls = 'text-xs uppercase tracking-wide text-[#71717A] mb-1 block';
+const labelCls = "text-xs uppercase tracking-wide text-[#71717A] mb-1 block";
 
 // ─────────────────────────────────────────────────────────────────────────
 //  Main component
@@ -87,7 +100,7 @@ export default function BlogArticlesEditor() {
   const { t } = useLang();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState({ category: 'all', q: '' });
+  const [filter, setFilter] = useState({ category: "all", q: "" });
   const [editing, setEditing] = useState(null); // article in edit modal
   const [deleting, setDeleting] = useState(null); // article in delete confirm
 
@@ -95,7 +108,7 @@ export default function BlogArticlesEditor() {
     setLoading(true);
     try {
       const params = {};
-      if (filter.category !== 'all') params.category = filter.category;
+      if (filter.category !== "all") params.category = filter.category;
       if (filter.q.trim()) params.q = filter.q.trim();
       const { data } = await axios.get(`${API_URL}/api/admin/blog/articles`, {
         params,
@@ -103,13 +116,15 @@ export default function BlogArticlesEditor() {
       });
       setItems(data.items || []);
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Failed to load articles');
+      toast.error(err?.response?.data?.detail || "Failed to load articles");
     } finally {
       setLoading(false);
     }
   }, [filter]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const openCreate = () => setEditing(emptyArticle());
   const openEdit = (a) => setEditing({ ...emptyArticle(), ...a });
@@ -121,11 +136,11 @@ export default function BlogArticlesEditor() {
       await axios.delete(`${API_URL}/api/admin/blog/articles/${deleting.id}`, {
         headers: authHeaders(),
       });
-      toast.success(t('adm_article_deleted'));
+      toast.success(t("adm_article_deleted"));
       setDeleting(null);
       load();
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Failed to delete');
+      toast.error(err?.response?.data?.detail || "Failed to delete");
     }
   };
 
@@ -135,11 +150,16 @@ export default function BlogArticlesEditor() {
       <div className="bg-white border border-[#E4E4E7] rounded-2xl p-5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-[#18181B]">Blog Articles (CMS)</h2>
+            <h2 className="text-lg font-semibold text-[#18181B]">
+              Blog Articles (CMS)
+            </h2>
             <p className="text-sm text-[#71717A] mt-1 break-words">
               Create bilingual (EN + BG) articles for the public&nbsp;
-              <code className="text-[#18181B] bg-[#FAFAFA] px-1 py-0.5 rounded">/blog</code> page. Read time is calculated
-              automatically (200 words&nbsp;/&nbsp;minute).
+              <code className="text-[#18181B] bg-[#FAFAFA] px-1 py-0.5 rounded">
+                /blog
+              </code>{" "}
+              page. Read time is calculated automatically (200
+              words&nbsp;/&nbsp;minute).
             </p>
           </div>
           <button
@@ -147,32 +167,43 @@ export default function BlogArticlesEditor() {
             data-testid="blog-new-btn"
             className="inline-flex items-center justify-center gap-2 px-4 h-10 rounded-xl bg-[#18181B] text-white text-sm font-semibold hover:bg-[#27272A] active:bg-black transition focus:outline-none focus-visible:ring-4 focus-visible:ring-black/15 whitespace-nowrap"
           >
-            <Plus size={16} weight="bold" />{t('newArticleAction')}</button>
+            <Plus size={16} weight="bold" />
+            {t("newArticleAction")}
+          </button>
         </div>
 
         {/* Filters */}
         <div className="flex flex-wrap items-end gap-3 pt-3 border-t border-[#E4E4E7]">
           <div className="min-w-[160px]">
-            <label className={labelCls}>{t('category')}</label>
+            <label className={labelCls}>{t("category")}</label>
             <WhiteSelect
               value={filter.category}
-              onChange={(e) => setFilter((f) => ({ ...f, category: e.target.value }))}
+              onChange={(e) =>
+                setFilter((f) => ({ ...f, category: e.target.value }))
+              }
               data-testid="blog-filter-category"
             >
-              <option value="all">{t('allCategories')}</option>
+              <option value="all">{t("allCategories")}</option>
               {CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
               ))}
             </WhiteSelect>
           </div>
           <div className="flex-1 min-w-[200px]">
-            <label className={labelCls}>{t('search')}</label>
+            <label className={labelCls}>{t("search")}</label>
             <div className="relative">
-              <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A1A1AA]" />
+              <MagnifyingGlass
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A1A1AA]"
+              />
               <input
                 value={filter.q}
-                onChange={(e) => setFilter((f) => ({ ...f, q: e.target.value }))}
-                placeholder={t('adm_search_by_title')}
+                onChange={(e) =>
+                  setFilter((f) => ({ ...f, q: e.target.value }))
+                }
+                placeholder={t("adm_search_by_title")}
                 className={`${inputCls} pl-9`}
                 data-testid="blog-filter-search"
               />
@@ -181,9 +212,9 @@ export default function BlogArticlesEditor() {
           <RefreshButton
             onClick={load}
             loading={loading}
-            ariaLabel={t('reloadAction')}
+            ariaLabel={t("reloadAction")}
             testId="blog-reload-btn"
-            title={t('reloadAction')}
+            title={t("reloadAction")}
           />
         </div>
       </div>
@@ -191,50 +222,80 @@ export default function BlogArticlesEditor() {
       {/* Articles list */}
       <div className="bg-white border border-[#E4E4E7] rounded-2xl overflow-hidden">
         {loading ? (
-          <div className="py-12 text-center text-[#A1A1AA] text-sm">{t('adm_loading')}</div>
+          <div className="py-12 text-center text-[#A1A1AA] text-sm">
+            {t("adm_loading")}
+          </div>
         ) : items.length === 0 ? (
           <div className="py-12 text-center text-[#A1A1AA] text-sm">
-            No articles yet. Click&nbsp;<span className="text-[#18181B] font-medium">{t('newArticleAction')}</span>&nbsp;to start.
+            No articles yet. Click&nbsp;
+            <span className="text-[#18181B] font-medium">
+              {t("newArticleAction")}
+            </span>
+            &nbsp;to start.
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-[#FAFAFA] border-b border-[#E4E4E7] text-[#71717A] uppercase text-xs tracking-wide">
               <tr>
-                <th className="text-left px-4 py-3 font-medium">{t('taskTitle')}</th>
-                <th className="text-left px-4 py-3 font-medium">{t('category')}</th>
-                <th className="text-left px-4 py-3 font-medium">{t('readFilter')}</th>
-                <th className="text-left px-4 py-3 font-medium">{t('publishedStatus')}</th>
-                <th className="text-left px-4 py-3 font-medium">{t('createdOn')}</th>
+                <th className="text-left px-4 py-3 font-medium">
+                  {t("taskTitle")}
+                </th>
+                <th className="text-left px-4 py-3 font-medium">
+                  {t("category")}
+                </th>
+                <th className="text-left px-4 py-3 font-medium">
+                  {t("readFilter")}
+                </th>
+                <th className="text-left px-4 py-3 font-medium">
+                  {t("publishedStatus")}
+                </th>
+                <th className="text-left px-4 py-3 font-medium">
+                  {t("createdOn")}
+                </th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {items.map((a) => (
-                <tr key={a.id} className="border-b border-[#E4E4E7] last:border-0 hover:bg-[#FAFAFA]">
+                <tr
+                  key={a.id}
+                  className="border-b border-[#E4E4E7] last:border-0 hover:bg-[#FAFAFA]"
+                >
                   <td className="px-4 py-3">
-                    <div className="text-[#18181B] font-medium">{a.title?.en || a.title?.bg || '(untitled)'}</div>
+                    <div className="text-[#18181B] font-medium">
+                      {a.title?.en || a.title?.bg || "(untitled)"}
+                    </div>
                     {a.title?.bg && a.title?.en && (
-                      <div className="text-xs text-[#A1A1AA] mt-0.5">{a.title.bg}</div>
+                      <div className="text-xs text-[#A1A1AA] mt-0.5">
+                        {a.title.bg}
+                      </div>
                     )}
-                    <div className="text-xs text-[#A1A1AA] mt-0.5">/{a.slug}</div>
+                    <div className="text-xs text-[#A1A1AA] mt-0.5">
+                      /{a.slug}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-[#52525B]">
-                    {CATEGORIES.find((c) => c.value === a.category)?.label || a.category}
+                    {CATEGORIES.find((c) => c.value === a.category)?.label ||
+                      a.category}
                   </td>
-                  <td className="px-4 py-3 text-[#71717A]">{a.read_time_minutes} min</td>
+                  <td className="px-4 py-3 text-[#71717A]">
+                    {a.read_time_minutes} min
+                  </td>
                   <td className="px-4 py-3">
                     {a.published ? (
                       <span className="inline-flex items-center gap-1 text-emerald-600 text-xs">
-                        <CheckCircle size={14} weight="fill" /> {t('adm_live')}
+                        <CheckCircle size={14} weight="fill" /> {t("adm_live")}
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-[#A1A1AA] text-xs">
-                        <EyeSlash size={14} /> {t('adm_draft')}
+                        <EyeSlash size={14} /> {t("adm_draft")}
                       </span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-[#A1A1AA] text-xs">
-                    {a.created_at ? new Date(a.created_at).toLocaleDateString() : ''}
+                    {a.created_at
+                      ? new Date(a.created_at).toLocaleDateString()
+                      : ""}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <button
@@ -242,14 +303,14 @@ export default function BlogArticlesEditor() {
                       className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-[#FAFAFA] hover:bg-[#FAFAFA] text-[#18181B] text-xs mr-2"
                       data-testid={`blog-edit-${a.id}`}
                     >
-                      <PencilSimple size={12} /> {t('adm_edit')}
+                      <PencilSimple size={12} /> {t("adm_edit")}
                     </button>
                     <button
                       onClick={() => setDeleting(a)}
                       className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs"
                       data-testid={`blog-delete-${a.id}`}
                     >
-                      <Trash size={12} /> {t('adm_delete')}
+                      <Trash size={12} /> {t("adm_delete")}
                     </button>
                   </td>
                 </tr>
@@ -265,7 +326,10 @@ export default function BlogArticlesEditor() {
           initial={editing}
           allItems={items}
           onClose={closeEditor}
-          onSaved={() => { closeEditor(); load(); }}
+          onSaved={() => {
+            closeEditor();
+            load();
+          }}
         />
       )}
 
@@ -273,16 +337,26 @@ export default function BlogArticlesEditor() {
       {deleting && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
           <div className="bg-white border border-[#E4E4E7] rounded-lg p-6 max-w-sm w-full">
-            <h3 className="text-lg font-semibold text-[#18181B] mb-2">{t('deleteArticleQuestion')}</h3>
+            <h3 className="text-lg font-semibold text-[#18181B] mb-2">
+              {t("deleteArticleQuestion")}
+            </h3>
             <p className="text-sm text-[#71717A] mb-5">
-              «{deleting.title?.en || deleting.title?.bg || deleting.slug}» — this action cannot be undone.
+              «{deleting.title?.en || deleting.title?.bg || deleting.slug}» —
+              this action cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setDeleting(null)} className="px-4 py-2 rounded-md bg-[#FAFAFA] hover:bg-[#FAFAFA] text-[#18181B] text-sm">
-                {t('cancelAction')}
+              <button
+                onClick={() => setDeleting(null)}
+                className="px-4 py-2 rounded-md bg-[#FAFAFA] hover:bg-[#FAFAFA] text-[#18181B] text-sm"
+              >
+                {t("cancelAction")}
               </button>
-              <button onClick={remove} className="px-4 py-2 rounded-md bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold" data-testid="blog-delete-confirm">
-                {t('deleteAction')}
+              <button
+                onClick={remove}
+                className="px-4 py-2 rounded-md bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold"
+                data-testid="blog-delete-confirm"
+              >
+                {t("deleteAction")}
               </button>
             </div>
           </div>
@@ -298,7 +372,7 @@ export default function BlogArticlesEditor() {
 function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
   const { t } = useLang();
   const [form, setForm] = useState(initial);
-  const [activeLang, setActiveLang] = useState('en');
+  const [activeLang, setActiveLang] = useState("en");
   const [saving, setSaving] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);
 
@@ -326,14 +400,18 @@ function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
     setUploadingImg(true);
     try {
       const fd = new FormData();
-      fd.append('image', file);
-      const { data } = await axios.post(`${API_URL}/api/admin/blog/upload-image`, fd, {
-        headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' },
-      });
-      set('cover_image_url', data.url);
-      toast.success(t('adm_image_uploaded'));
+      fd.append("image", file);
+      const { data } = await axios.post(
+        `${API_URL}/api/admin/blog/upload-image`,
+        fd,
+        {
+          headers: { ...authHeaders(), "Content-Type": "multipart/form-data" },
+        },
+      );
+      set("cover_image_url", data.url);
+      toast.success(t("adm_image_uploaded"));
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Image upload failed');
+      toast.error(err?.response?.data?.detail || "Image upload failed");
     } finally {
       setUploadingImg(false);
     }
@@ -344,7 +422,7 @@ function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
     try {
       const payload = {
         category: form.category,
-        cover_image_url: form.cover_image_url || '',
+        cover_image_url: form.cover_image_url || "",
         title: form.title,
         excerpt: form.excerpt,
         body: form.body,
@@ -357,17 +435,25 @@ function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
 
       let saved;
       if (isNew) {
-        const r = await axios.post(`${API_URL}/api/admin/blog/articles`, payload, { headers: authHeaders() });
+        const r = await axios.post(
+          `${API_URL}/api/admin/blog/articles`,
+          payload,
+          { headers: authHeaders() },
+        );
         saved = r.data;
-        toast.success(t('adm_article_created'));
+        toast.success(t("adm_article_created"));
       } else {
-        const r = await axios.put(`${API_URL}/api/admin/blog/articles/${form.id}`, payload, { headers: authHeaders() });
+        const r = await axios.put(
+          `${API_URL}/api/admin/blog/articles/${form.id}`,
+          payload,
+          { headers: authHeaders() },
+        );
         saved = r.data;
-        toast.success(t('adm_article_saved'));
+        toast.success(t("adm_article_saved"));
       }
       onSaved(saved);
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Save failed');
+      toast.error(err?.response?.data?.detail || "Save failed");
     } finally {
       setSaving(false);
     }
@@ -378,9 +464,12 @@ function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
   }, [allItems, form.id]);
 
   const toggleRelated = (id) => {
-    set('related_ids', (form.related_ids || []).includes(id)
-      ? (form.related_ids || []).filter((x) => x !== id)
-      : [...(form.related_ids || []), id].slice(0, 5));
+    set(
+      "related_ids",
+      (form.related_ids || []).includes(id)
+        ? (form.related_ids || []).filter((x) => x !== id)
+        : [...(form.related_ids || []), id].slice(0, 5),
+    );
   };
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-stretch justify-center overflow-y-auto py-6">
@@ -388,9 +477,13 @@ function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
         {/* header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#E4E4E7]">
           <h2 className="text-lg font-semibold text-[#18181B]">
-            {isNew ? 'New article' : 'Edit article'}
+            {isNew ? "New article" : "Edit article"}
           </h2>
-          <button onClick={onClose} className="text-[#71717A] hover:text-[#18181B]" data-testid="blog-modal-close">
+          <button
+            onClick={onClose}
+            className="text-[#71717A] hover:text-[#18181B]"
+            data-testid="blog-modal-close"
+          >
             <X size={22} />
           </button>
         </div>
@@ -400,50 +493,62 @@ function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
           {/* Meta row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className={labelCls}>{t('category')}</label>
+              <label className={labelCls}>{t("category")}</label>
               <WhiteSelect
                 value={form.category}
-                onChange={(e) => set('category', e.target.value)}
+                onChange={(e) => set("category", e.target.value)}
                 data-testid="blog-form-category"
               >
                 {CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
                 ))}
               </WhiteSelect>
             </div>
             <div>
               <label className={labelCls}>Slug (URL)</label>
               <input
-                value={form.slug || ''}
-                onChange={(e) => set('slug', e.target.value)}
+                value={form.slug || ""}
+                onChange={(e) => set("slug", e.target.value)}
                 placeholder="auto-from-title-en"
                 className={inputCls}
                 data-testid="blog-form-slug"
               />
             </div>
             <div>
-              <label className={labelCls}>{t('readTime')}</label>
+              <label className={labelCls}>{t("readTime")}</label>
               <div className="px-3 py-2 text-sm text-[#52525B] bg-white border border-[#E4E4E7] rounded-md">
-                {form.read_time_minutes || 1} min&nbsp;<span className="text-[#A1A1AA]">(auto)</span>
+                {form.read_time_minutes || 1} min&nbsp;
+                <span className="text-[#A1A1AA]">(auto)</span>
               </div>
             </div>
           </div>
 
           {/* Cover image */}
           <div>
-            <label className={labelCls}>Cover image (recommended 513×424 or any 16:13)</label>
+            <label className={labelCls}>
+              Cover image (recommended 513×424 or any 16:13)
+            </label>
             <div className="flex items-start gap-4">
               <div className="w-48 h-40 rounded-md border border-[#E4E4E7] bg-[#FAFAFA] overflow-hidden flex items-center justify-center text-[#A1A1AA]">
                 {form.cover_image_url ? (
-                  <img src={`${API_URL}${form.cover_image_url}`} alt="" className="w-full h-full object-cover" />
+                  <img
+                    src={`${API_URL}${form.cover_image_url}`}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   <ImageIcon size={32} />
                 )}
               </div>
               <div className="flex-1 space-y-2">
-                <label className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-[#E4E4E7] bg-white hover:bg-[#FAFAFA] text-[#18181B] text-sm cursor-pointer transition-colors" data-testid="blog-form-upload-label">
+                <label
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-[#E4E4E7] bg-white hover:bg-[#FAFAFA] text-[#18181B] text-sm cursor-pointer transition-colors"
+                  data-testid="blog-form-upload-label"
+                >
                   <UploadSimple size={14} />
-                  {uploadingImg ? 'Uploading…' : 'Upload image'}
+                  {uploadingImg ? "Uploading…" : "Upload image"}
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/gif"
@@ -454,13 +559,15 @@ function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
                 </label>
                 {form.cover_image_url && (
                   <button
-                    onClick={() => set('cover_image_url', '')}
+                    onClick={() => set("cover_image_url", "")}
                     className="ml-2 inline-flex items-center gap-1 px-3 py-2 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs border border-rose-200"
                   >
-                    <Trash size={12} /> {t('adm_remove')}
+                    <Trash size={12} /> {t("adm_remove")}
                   </button>
                 )}
-                <p className="text-xs text-[#A1A1AA]">{t('adm_jpg_png_webp_or_gif_max_8_mb')}</p>
+                <p className="text-xs text-[#A1A1AA]">
+                  {t("adm_jpg_png_webp_or_gif_max_8_mb")}
+                </p>
               </div>
             </div>
           </div>
@@ -473,10 +580,10 @@ function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
                   key={l.code}
                   onClick={() => setActiveLang(l.code)}
                   className={
-                    'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ' +
+                    "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition " +
                     (activeLang === l.code
-                      ? 'border-amber-500 text-amber-500'
-                      : 'border-transparent text-[#71717A] hover:text-[#18181B]')
+                      ? "border-amber-500 text-amber-500"
+                      : "border-transparent text-[#71717A] hover:text-[#18181B]")
                   }
                   data-testid={`blog-lang-${l.code}`}
                 >
@@ -488,36 +595,49 @@ function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
 
             <div className="space-y-4">
               <div>
-                <label className={labelCls}>Title ({activeLang.toUpperCase()})</label>
+                <label className={labelCls}>
+                  Title ({activeLang.toUpperCase()})
+                </label>
                 <input
-                  value={form.title?.[activeLang] || ''}
-                  onChange={(e) => set(['title', activeLang], e.target.value)}
-                  placeholder={activeLang === 'en' ? 'USA Salvage Car Prices…' : t('adm3_36e220d142')}
+                  value={form.title?.[activeLang] || ""}
+                  onChange={(e) => set(["title", activeLang], e.target.value)}
+                  placeholder={
+                    activeLang === "en"
+                      ? "USA Salvage Car Prices…"
+                      : t("adm3_36e220d142")
+                  }
                   className={inputCls}
                   data-testid={`blog-form-title-${activeLang}`}
                 />
               </div>
               <div>
-                <label className={labelCls}>Short excerpt ({activeLang.toUpperCase()}) — shown on the blog list</label>
+                <label className={labelCls}>
+                  Short excerpt ({activeLang.toUpperCase()}) — shown on the blog
+                  list
+                </label>
                 <textarea
                   rows={3}
-                  value={form.excerpt?.[activeLang] || ''}
-                  onChange={(e) => set(['excerpt', activeLang], e.target.value)}
-                  placeholder={t('adm_a_12_sentence_preview_shown_on_the_public_blog_lis')}
+                  value={form.excerpt?.[activeLang] || ""}
+                  onChange={(e) => set(["excerpt", activeLang], e.target.value)}
+                  placeholder={t(
+                    "adm_a_12_sentence_preview_shown_on_the_public_blog_lis",
+                  )}
                   className={inputCls}
                   data-testid={`blog-form-excerpt-${activeLang}`}
                 />
               </div>
               <div>
-                <label className={labelCls}>Full body ({activeLang.toUpperCase()}) — rich text</label>
+                <label className={labelCls}>
+                  Full body ({activeLang.toUpperCase()}) — rich text
+                </label>
                 <div data-testid={`blog-form-body-${activeLang}`}>
                   <RichTextEditor
-                    value={form.body?.[activeLang] || ''}
-                    onChange={(v) => set(['body', activeLang], v)}
+                    value={form.body?.[activeLang] || ""}
+                    onChange={(v) => set(["body", activeLang], v)}
                     placeholder={
-                      activeLang === 'en'
-                        ? 'Write the article in English…'
-                        : t('adm3_29f3b5a5cf')
+                      activeLang === "en"
+                        ? "Write the article in English…"
+                        : t("adm3_29f3b5a5cf")
                     }
                     testId={`blog-form-rte-${activeLang}`}
                   />
@@ -535,7 +655,7 @@ function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
               </label>
               <TagsInput
                 value={form.tags || []}
-                onChange={(v) => set('tags', v)}
+                onChange={(v) => set("tags", v)}
               />
             </div>
             <div>
@@ -544,8 +664,8 @@ function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
                 Publish date (overrides auto)
               </label>
               <WhiteDatePicker
-                value={(form.published_at || '').slice(0, 10)}
-                onChange={(e) => set('published_at', e.target.value)}
+                value={(form.published_at || "").slice(0, 10)}
+                onChange={(e) => set("published_at", e.target.value)}
                 data-testid="blog-form-published-at"
               />
             </div>
@@ -555,25 +675,30 @@ function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
           <div>
             <label className={labelCls}>Related articles (up to 5)</label>
             {relatedOptions.length === 0 ? (
-              <p className="text-xs text-[#A1A1AA]">{t('noOtherArticles')}</p>
+              <p className="text-xs text-[#A1A1AA]">{t("noOtherArticles")}</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-2">
                 {relatedOptions.map((r) => {
                   const sel = (form.related_ids || []).includes(r.id);
                   return (
-                    <label key={r.id} className={
-                      'flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer border text-sm ' +
-                      (sel
-                        ? 'bg-amber-50 border-amber-400 text-amber-700'
-                        : 'bg-white border-[#E4E4E7] text-[#52525B] hover:border-[#E4E4E7]')
-                    }>
+                    <label
+                      key={r.id}
+                      className={
+                        "flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer border text-sm " +
+                        (sel
+                          ? "bg-amber-50 border-amber-400 text-amber-700"
+                          : "bg-white border-[#E4E4E7] text-[#52525B] hover:border-[#E4E4E7]")
+                      }
+                    >
                       <input
                         type="checkbox"
                         checked={sel}
                         onChange={() => toggleRelated(r.id)}
                         className="accent-amber-500"
                       />
-                      <span className="truncate">{r.title?.en || r.title?.bg || r.slug}</span>
+                      <span className="truncate">
+                        {r.title?.en || r.title?.bg || r.slug}
+                      </span>
                     </label>
                   );
                 })}
@@ -584,20 +709,20 @@ function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
           {/* Publish toggle */}
           <div className="flex items-center gap-3 pt-3 border-t border-[#E4E4E7]">
             <button
-              onClick={() => set('published', !form.published)}
+              onClick={() => set("published", !form.published)}
               className={
-                'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition ' +
+                "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition " +
                 (form.published
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                  : 'bg-[#FAFAFA] hover:bg-[#FAFAFA] text-[#18181B]')
+                  ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                  : "bg-[#FAFAFA] hover:bg-[#FAFAFA] text-[#18181B]")
               }
               data-testid="blog-form-publish-toggle"
             >
               {form.published ? <Eye size={14} /> : <EyeSlash size={14} />}
-              {form.published ? 'Published (live)' : 'Draft (hidden)'}
+              {form.published ? "Published (live)" : "Draft (hidden)"}
             </button>
             <span className="text-xs text-[#A1A1AA]">
-              {t('adm_drafts_are_not_visible_on_the_public_blog_page')}
+              {t("adm_drafts_are_not_visible_on_the_public_blog_page")}
             </span>
           </div>
         </div>
@@ -609,7 +734,7 @@ function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
             className="px-4 py-2 rounded-md bg-[#FAFAFA] hover:bg-[#FAFAFA] text-[#18181B] text-sm"
             disabled={saving}
           >
-            {t('cancelAction')}
+            {t("cancelAction")}
           </button>
           <button
             onClick={() => save()}
@@ -618,7 +743,7 @@ function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
             data-testid="blog-form-save"
           >
             <FloppyDisk size={14} />
-            {saving ? 'Saving…' : (isNew ? 'Create article' : 'Save changes')}
+            {saving ? "Saving…" : isNew ? "Create article" : "Save changes"}
           </button>
         </div>
       </div>
@@ -631,11 +756,11 @@ function ArticleEditorModal({ initial, allItems, onClose, onSaved }) {
 // ─────────────────────────────────────────────────────────────────────────
 function TagsInput({ value, onChange }) {
   const { t } = useLang();
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const tags = Array.isArray(value) ? value : [];
 
   const addTag = (raw) => {
-    const t = (raw || '').trim().slice(0, 40);
+    const t = (raw || "").trim().slice(0, 40);
     if (!t) return;
     const lower = t.toLowerCase();
     if (tags.some((x) => x.toLowerCase() === lower)) return;
@@ -647,20 +772,24 @@ function TagsInput({ value, onChange }) {
   };
 
   const onKeyDown = (e) => {
-    if (e.key === 'Enter' || e.key === ',') {
+    if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       addTag(input);
-      setInput('');
-    } else if (e.key === 'Backspace' && input === '' && tags.length > 0) {
+      setInput("");
+    } else if (e.key === "Backspace" && input === "" && tags.length > 0) {
       removeTag(tags.length - 1);
     }
   };
   const onPaste = (e) => {
-    const txt = e.clipboardData?.getData('text');
+    const txt = e.clipboardData?.getData("text");
     if (txt && /[,\n]/.test(txt)) {
       e.preventDefault();
-      txt.split(/[,\n]/).map((x) => x.trim()).filter(Boolean).forEach(addTag);
-      setInput('');
+      txt
+        .split(/[,\n]/)
+        .map((x) => x.trim())
+        .filter(Boolean)
+        .forEach(addTag);
+      setInput("");
     }
   };
 
@@ -691,8 +820,13 @@ function TagsInput({ value, onChange }) {
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={onKeyDown}
         onPaste={onPaste}
-        onBlur={() => { if (input) { addTag(input); setInput(''); } }}
-        placeholder={tags.length === 0 ? 'salvage, copart, q1 2026…' : ''}
+        onBlur={() => {
+          if (input) {
+            addTag(input);
+            setInput("");
+          }
+        }}
+        placeholder={tags.length === 0 ? "salvage, copart, q1 2026…" : ""}
         className="flex-1 min-w-[120px] bg-transparent outline-none border-0 px-1 py-0 text-sm text-[#18181B] placeholder-[#A1A1AA]"
         data-testid="blog-form-tag-input"
       />

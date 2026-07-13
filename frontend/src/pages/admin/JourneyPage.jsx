@@ -12,9 +12,9 @@
  *     more bordered tile inside a bordered card.
  */
 
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { useLang } from '../../i18n';
+import React, { useState, useEffect } from "react";
+import axios from "axios";
+import { useLang } from "../../i18n";
 import {
   TrendingDown,
   TrendingUp,
@@ -26,30 +26,46 @@ import {
   ArrowDown,
   ChevronRight,
   BarChart3,
-} from 'lucide-react';
-import WhiteSelect from '../../components/ui/WhiteSelect';
-import RefreshButton from '../../components/ui/RefreshButton';
+} from "lucide-react";
+import WhiteSelect from "../../components/ui/WhiteSelect";
+import RefreshButton from "../../components/ui/RefreshButton";
 import {
   AdminPageHeader,
   AdminCard,
   AdminStat,
-} from '../../components/ui/AdminPagePrimitives';
+} from "../../components/ui/AdminPagePrimitives";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 // Stage config with colors and icons
 const STAGE_CONFIG = {
-  NEW_LEAD:        { label: 'New lead',         labelEn: 'New Lead',         color: '#3B82F6' },
-  CONTACT_ATTEMPT: { label: 'Contact',          labelEn: 'Contact',          color: '#8B5CF6' },
-  QUALIFIED:       { label: 'Qualified',        labelEn: 'Qualified',        color: '#6366F1' },
-  CAR_SELECTED:    { label: 'Car Selected',     labelEn: 'Car Selected',     color: '#14B8A6' },
-  NEGOTIATION:     { label: 'Negotiations',     labelEn: 'Negotiation',      color: '#F59E0B' },
-  CONTRACT_SENT:   { label: 'Contract',         labelEn: 'Contract Sent',    color: '#EAB308' },
-  CONTRACT_SIGNED: { label: 'Signed',           labelEn: 'Signed',           color: '#84CC16' },
-  PAYMENT_PENDING: { label: 'Awaiting Payment', labelEn: 'Payment Pending',  color: '#F97316' },
-  PAYMENT_DONE:    { label: 'Paid',             labelEn: 'Paid',             color: '#22C55E' },
-  SHIPPING:        { label: 'Delivery',         labelEn: 'Shipping',         color: '#06B6D4' },
-  DELIVERED:       { label: 'Delivered',        labelEn: 'Delivered',        color: '#10B981' },
+  NEW_LEAD: { label: "New lead", labelEn: "New Lead", color: "#3B82F6" },
+  CONTACT_ATTEMPT: { label: "Contact", labelEn: "Contact", color: "#8B5CF6" },
+  QUALIFIED: { label: "Qualified", labelEn: "Qualified", color: "#6366F1" },
+  CAR_SELECTED: {
+    label: "Car Selected",
+    labelEn: "Car Selected",
+    color: "#14B8A6",
+  },
+  NEGOTIATION: {
+    label: "Negotiations",
+    labelEn: "Negotiation",
+    color: "#F59E0B",
+  },
+  CONTRACT_SENT: {
+    label: "Contract",
+    labelEn: "Contract Sent",
+    color: "#EAB308",
+  },
+  CONTRACT_SIGNED: { label: "Signed", labelEn: "Signed", color: "#84CC16" },
+  PAYMENT_PENDING: {
+    label: "Awaiting Payment",
+    labelEn: "Payment Pending",
+    color: "#F97316",
+  },
+  PAYMENT_DONE: { label: "Paid", labelEn: "Paid", color: "#22C55E" },
+  SHIPPING: { label: "Delivery", labelEn: "Shipping", color: "#06B6D4" },
+  DELIVERED: { label: "Delivered", labelEn: "Delivered", color: "#10B981" },
 };
 
 const STAGE_ORDER = Object.keys(STAGE_CONFIG);
@@ -67,19 +83,23 @@ const JourneyPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const headers = { Authorization: `Bearer ${token}` };
       const [funnelRes, bottlenecksRes, durationsRes] = await Promise.all([
         axios.get(`${API_URL}/api/journey/funnel?days=${period}`, { headers }),
-        axios.get(`${API_URL}/api/journey/bottlenecks?days=${period}`, { headers }),
-        axios.get(`${API_URL}/api/journey/durations?days=${period}`, { headers }),
+        axios.get(`${API_URL}/api/journey/bottlenecks?days=${period}`, {
+          headers,
+        }),
+        axios.get(`${API_URL}/api/journey/durations?days=${period}`, {
+          headers,
+        }),
       ]);
       setFunnelData(funnelRes.data);
       setBottlenecks(bottlenecksRes.data);
       setDurations(durationsRes.data);
     } catch (err) {
-      console.error('Failed to fetch journey data:', err);
-      setError(t('adm2_e0eb0ef25b'));
+      console.error("Failed to fetch journey data:", err);
+      setError(t("adm2_e0eb0ef25b"));
     } finally {
       setLoading(false);
     }
@@ -94,16 +114,18 @@ const JourneyPage = () => {
     ? Math.max(...STAGE_ORDER.map((stage) => funnelData.funnel[stage] || 0), 1)
     : 1;
 
-  const daysWord = lang === 'uk' ? t('adm2_e85d4cee49') : 'days';
+  const daysWord = lang === "uk" ? t("adm2_e85d4cee49") : "days";
 
   return (
     <div className="space-y-4 sm:space-y-5" data-testid="journey-page">
       <AdminPageHeader
         icon={BarChart3}
-        title={t('journeyFunnelTitle') || t('adm2_a1eb607b82') || 'Journey · Funnel'}
-        subtitle={t('journeyFunnelSubtitle') || t('adm2_9ea75dad82')}
+        title={
+          t("journeyFunnelTitle") || t("adm2_a1eb607b82") || "Journey · Funnel"
+        }
+        subtitle={t("journeyFunnelSubtitle") || t("adm2_9ea75dad82")}
         testId="journey-header"
-        actions={(
+        actions={
           <>
             <div className="w-[140px] shrink-0">
               <WhiteSelect
@@ -119,11 +141,11 @@ const JourneyPage = () => {
             <RefreshButton
               onClick={fetchData}
               loading={loading}
-              ariaLabel={lang === 'uk' ? t('adm2_b6bf91f845') : 'Refresh'}
+              ariaLabel={lang === "uk" ? t("adm2_b6bf91f845") : "Refresh"}
               testId="refresh-btn"
             />
           </>
-        )}
+        }
       />
 
       {error && (
@@ -136,23 +158,23 @@ const JourneyPage = () => {
       {funnelData && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3">
           <AdminStat
-            label={lang === 'uk' ? t('adm2_84996f1637') : 'Total deals'}
+            label={lang === "uk" ? t("adm2_84996f1637") : "Total deals"}
             value={funnelData.totalDeals}
             icon={Users}
           />
           <AdminStat
-            label={lang === 'uk' ? t('adm2_f5cce37a63') : 'Delivered'}
+            label={lang === "uk" ? t("adm2_f5cce37a63") : "Delivered"}
             value={funnelData.delivered}
             icon={Target}
             tone="positive"
           />
           <AdminStat
-            label={lang === 'uk' ? t('adm2_b7e8aa2f85') : 'Conversion'}
+            label={lang === "uk" ? t("adm2_b7e8aa2f85") : "Conversion"}
             value={`${funnelData.conversionRate}%`}
             icon={TrendingUp}
           />
           <AdminStat
-            label={lang === 'uk' ? t('adm2_417bbb12ec') : 'Period'}
+            label={lang === "uk" ? t("adm2_417bbb12ec") : "Period"}
             value={`${period}d`}
             icon={Clock}
           />
@@ -163,7 +185,7 @@ const JourneyPage = () => {
         {/* ── Main funnel ── */}
         <AdminCard className="lg:col-span-2">
           <h2 className="text-[14.5px] font-semibold text-[#18181B] mb-4">
-            {lang === 'uk' ? t('adm2_a1eb607b82') : 'Sales Funnel'}
+            {lang === "uk" ? t("adm2_a1eb607b82") : "Sales Funnel"}
           </h2>
 
           {loading ? (
@@ -176,14 +198,16 @@ const JourneyPage = () => {
                 const config = STAGE_CONFIG[stage];
                 const value = funnelData.funnel[stage] || 0;
                 const percentage = (value / maxFunnelValue) * 100;
-                const dropOff = funnelData.dropOff?.find((d) => d.from === stage);
+                const dropOff = funnelData.dropOff?.find(
+                  (d) => d.from === stage,
+                );
 
                 return (
                   <div key={stage} className="relative">
                     {/* Label row */}
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <span className="text-[12px] text-[#3F3F46] font-medium truncate">
-                        {lang === 'uk' ? config.label : config.labelEn}
+                        {lang === "uk" ? config.label : config.labelEn}
                       </span>
                       {dropOff && dropOff.rate > 0 && (
                         <span className="inline-flex items-center gap-1 text-[11px] text-rose-600 shrink-0">
@@ -201,7 +225,9 @@ const JourneyPage = () => {
                           backgroundColor: config.color,
                         }}
                       >
-                        <span className="text-white font-semibold text-[12.5px] tabular-nums">{value}</span>
+                        <span className="text-white font-semibold text-[12.5px] tabular-nums">
+                          {value}
+                        </span>
                       </div>
                     </div>
                     {idx < STAGE_ORDER.length - 1 && (
@@ -215,7 +241,7 @@ const JourneyPage = () => {
             </div>
           ) : (
             <div className="text-center text-[#71717A] py-12 text-[13px]">
-              {lang === 'uk' ? t('adm2_ab301504ad') : 'No data available'}
+              {lang === "uk" ? t("adm2_ab301504ad") : "No data available"}
             </div>
           )}
         </AdminCard>
@@ -226,7 +252,7 @@ const JourneyPage = () => {
           <AdminCard>
             <h3 className="text-[14.5px] font-semibold text-[#18181B] mb-3 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-500" />
-              {lang === 'uk' ? t('adm2_b7a51b5fa5') : 'Bottlenecks'}
+              {lang === "uk" ? t("adm2_b7a51b5fa5") : "Bottlenecks"}
             </h3>
 
             {bottlenecks.length > 0 ? (
@@ -239,15 +265,19 @@ const JourneyPage = () => {
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 text-[12px] min-w-0 flex-wrap">
                         <span className="text-[#3F3F46] truncate">
-                          {lang === 'uk'
-                            ? STAGE_CONFIG[bottleneck.from]?.label || bottleneck.from
-                            : STAGE_CONFIG[bottleneck.from]?.labelEn || bottleneck.from}
+                          {lang === "uk"
+                            ? STAGE_CONFIG[bottleneck.from]?.label ||
+                              bottleneck.from
+                            : STAGE_CONFIG[bottleneck.from]?.labelEn ||
+                              bottleneck.from}
                         </span>
                         <ChevronRight className="w-3.5 h-3.5 text-[#A1A1AA] shrink-0" />
                         <span className="text-[#3F3F46] truncate">
-                          {lang === 'uk'
-                            ? STAGE_CONFIG[bottleneck.to]?.label || bottleneck.to
-                            : STAGE_CONFIG[bottleneck.to]?.labelEn || bottleneck.to}
+                          {lang === "uk"
+                            ? STAGE_CONFIG[bottleneck.to]?.label ||
+                              bottleneck.to
+                            : STAGE_CONFIG[bottleneck.to]?.labelEn ||
+                              bottleneck.to}
                         </span>
                       </div>
                       <span className="text-amber-600 font-bold text-[13px] shrink-0 tabular-nums">
@@ -255,14 +285,17 @@ const JourneyPage = () => {
                       </span>
                     </div>
                     <p className="text-[#71717A] text-[11px] mt-1">
-                      {bottleneck.count} {lang === 'uk' ? t('adm2_16ff386eac') : 'dropped'}
+                      {bottleneck.count}{" "}
+                      {lang === "uk" ? t("adm2_16ff386eac") : "dropped"}
                     </p>
                   </div>
                 ))}
               </div>
             ) : (
               <p className="text-[#71717A] text-[12.5px]">
-                {lang === 'uk' ? t('adm2_ca211dffd9') : 'No bottlenecks detected'}
+                {lang === "uk"
+                  ? t("adm2_ca211dffd9")
+                  : "No bottlenecks detected"}
               </p>
             )}
           </AdminCard>
@@ -271,28 +304,43 @@ const JourneyPage = () => {
           <AdminCard>
             <h3 className="text-[14.5px] font-semibold text-[#18181B] mb-3 flex items-center gap-2">
               <Clock className="w-4 h-4 text-[#3B82F6]" />
-              {lang === 'uk' ? t('adm2_7f869d6855') : 'Average durations'}
+              {lang === "uk" ? t("adm2_7f869d6855") : "Average durations"}
             </h3>
 
             {durations?.averages ? (
               <div className="space-y-1.5" data-testid="durations-list">
                 {Object.entries(durations.averages)
-                  .filter(([key]) => key !== 'totalJourneyDays')
+                  .filter(([key]) => key !== "totalJourneyDays")
                   .map(([key, value]) => {
                     const labels = {
-                      daysToContact:  { uk: t('adm2_ab3d02bdd5'), en: 'To Contact' },
-                      daysToDeal:     { uk: t('adm2_4ef7753310'), en: 'To Deal' },
-                      daysToContract: { uk: t('adm2_fd62458163'), en: 'To Contract' },
-                      daysToPayment:  { uk: t('adm2_bb331725a4'), en: 'To Payment' },
-                      daysToDelivery: { uk: t('adm2_5fb668924c'), en: 'To Delivery' },
+                      daysToContact: {
+                        uk: t("adm2_ab3d02bdd5"),
+                        en: "To Contact",
+                      },
+                      daysToDeal: { uk: t("adm2_4ef7753310"), en: "To Deal" },
+                      daysToContract: {
+                        uk: t("adm2_fd62458163"),
+                        en: "To Contract",
+                      },
+                      daysToPayment: {
+                        uk: t("adm2_bb331725a4"),
+                        en: "To Payment",
+                      },
+                      daysToDelivery: {
+                        uk: t("adm2_5fb668924c"),
+                        en: "To Delivery",
+                      },
                     };
-                    const label = labels[key]?.[lang === 'uk' ? 'uk' : 'en'] || key;
+                    const label =
+                      labels[key]?.[lang === "uk" ? "uk" : "en"] || key;
                     return (
                       <div
                         key={key}
                         className="flex items-center justify-between py-1.5 border-b border-[#F4F4F5]"
                       >
-                        <span className="text-[12px] text-[#52525B]">{label}</span>
+                        <span className="text-[12px] text-[#52525B]">
+                          {label}
+                        </span>
                         <span className="text-[12.5px] text-[#18181B] font-medium tabular-nums">
                           {value} {daysWord}
                         </span>
@@ -301,20 +349,21 @@ const JourneyPage = () => {
                   })}
                 <div className="flex items-center justify-between pt-3 mt-2 border-t border-[#E4E4E7]">
                   <span className="text-[12.5px] text-[#18181B] font-semibold">
-                    {lang === 'uk' ? t('adm2_1169cb90da') : 'Total journey'}
+                    {lang === "uk" ? t("adm2_1169cb90da") : "Total journey"}
                   </span>
                   <span className="text-[14px] text-[#18181B] font-bold tabular-nums">
                     {durations.averages.totalJourneyDays} {daysWord}
                   </span>
                 </div>
                 <p className="text-[#A1A1AA] text-[11px] mt-2">
-                  {lang === 'uk' ? t('adm2_ed4ce0d0aa') : 'Based on'}{' '}
-                  {durations.count} {lang === 'uk' ? t('adm2_619f8896d0') : 'completed deals'}
+                  {lang === "uk" ? t("adm2_ed4ce0d0aa") : "Based on"}{" "}
+                  {durations.count}{" "}
+                  {lang === "uk" ? t("adm2_619f8896d0") : "completed deals"}
                 </p>
               </div>
             ) : (
               <p className="text-[#71717A] text-[12.5px]">
-                {lang === 'uk' ? t('adm2_e776bd6252') : 'Not enough data'}
+                {lang === "uk" ? t("adm2_e776bd6252") : "Not enough data"}
               </p>
             )}
           </AdminCard>

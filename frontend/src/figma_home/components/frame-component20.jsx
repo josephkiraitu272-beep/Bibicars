@@ -15,7 +15,7 @@ import { useLang } from "../../i18n";
 import useInView from "../../components/useInView";
 import styles from "./frame-component20.module.css";
 
-const API = process.env.REACT_APP_BACKEND_URL || "";
+const API = "https://backend-production-ae6d.up.railway.app";
 
 /**
  * Vehicle types — kept 1:1 in sync with /pages/public/CalculatorPage.js
@@ -24,11 +24,41 @@ const API = process.env.REACT_APP_BACKEND_URL || "";
  * so the result-set across Welcome / Calculator / Catalog matches.
  */
 const VEHICLE_TYPES = [
-  { id: "motorbike", icon: "/figma/calc/veh-motorbike.png", alt_en: "Motorbike", alt_bg: "Мотоциклет", apiType: "motorcycle" },
-  { id: "sedan",     icon: "/figma/calc/veh-sedan.png",     alt_en: "Sedan",     alt_bg: "Седан",      apiType: "sedan" },
-  { id: "suv",       icon: "/figma/calc/veh-suv.png",       alt_en: "SUV",       alt_bg: "Джип",       apiType: "suv" },
-  { id: "pickup",    icon: "/figma/calc/veh-pickup.png",    alt_en: "Pick-up",   alt_bg: "Пикап",      apiType: "pickup" },
-  { id: "van",       icon: "/figma/calc/veh-van.png",       alt_en: "Van",       alt_bg: "Ван",        apiType: "bigSUV" },
+  {
+    id: "motorbike",
+    icon: "/figma/calc/veh-motorbike.png",
+    alt_en: "Motorbike",
+    alt_bg: "Мотоциклет",
+    apiType: "motorcycle",
+  },
+  {
+    id: "sedan",
+    icon: "/figma/calc/veh-sedan.png",
+    alt_en: "Sedan",
+    alt_bg: "Седан",
+    apiType: "sedan",
+  },
+  {
+    id: "suv",
+    icon: "/figma/calc/veh-suv.png",
+    alt_en: "SUV",
+    alt_bg: "Джип",
+    apiType: "suv",
+  },
+  {
+    id: "pickup",
+    icon: "/figma/calc/veh-pickup.png",
+    alt_en: "Pick-up",
+    alt_bg: "Пикап",
+    apiType: "pickup",
+  },
+  {
+    id: "van",
+    icon: "/figma/calc/veh-van.png",
+    alt_en: "Van",
+    alt_bg: "Ван",
+    apiType: "bigSUV",
+  },
 ];
 /* Price-tier labels mapped to the numeric range (in EUR — matches the
  * displayed card pricing). Sent to `/api/public/vehicles` as
@@ -55,7 +85,8 @@ const FrameComponent20 = ({ className = "", onChange, countOverride }) => {
   const selectVehicle = (id) => {
     setVehicle(id);
     const apiType = VEHICLE_TYPES.find((v) => v.id === id)?.apiType;
-    if (typeof onChange === "function") onChange({ vehicleId: id, apiType, tier: tierLabel });
+    if (typeof onChange === "function")
+      onChange({ vehicleId: id, apiType, tier: tierLabel });
   };
 
   /* ── Real proposals count ────────────────────────────────────────
@@ -98,9 +129,12 @@ const FrameComponent20 = ({ className = "", onChange, countOverride }) => {
   /* Render count safely: dash while loading, otherwise the real number.
    * Prefer the parent-supplied `countOverride` so the counter mirrors
    * exactly what the curated wishlist grid renders. */
-  const countLabel = countOverride != null
-    ? String(countOverride)
-    : (count == null ? "—" : String(count));
+  const countLabel =
+    countOverride != null
+      ? String(countOverride)
+      : count == null
+        ? "—"
+        : String(count);
 
   /* Site-wide reveal: animate the chips + counter when the filter row
    * scrolls into view. Uses the same `data-stagger` + `is-visible`
@@ -111,12 +145,28 @@ const FrameComponent20 = ({ className = "", onChange, countOverride }) => {
   return (
     <section
       ref={rowRef}
-      className={[styles.frameWrapper, className, rowInView ? "is-visible" : ""].join(" ")}
+      className={[
+        styles.frameWrapper,
+        className,
+        rowInView ? "is-visible" : "",
+      ].join(" ")}
     >
-      <div className={styles.frameParent} data-stagger="80" style={{ "--stagger-step": "120ms" }}>
-        <div className={styles.frameGroup} data-stagger="80" style={{ "--stagger-step": "80ms" }}>
+      <div
+        className={styles.frameParent}
+        data-stagger="80"
+        style={{ "--stagger-step": "120ms" }}
+      >
+        <div
+          className={styles.frameGroup}
+          data-stagger="80"
+          style={{ "--stagger-step": "80ms" }}
+        >
           {/* Vehicle type segmented control — 5 PNG icons (calculator parity) */}
-          <div className={styles.segment} role="tablist" aria-label={isBg ? "Тип превозно средство" : "Vehicle type"}>
+          <div
+            className={styles.segment}
+            role="tablist"
+            aria-label={isBg ? "Тип превозно средство" : "Vehicle type"}
+          >
             {VEHICLE_TYPES.map(({ id, icon, alt_en, alt_bg }) => {
               const altLabel = isBg ? alt_bg : alt_en;
               return (
@@ -146,7 +196,11 @@ const FrameComponent20 = ({ className = "", onChange, countOverride }) => {
           </div>
 
           {/* Price tier segmented control */}
-          <div className={styles.segment} role="tablist" aria-label={isBg ? "Ценови диапазон" : "Price range"}>
+          <div
+            className={styles.segment}
+            role="tablist"
+            aria-label={isBg ? "Ценови диапазон" : "Price range"}
+          >
             {PRICE_TIERS.map((p) => (
               <button
                 key={p.label}
@@ -156,8 +210,11 @@ const FrameComponent20 = ({ className = "", onChange, countOverride }) => {
                 className={`${styles.tierBtn} ${tierLabel === p.label ? styles.tierBtnActive : ""}`}
                 onClick={() => {
                   setTierLabel(p.label);
-                  const apiType = VEHICLE_TYPES.find((v) => v.id === vehicle)?.apiType;
-                  if (typeof onChange === "function") onChange({ vehicleId: vehicle, apiType, tier: p.label });
+                  const apiType = VEHICLE_TYPES.find(
+                    (v) => v.id === vehicle,
+                  )?.apiType;
+                  if (typeof onChange === "function")
+                    onChange({ vehicleId: vehicle, apiType, tier: p.label });
                 }}
               >
                 {p.label}
@@ -175,7 +232,9 @@ const FrameComponent20 = ({ className = "", onChange, countOverride }) => {
             <span className={styles.proposalsLabel}>
               {isBg ? "оферти" : "proposals"}
             </span>
-            <span className={styles.proposalsSep} aria-hidden="true">-</span>
+            <span className={styles.proposalsSep} aria-hidden="true">
+              -
+            </span>
             <span className={styles.proposalsCount}>{countLabel}</span>
           </div>
         </div>

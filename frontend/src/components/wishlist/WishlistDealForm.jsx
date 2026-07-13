@@ -14,60 +14,108 @@
  *   - compact?:   boolean          компактный layout для модала (без обёрточной карточки)
  *   - showCancel?: boolean         показать кнопку Cancel (для модала)
  */
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { toast } from 'sonner';
-import { useLang } from '../../i18n';
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import { useLang } from "../../i18n";
 import {
   Plus,
   MagnifyingGlass,
   Car,
   CaretRight,
   Sparkle,
-} from '@phosphor-icons/react';
+} from "@phosphor-icons/react";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 // Localized UI chrome for the wishlist builder. Supported languages: en / uk / bg
 // (no Russian). Vehicle category names are kept as-is (universal/technical).
 const L = {
-  new_pick:      { en: 'New curated pick',        uk: 'Нова кураторська позиція',  bg: 'Нова селекция' },
-  category:      { en: 'Category',                uk: 'Категорія',                 bg: 'Категория' },
-  budget:        { en: 'Budget',                  uk: 'Бюджет',                    bg: 'Бюджет' },
-  week:          { en: 'Week',                    uk: 'Тиждень',                   bg: 'Седмица' },
-  this_week:     { en: 'This week',               uk: 'Цей тиждень',               bg: 'Тази седмица' },
-  next_week:     { en: 'Next week',               uk: 'Наступний тиждень',         bg: 'Следваща седмица' },
-  vehicle_vin:   { en: 'Vehicle (VIN)',           uk: 'Автомобіль (VIN)',          bg: 'Автомобил (VIN)' },
-  vin_ph:        { en: 'Enter VIN, lot # or year/make/model', uk: 'Введіть VIN, № лоту або рік/марку/модель', bg: 'Въведете VIN, № лот или година/марка/модел' },
-  note_opt:      { en: 'Note (optional)',         uk: 'Нотатка (необов’язково)',   bg: 'Бележка (по избор)' },
-  note_ph:       { en: 'Why is this a great deal?', uk: 'Чому це вигідна пропозиція?', bg: 'Защо това е изгодна оферта?' },
-  submit_hint:   { en: 'Submission goes to team-lead for approval.', uk: 'Заявка надсилається тимліду на підтвердження.', bg: 'Заявката отива при тийм-лийда за одобрение.' },
-  cancel:        { en: 'Cancel',                  uk: 'Скасувати',                 bg: 'Отказ' },
-  submit:        { en: 'Submit for approval',     uk: 'Надіслати на підтвердження', bg: 'Изпрати за одобрение' },
-  submitting:    { en: 'Submitting…',             uk: 'Надсилання…',               bg: 'Изпращане…' },
-  vin_required:  { en: 'VIN is required',         uk: 'Потрібен VIN',              bg: 'Изисква се VIN' },
-  created_ok:    { en: 'Wishlist card created — pending team-lead approval', uk: 'Картку створено — очікує підтвердження тимліда', bg: 'Картата е създадена — очаква одобрение от тийм-лийда' },
-  create_failed: { en: 'Failed to create',        uk: 'Не вдалося створити',       bg: 'Неуспешно създаване' },
-  lot:           { en: 'Lot',                     uk: 'Лот',                       bg: 'Лот' },
+  new_pick: {
+    en: "New curated pick",
+    uk: "Нова кураторська позиція",
+    bg: "Нова селекция",
+  },
+  category: { en: "Category", uk: "Категорія", bg: "Категория" },
+  budget: { en: "Budget", uk: "Бюджет", bg: "Бюджет" },
+  week: { en: "Week", uk: "Тиждень", bg: "Седмица" },
+  this_week: { en: "This week", uk: "Цей тиждень", bg: "Тази седмица" },
+  next_week: {
+    en: "Next week",
+    uk: "Наступний тиждень",
+    bg: "Следваща седмица",
+  },
+  vehicle_vin: {
+    en: "Vehicle (VIN)",
+    uk: "Автомобіль (VIN)",
+    bg: "Автомобил (VIN)",
+  },
+  vin_ph: {
+    en: "Enter VIN, lot # or year/make/model",
+    uk: "Введіть VIN, № лоту або рік/марку/модель",
+    bg: "Въведете VIN, № лот или година/марка/модел",
+  },
+  note_opt: {
+    en: "Note (optional)",
+    uk: "Нотатка (необов’язково)",
+    bg: "Бележка (по избор)",
+  },
+  note_ph: {
+    en: "Why is this a great deal?",
+    uk: "Чому це вигідна пропозиція?",
+    bg: "Защо това е изгодна оферта?",
+  },
+  submit_hint: {
+    en: "Submission goes to team-lead for approval.",
+    uk: "Заявка надсилається тимліду на підтвердження.",
+    bg: "Заявката отива при тийм-лийда за одобрение.",
+  },
+  cancel: { en: "Cancel", uk: "Скасувати", bg: "Отказ" },
+  submit: {
+    en: "Submit for approval",
+    uk: "Надіслати на підтвердження",
+    bg: "Изпрати за одобрение",
+  },
+  submitting: { en: "Submitting…", uk: "Надсилання…", bg: "Изпращане…" },
+  vin_required: {
+    en: "VIN is required",
+    uk: "Потрібен VIN",
+    bg: "Изисква се VIN",
+  },
+  created_ok: {
+    en: "Wishlist card created — pending team-lead approval",
+    uk: "Картку створено — очікує підтвердження тимліда",
+    bg: "Картата е създадена — очаква одобрение от тийм-лийда",
+  },
+  create_failed: {
+    en: "Failed to create",
+    uk: "Не вдалося створити",
+    bg: "Неуспешно създаване",
+  },
+  lot: { en: "Lot", uk: "Лот", bg: "Лот" },
 };
 
 const CATEGORIES = [
-  { id: 'motorbike', label: 'Motorbike', icon: '/figma/calc/veh-motorbike.png' },
-  { id: 'sedan',     label: 'Sedan',     icon: '/figma/calc/veh-sedan.png' },
-  { id: 'suv',       label: 'SUV',       icon: '/figma/calc/veh-suv.png' },
-  { id: 'pickup',    label: 'Pick-up',   icon: '/figma/calc/veh-pickup.png' },
-  { id: 'van',       label: 'Van',       icon: '/figma/calc/veh-van.png' },
+  {
+    id: "motorbike",
+    label: "Motorbike",
+    icon: "/figma/calc/veh-motorbike.png",
+  },
+  { id: "sedan", label: "Sedan", icon: "/figma/calc/veh-sedan.png" },
+  { id: "suv", label: "SUV", icon: "/figma/calc/veh-suv.png" },
+  { id: "pickup", label: "Pick-up", icon: "/figma/calc/veh-pickup.png" },
+  { id: "van", label: "Van", icon: "/figma/calc/veh-van.png" },
 ];
 
 const BUDGETS = [
-  { id: '10-15K', label: '10–15K' },
-  { id: '15-25K', label: '15–25K' },
-  { id: '30-50K', label: '30–50K' },
+  { id: "10-15K", label: "10–15K" },
+  { id: "15-25K", label: "15–25K" },
+  { id: "30-50K", label: "30–50K" },
 ];
 
 const WEEKS = [
-  { id: 'current', label: 'This week' },
-  { id: 'next',    label: 'Next week' },
+  { id: "current", label: "This week" },
+  { id: "next", label: "Next week" },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -81,7 +129,7 @@ function VinAutocomplete({ value, onChange, onSelect }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const q = (value || '').trim();
+    const q = (value || "").trim();
     if (q.length < 3) {
       setResults([]);
       return;
@@ -107,14 +155,17 @@ function VinAutocomplete({ value, onChange, onSelect }) {
   return (
     <div className="relative">
       <div className="relative">
-        <MagnifyingGlass size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#71717A]" />
+        <MagnifyingGlass
+          size={18}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-[#71717A]"
+        />
         <input
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value.toUpperCase())}
           onFocus={() => results.length && setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 180)}
-          placeholder={tr('vin_ph')}
+          placeholder={tr("vin_ph")}
           data-testid="wishlist-vin-input"
           className="w-full pl-10 pr-4 py-2.5 border border-[#E4E4E7] rounded-xl text-sm focus:outline-none focus:border-[#18181B]"
         />
@@ -133,7 +184,11 @@ function VinAutocomplete({ value, onChange, onSelect }) {
               className="w-full text-left px-3 py-2.5 hover:bg-[#FAFAFA] flex items-center gap-3 border-b border-[#F4F4F5] last:border-b-0"
             >
               {r.image ? (
-                <img src={r.image} alt={r.vin} className="w-14 h-10 object-cover rounded bg-[#F4F4F5]" />
+                <img
+                  src={r.image}
+                  alt={r.vin}
+                  className="w-14 h-10 object-cover rounded bg-[#F4F4F5]"
+                />
               ) : (
                 <div className="w-14 h-10 rounded bg-[#F4F4F5] flex items-center justify-center">
                   <Car size={16} className="text-[#A1A1AA]" />
@@ -141,10 +196,13 @@ function VinAutocomplete({ value, onChange, onSelect }) {
               )}
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-[#18181B] truncate">
-                  {[r.year, r.make, r.model].filter(Boolean).join(' ') || r.title || r.vin}
+                  {[r.year, r.make, r.model].filter(Boolean).join(" ") ||
+                    r.title ||
+                    r.vin}
                 </div>
                 <div className="text-xs text-[#71717A] truncate">
-                  VIN: {r.vin}{r.lot_number ? ` · ${tr('lot')} ${r.lot_number}` : ''}
+                  VIN: {r.vin}
+                  {r.lot_number ? ` · ${tr("lot")} ${r.lot_number}` : ""}
                 </div>
               </div>
               <CaretRight size={14} className="text-[#A1A1AA] flex-shrink-0" />
@@ -153,7 +211,9 @@ function VinAutocomplete({ value, onChange, onSelect }) {
         </div>
       )}
       {loading && (
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#71717A]">…</div>
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#71717A]">
+          …
+        </div>
       )}
     </div>
   );
@@ -162,65 +222,79 @@ function VinAutocomplete({ value, onChange, onSelect }) {
 /* ------------------------------------------------------------------ */
 /*  Form                                                               */
 /* ------------------------------------------------------------------ */
-const WishlistDealForm = ({ onCreated, onCancel, compact = false, showCancel = false }) => {
+const WishlistDealForm = ({
+  onCreated,
+  onCancel,
+  compact = false,
+  showCancel = false,
+}) => {
   const { lang } = useLang();
   const tr = (k) => (L[k] && (L[k][lang] || L[k].en)) || k;
-  const [category, setCategory] = useState('sedan');
-  const [budget, setBudget] = useState('10-15K');
-  const [week, setWeek] = useState('current');
-  const [vin, setVin] = useState('');
-  const [note, setNote] = useState('');
+  const [category, setCategory] = useState("sedan");
+  const [budget, setBudget] = useState("10-15K");
+  const [week, setWeek] = useState("current");
+  const [vin, setVin] = useState("");
+  const [note, setNote] = useState("");
   const [selectedSnapshot, setSelectedSnapshot] = useState(null);
   const [creating, setCreating] = useState(false);
 
   const reset = () => {
-    setVin('');
-    setNote('');
+    setVin("");
+    setNote("");
     setSelectedSnapshot(null);
   };
 
   const handleSubmit = async (e) => {
     e?.preventDefault?.();
     if (!vin.trim()) {
-      toast.error(tr('vin_required'));
+      toast.error(tr("vin_required"));
       return;
     }
     setCreating(true);
     try {
-      const { data } = await axios.post(`${API_URL}/api/manager/wishlist-deals`, {
-        vin: vin.trim().toUpperCase(),
-        category,
-        budget,
-        week,
-        note: note.trim() || undefined,
-      });
-      toast.success(tr('created_ok'));
+      const { data } = await axios.post(
+        `${API_URL}/api/manager/wishlist-deals`,
+        {
+          vin: vin.trim().toUpperCase(),
+          category,
+          budget,
+          week,
+          note: note.trim() || undefined,
+        },
+      );
+      toast.success(tr("created_ok"));
       reset();
-      if (typeof onCreated === 'function') onCreated(data);
+      if (typeof onCreated === "function") onCreated(data);
     } catch (err) {
-      toast.error(err?.response?.data?.detail || tr('create_failed'));
+      toast.error(err?.response?.data?.detail || tr("create_failed"));
     } finally {
       setCreating(false);
     }
   };
 
   const wrapperClass = compact
-    ? 'space-y-5'
-    : 'bg-white rounded-2xl border border-[#E4E4E7] p-5 sm:p-6 space-y-5';
+    ? "space-y-5"
+    : "bg-white rounded-2xl border border-[#E4E4E7] p-5 sm:p-6 space-y-5";
 
   return (
-    <form onSubmit={handleSubmit} className={wrapperClass} data-testid="wishlist-builder-form">
+    <form
+      onSubmit={handleSubmit}
+      className={wrapperClass}
+      data-testid="wishlist-builder-form"
+    >
       {!compact && (
         <div className="flex items-center gap-2">
           <Sparkle size={18} className="text-amber-500" weight="fill" />
-          <h2 className="text-lg font-semibold text-[#18181B]">{tr('new_pick')}</h2>
+          <h2 className="text-lg font-semibold text-[#18181B]">
+            {tr("new_pick")}
+          </h2>
         </div>
       )}
 
       {/* Category */}
       <div>
         <label className="text-xs font-semibold uppercase tracking-wider text-[#71717A] mb-2 block">
-          {tr('category')}
+          {tr("category")}
         </label>
         <div className="flex flex-wrap gap-2" role="radiogroup">
           {CATEGORIES.map((c) => (
@@ -233,8 +307,8 @@ const WishlistDealForm = ({ onCreated, onCancel, compact = false, showCancel = f
               data-testid={`wishlist-cat-${c.id}`}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-medium transition ${
                 category === c.id
-                  ? 'bg-amber-400 text-[#18181B] border-amber-400'
-                  : 'bg-white text-[#18181B] border-[#E4E4E7] hover:border-[#A1A1AA]'
+                  ? "bg-amber-400 text-[#18181B] border-amber-400"
+                  : "bg-white text-[#18181B] border-[#E4E4E7] hover:border-[#A1A1AA]"
               }`}
             >
               <span
@@ -242,16 +316,16 @@ const WishlistDealForm = ({ onCreated, onCancel, compact = false, showCancel = f
                 style={{
                   width: 18,
                   height: 18,
-                  backgroundColor: 'currentColor',
+                  backgroundColor: "currentColor",
                   WebkitMaskImage: `url(${c.icon})`,
                   maskImage: `url(${c.icon})`,
-                  WebkitMaskRepeat: 'no-repeat',
-                  maskRepeat: 'no-repeat',
-                  WebkitMaskPosition: 'center',
-                  maskPosition: 'center',
-                  WebkitMaskSize: 'contain',
-                  maskSize: 'contain',
-                  display: 'inline-block',
+                  WebkitMaskRepeat: "no-repeat",
+                  maskRepeat: "no-repeat",
+                  WebkitMaskPosition: "center",
+                  maskPosition: "center",
+                  WebkitMaskSize: "contain",
+                  maskSize: "contain",
+                  display: "inline-block",
                 }}
               />
               {c.label}
@@ -264,7 +338,7 @@ const WishlistDealForm = ({ onCreated, onCancel, compact = false, showCancel = f
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div>
           <label className="text-xs font-semibold uppercase tracking-wider text-[#71717A] mb-2 block">
-            {tr('budget')}
+            {tr("budget")}
           </label>
           <div className="flex gap-2" role="radiogroup">
             {BUDGETS.map((b) => (
@@ -277,8 +351,8 @@ const WishlistDealForm = ({ onCreated, onCancel, compact = false, showCancel = f
                 data-testid={`wishlist-bud-${b.id}`}
                 className={`flex-1 px-4 py-2 rounded-xl border text-sm font-semibold transition ${
                   budget === b.id
-                    ? 'bg-amber-400 text-[#18181B] border-amber-400'
-                    : 'bg-white text-[#18181B] border-[#E4E4E7] hover:border-[#A1A1AA]'
+                    ? "bg-amber-400 text-[#18181B] border-amber-400"
+                    : "bg-white text-[#18181B] border-[#E4E4E7] hover:border-[#A1A1AA]"
                 }`}
               >
                 {b.label}
@@ -288,7 +362,7 @@ const WishlistDealForm = ({ onCreated, onCancel, compact = false, showCancel = f
         </div>
         <div>
           <label className="text-xs font-semibold uppercase tracking-wider text-[#71717A] mb-2 block">
-            {tr('week')}
+            {tr("week")}
           </label>
           <div className="flex gap-2" role="radiogroup">
             {WEEKS.map((w) => (
@@ -300,11 +374,11 @@ const WishlistDealForm = ({ onCreated, onCancel, compact = false, showCancel = f
                 onClick={() => setWeek(w.id)}
                 className={`flex-1 px-4 py-2 rounded-xl border text-sm font-semibold transition ${
                   week === w.id
-                    ? 'bg-[#18181B] text-white border-[#18181B]'
-                    : 'bg-white text-[#18181B] border-[#E4E4E7] hover:border-[#A1A1AA]'
+                    ? "bg-[#18181B] text-white border-[#18181B]"
+                    : "bg-white text-[#18181B] border-[#E4E4E7] hover:border-[#A1A1AA]"
                 }`}
               >
-                {tr(w.id === 'current' ? 'this_week' : 'next_week')}
+                {tr(w.id === "current" ? "this_week" : "next_week")}
               </button>
             ))}
           </div>
@@ -314,7 +388,7 @@ const WishlistDealForm = ({ onCreated, onCancel, compact = false, showCancel = f
       {/* VIN */}
       <div>
         <label className="text-xs font-semibold uppercase tracking-wider text-[#71717A] mb-2 block">
-          {tr('vehicle_vin')}
+          {tr("vehicle_vin")}
         </label>
         <VinAutocomplete
           value={vin}
@@ -323,7 +397,7 @@ const WishlistDealForm = ({ onCreated, onCancel, compact = false, showCancel = f
             setSelectedSnapshot(null);
           }}
           onSelect={(r) => {
-            setVin(r.vin || '');
+            setVin(r.vin || "");
             setSelectedSnapshot(r);
           }}
         />
@@ -338,13 +412,22 @@ const WishlistDealForm = ({ onCreated, onCancel, compact = false, showCancel = f
             )}
             <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold text-[#18181B] truncate">
-                {[selectedSnapshot.year, selectedSnapshot.make, selectedSnapshot.model]
-                  .filter(Boolean).join(' ') || selectedSnapshot.title}
+                {[
+                  selectedSnapshot.year,
+                  selectedSnapshot.make,
+                  selectedSnapshot.model,
+                ]
+                  .filter(Boolean)
+                  .join(" ") || selectedSnapshot.title}
               </div>
               <div className="text-xs text-[#71717A] truncate">
                 VIN: {selectedSnapshot.vin}
-                {selectedSnapshot.lot_number ? ` · ${tr('lot')} ${selectedSnapshot.lot_number}` : ''}
-                {selectedSnapshot.auction_name ? ` · ${selectedSnapshot.auction_name}` : ''}
+                {selectedSnapshot.lot_number
+                  ? ` · ${tr("lot")} ${selectedSnapshot.lot_number}`
+                  : ""}
+                {selectedSnapshot.auction_name
+                  ? ` · ${selectedSnapshot.auction_name}`
+                  : ""}
               </div>
             </div>
           </div>
@@ -354,21 +437,19 @@ const WishlistDealForm = ({ onCreated, onCancel, compact = false, showCancel = f
       {/* Note */}
       <div>
         <label className="text-xs font-semibold uppercase tracking-wider text-[#71717A] mb-2 block">
-          {tr('note_opt')}
+          {tr("note_opt")}
         </label>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder={tr('note_ph')}
+          placeholder={tr("note_ph")}
           rows={2}
           className="w-full px-3 py-2 border border-[#E4E4E7] rounded-xl text-sm focus:outline-none focus:border-[#18181B] resize-none"
         />
       </div>
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <span className="text-xs text-[#71717A]">
-          {tr('submit_hint')}
-        </span>
+        <span className="text-xs text-[#71717A]">{tr("submit_hint")}</span>
         <div className="flex items-center gap-2">
           {showCancel && (
             <button
@@ -376,7 +457,7 @@ const WishlistDealForm = ({ onCreated, onCancel, compact = false, showCancel = f
               onClick={onCancel}
               className="px-4 py-2.5 rounded-xl bg-white border border-[#E4E4E7] text-[#18181B] text-sm font-medium hover:bg-[#F4F4F5]"
             >
-              {tr('cancel')}
+              {tr("cancel")}
             </button>
           )}
           <button
@@ -386,7 +467,7 @@ const WishlistDealForm = ({ onCreated, onCancel, compact = false, showCancel = f
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-400 text-[#18181B] font-semibold hover:bg-amber-300 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
             <Plus size={16} weight="bold" />
-            {creating ? tr('submitting') : tr('submit')}
+            {creating ? tr("submitting") : tr("submit")}
           </button>
         </div>
       </div>

@@ -14,30 +14,57 @@
  *   - Desktop (md+): full data table
  *   - Mobile (<md): vertical cards, one per provider, every metric stacked
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
-import { toast } from 'sonner';
-import { useLang } from '../../i18n';
-import ControlSubNav from '../../components/admin/ControlSubNav';
-import ControlPageHeader from '../../components/admin/ControlPageHeader';
-import RefreshButton from '../../components/ui/RefreshButton';
-import {
-  Gauge,
-  ArrowClockwise,
-  Warning,
-} from '@phosphor-icons/react';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import { useLang } from "../../i18n";
+import ControlSubNav from "../../components/admin/ControlSubNav";
+import ControlPageHeader from "../../components/admin/ControlPageHeader";
+import RefreshButton from "../../components/ui/RefreshButton";
+import { Gauge, ArrowClockwise, Warning } from "@phosphor-icons/react";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 const TIER_META = {
-  high:      { label: 'High',      emoji: '🟢', color: 'bg-emerald-100 text-emerald-700 ring-emerald-200', bar: 'bg-emerald-500', multiplier: '×1.2' },
-  normal:    { label: 'Normal',    emoji: '🟡', color: 'bg-amber-100 text-amber-700 ring-amber-200',       bar: 'bg-amber-500',   multiplier: '×1.0' },
-  warning:   { label: 'Warning',   emoji: '🟠', color: 'bg-orange-100 text-orange-700 ring-orange-200',    bar: 'bg-orange-500',  multiplier: '×0.8' },
-  penalized: { label: 'Penalized', emoji: '🔴', color: 'bg-red-100 text-red-700 ring-red-200',             bar: 'bg-red-500',     multiplier: '×0.5' },
-  hidden:    { label: 'Hidden',    emoji: '🚫', color: 'bg-zinc-200 text-zinc-700 ring-zinc-300',           bar: 'bg-zinc-500',    multiplier: 'excl.' },
+  high: {
+    label: "High",
+    emoji: "🟢",
+    color: "bg-emerald-100 text-emerald-700 ring-emerald-200",
+    bar: "bg-emerald-500",
+    multiplier: "×1.2",
+  },
+  normal: {
+    label: "Normal",
+    emoji: "🟡",
+    color: "bg-amber-100 text-amber-700 ring-amber-200",
+    bar: "bg-amber-500",
+    multiplier: "×1.0",
+  },
+  warning: {
+    label: "Warning",
+    emoji: "🟠",
+    color: "bg-orange-100 text-orange-700 ring-orange-200",
+    bar: "bg-orange-500",
+    multiplier: "×0.8",
+  },
+  penalized: {
+    label: "Penalized",
+    emoji: "🔴",
+    color: "bg-red-100 text-red-700 ring-red-200",
+    bar: "bg-red-500",
+    multiplier: "×0.5",
+  },
+  hidden: {
+    label: "Hidden",
+    emoji: "🚫",
+    color: "bg-zinc-200 text-zinc-700 ring-zinc-300",
+    bar: "bg-zinc-500",
+    multiplier: "excl.",
+  },
 };
 
-const pct = (v) => (v === null || v === undefined ? '—' : `${(v * 100).toFixed(0)}%`);
+const pct = (v) =>
+  v === null || v === undefined ? "—" : `${(v * 100).toFixed(0)}%`;
 
 const TierBadge = ({ tier }) => {
   const meta = TIER_META[tier] || TIER_META.normal;
@@ -96,20 +123,20 @@ const ProviderCard = ({ it, t }) => {
       <div className="grid grid-cols-3 gap-2.5 pt-1">
         <div className="bg-zinc-50 rounded-xl p-3">
           <div className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold">
-            {t('responseLabel')}
+            {t("responseLabel")}
           </div>
           <div className="text-base font-semibold text-zinc-800 mt-1">
             {pct(it.sub_scores?.responseScore)}
           </div>
           <div className="text-[10px] text-zinc-400 mt-0.5">
             {it.metrics?.responseTimeAvg
-              ? `${it.metrics.responseTimeAvg} ${t('r9_min_short')}`
-              : '—'}
+              ? `${it.metrics.responseTimeAvg} ${t("r9_min_short")}`
+              : "—"}
           </div>
         </div>
         <div className="bg-zinc-50 rounded-xl p-3">
           <div className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold">
-            {t('completionLabel')}
+            {t("completionLabel")}
           </div>
           <div className="text-base font-semibold text-zinc-800 mt-1">
             {pct(it.sub_scores?.completionScore)}
@@ -120,7 +147,7 @@ const ProviderCard = ({ it, t }) => {
         </div>
         <div className="bg-zinc-50 rounded-xl p-3">
           <div className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold">
-            {t('activityLabel')}
+            {t("activityLabel")}
           </div>
           <div className="text-base font-semibold text-zinc-800 mt-1">
             {pct(it.sub_scores?.activityScore)}
@@ -133,7 +160,7 @@ const ProviderCard = ({ it, t }) => {
 
       <div className="flex items-center justify-between text-xs text-zinc-500 pt-3 border-t border-zinc-100">
         <span>
-          {t('lateStarts')}:{' '}
+          {t("lateStarts")}:{" "}
           {(it.penalties?.lateStarts ?? 0) > 0 ? (
             <span className="inline-flex items-center gap-1 text-red-600 font-medium">
               <Warning size={12} weight="bold" />
@@ -144,7 +171,7 @@ const ProviderCard = ({ it, t }) => {
           )}
         </span>
         <span className="text-zinc-400">
-          {it.updatedAt ? new Date(it.updatedAt).toLocaleDateString() : '—'}
+          {it.updatedAt ? new Date(it.updatedAt).toLocaleDateString() : "—"}
         </span>
       </div>
     </div>
@@ -160,14 +187,14 @@ export default function ProviderHealthPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const r = await axios.get(`${API_URL}/api/admin/providers/stats`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setItems(r.data.items || []);
     } catch (e) {
       console.error(e);
-      toast.error(t('adm_failed_to_load_health_dashboard'));
+      toast.error(t("adm_failed_to_load_health_dashboard"));
     } finally {
       setLoading(false);
     }
@@ -177,19 +204,19 @@ export default function ProviderHealthPage() {
   const recomputeAll = useCallback(async () => {
     setRecomputing(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const r = await axios.post(
         `${API_URL}/api/admin/providers/stats/recompute`,
         {},
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
       toast.success(
-        `${t('r9_recalculated')} ${r.data?.count ?? 0} ${t('r9_providers_plural')}`
+        `${t("r9_recalculated")} ${r.data?.count ?? 0} ${t("r9_providers_plural")}`,
       );
       await load();
     } catch (e) {
       console.error(e);
-      toast.error(t('adm_recalculation_failed'));
+      toast.error(t("adm_recalculation_failed"));
     } finally {
       setRecomputing(false);
     }
@@ -214,13 +241,13 @@ export default function ProviderHealthPage() {
       <div className="space-y-5 sm:space-y-6">
         <ControlPageHeader
           icon={Gauge}
-          title={t('adm_provider_pressure_healthscore')}
-          subtitle={t('adm_performer_rating_controls_matching_visibility_boos')}
+          title={t("adm_provider_pressure_healthscore")}
+          subtitle={t("adm_performer_rating_controls_matching_visibility_boos")}
           action={
             <RefreshButton
               onClick={recomputeAll}
               loading={recomputing || loading}
-              ariaLabel={t('adm2_98a263e7c7')}
+              ariaLabel={t("adm2_98a263e7c7")}
               testId="provider-recompute-btn"
             />
           }
@@ -254,29 +281,52 @@ export default function ProviderHealthPage() {
             <table className="min-w-[800px] w-full text-sm">
               <thead className="bg-zinc-50 border-b border-zinc-200">
                 <tr className="text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  <th className="px-3 py-3 whitespace-nowrap">{t('adm_assignee')}</th>
-                  <th className="px-3 py-3 w-40 whitespace-nowrap">{t('scoreLabel')}</th>
-                  <th className="px-3 py-3 whitespace-nowrap">{t('tierLabel')}</th>
-                  <th className="px-3 py-3 whitespace-nowrap">{t('responseLabel')}</th>
-                  <th className="px-3 py-3 whitespace-nowrap">{t('completionLabel')}</th>
-                  <th className="px-3 py-3 whitespace-nowrap">{t('activityLabel')}</th>
-                  <th className="px-3 py-3 whitespace-nowrap">{t('adm_orders')}</th>
-                  <th className="px-3 py-3 whitespace-nowrap">{t('lateStarts')}</th>
-                  <th className="px-3 py-3 whitespace-nowrap">{t('adm_updated')}</th>
+                  <th className="px-3 py-3 whitespace-nowrap">
+                    {t("adm_assignee")}
+                  </th>
+                  <th className="px-3 py-3 w-40 whitespace-nowrap">
+                    {t("scoreLabel")}
+                  </th>
+                  <th className="px-3 py-3 whitespace-nowrap">
+                    {t("tierLabel")}
+                  </th>
+                  <th className="px-3 py-3 whitespace-nowrap">
+                    {t("responseLabel")}
+                  </th>
+                  <th className="px-3 py-3 whitespace-nowrap">
+                    {t("completionLabel")}
+                  </th>
+                  <th className="px-3 py-3 whitespace-nowrap">
+                    {t("activityLabel")}
+                  </th>
+                  <th className="px-3 py-3 whitespace-nowrap">
+                    {t("adm_orders")}
+                  </th>
+                  <th className="px-3 py-3 whitespace-nowrap">
+                    {t("lateStarts")}
+                  </th>
+                  <th className="px-3 py-3 whitespace-nowrap">
+                    {t("adm_updated")}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
                 {loading && items.length === 0 && (
                   <tr>
                     <td colSpan={9} className="text-center py-10 text-zinc-400">
-                      {t('adm_loading_3')}
+                      {t("adm_loading_3")}
                     </td>
                   </tr>
                 )}
                 {!loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="text-center py-10 text-zinc-400 px-4">
-                      {t('adm_no_provider_create_an_invoice_and_mark_it_as_paid')}
+                    <td
+                      colSpan={9}
+                      className="text-center py-10 text-zinc-400 px-4"
+                    >
+                      {t(
+                        "adm_no_provider_create_an_invoice_and_mark_it_as_paid",
+                      )}
                     </td>
                   </tr>
                 )}
@@ -306,8 +356,8 @@ export default function ProviderHealthPage() {
                       </div>
                       <div className="text-xs text-zinc-400">
                         {it.metrics?.responseTimeAvg
-                          ? `${it.metrics.responseTimeAvg} ${t('r9_min_short')}`
-                          : '—'}
+                          ? `${it.metrics.responseTimeAvg} ${t("r9_min_short")}`
+                          : "—"}
                       </div>
                     </td>
                     <td className="px-3 py-3 text-zinc-700 whitespace-nowrap">
@@ -327,7 +377,8 @@ export default function ProviderHealthPage() {
                         {it.metrics?.activeOrders ?? 0}
                       </span>
                       <span className="text-xs text-zinc-400">
-                        {' '}/ {it.metrics?.totalOrders ?? 0}
+                        {" "}
+                        / {it.metrics?.totalOrders ?? 0}
                       </span>
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap">
@@ -343,7 +394,7 @@ export default function ProviderHealthPage() {
                     <td className="px-3 py-3 text-xs text-zinc-400 whitespace-nowrap">
                       {it.updatedAt
                         ? new Date(it.updatedAt).toLocaleString()
-                        : '—'}
+                        : "—"}
                     </td>
                   </tr>
                 ))}
@@ -356,12 +407,12 @@ export default function ProviderHealthPage() {
         <div className="md:hidden space-y-4">
           {loading && items.length === 0 && (
             <div className="bg-white rounded-2xl border border-zinc-200 p-6 text-center text-sm text-zinc-400">
-              {t('adm_loading_3')}
+              {t("adm_loading_3")}
             </div>
           )}
           {!loading && items.length === 0 && (
             <div className="bg-white rounded-2xl border border-zinc-200 p-6 text-center text-sm text-zinc-400">
-              {t('adm_no_provider_create_an_invoice_and_mark_it_as_paid')}
+              {t("adm_no_provider_create_an_invoice_and_mark_it_as_paid")}
             </div>
           )}
           {items.map((it) => (
@@ -372,32 +423,31 @@ export default function ProviderHealthPage() {
         {/* Legend */}
         <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 sm:p-5 text-xs text-zinc-600 leading-relaxed">
           <div className="font-semibold text-zinc-700 mb-2">
-            {t('adm_how_it_works')}
+            {t("adm_how_it_works")}
           </div>
           <ul className="list-disc pl-5 space-y-1.5">
             <li>
-              <b>Score 80–100 (High)</b>{' '}
-              {t('adm_boost_12_in_matching_priority_delivery_of_new_orde')}
+              <b>Score 80–100 (High)</b>{" "}
+              {t("adm_boost_12_in_matching_priority_delivery_of_new_orde")}
             </li>
             <li>
-              <b>60–79 (Normal)</b>{' '}
-              {t('adm_normal_output_multiplier_10')}
+              <b>60–79 (Normal)</b> {t("adm_normal_output_multiplier_10")}
             </li>
             <li>
-              <b>40–59 (Warning)</b>{' '}
-              {t('adm_multiplier_08_manager_receives_a_notification_you')}
+              <b>40–59 (Warning)</b>{" "}
+              {t("adm_multiplier_08_manager_receives_a_notification_you")}
             </li>
             <li>
-              <b>20–39 (Penalized)</b>{' '}
-              {t('adm_multiplier_05_penalty_close_to_disabling')}
+              <b>20–39 (Penalized)</b>{" "}
+              {t("adm_multiplier_05_penalty_close_to_disabling")}
             </li>
             <li>
-              <b>&lt; 20 (Hidden)</b>{' '}
-              {t('adm_excluded_from_matching_can_be_returned_by_recalcul')}
+              <b>&lt; 20 (Hidden)</b>{" "}
+              {t("adm_excluded_from_matching_can_be_returned_by_recalcul")}
             </li>
           </ul>
           <div className="mt-2">
-            {t('adm_tier_change_notifications_are_sent_to_the_manager')}
+            {t("adm_tier_change_notifications_are_sent_to_the_manager")}
           </div>
         </div>
       </div>

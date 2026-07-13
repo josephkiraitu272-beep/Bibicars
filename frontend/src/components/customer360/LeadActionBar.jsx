@@ -18,9 +18,9 @@
  * manager pick which lead the bar acts on.
  */
 
-import React, { useMemo, useState } from 'react';
-import axios from 'axios';
-import { toast } from 'sonner';
+import React, { useMemo, useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import {
   Target,
   PencilSimple,
@@ -29,25 +29,20 @@ import {
   ListChecks,
   CalendarBlank,
   Trophy,
-} from '@phosphor-icons/react';
+} from "@phosphor-icons/react";
 
-import { API_URL } from '../../App';
+import { API_URL } from "../../App";
 import {
   LEAD_PIPELINE,
   STATUS_THEME,
   statusLabel,
-} from '../leads/leadConstants';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from '../ui/select';
-import LeadCreateModal from '../leads/LeadCreateModal';
-import ReassignDialog from '../ui/ReassignDialog';
-import QuickCallButton from '../calls/QuickCallButton';
-import ViberButton from '../calls/ViberButton';
-import { detectCountry, isValidForCountry } from '../ui/PhoneInput';
+} from "../leads/leadConstants";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "../ui/Select";
+import LeadCreateModal from "../leads/LeadCreateModal";
+import ReassignDialog from "../ui/ReassignDialog";
+import QuickCallButton from "../calls/QuickCallButton";
+import ViberButton from "../calls/ViberButton";
+import { detectCountry, isValidForCountry } from "../ui/PhoneInput";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -55,40 +50,90 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // translated even before translations.js round-trips.
 const STR = {
   uk: {
-    lead: 'Лід', status: 'Статус', convert: 'Конвертувати', won: 'Виграно',
-    call: 'Дзвінок', task: 'Задача', meeting: 'Зустріч', edit: 'Редагувати',
-    reassign: 'Переназначити', del: 'Видалити', assignee: 'Менеджер',
-    unassigned: 'не призначено', confirmDel: 'Видалити цей лід? Дію не можна скасувати.',
-    statusSaved: 'Статус оновлено', deleted: 'Лід видалено', saved: 'Лід збережено',
-    err: 'Сталася помилка', checkFields: 'Перевірте поля форми', pickLead: 'Оберіть лід',
-    quick: 'Швидкі дії', converted: 'Лід конвертовано',
+    lead: "Лід",
+    status: "Статус",
+    convert: "Конвертувати",
+    won: "Виграно",
+    call: "Дзвінок",
+    task: "Задача",
+    meeting: "Зустріч",
+    edit: "Редагувати",
+    reassign: "Переназначити",
+    del: "Видалити",
+    assignee: "Менеджер",
+    unassigned: "не призначено",
+    confirmDel: "Видалити цей лід? Дію не можна скасувати.",
+    statusSaved: "Статус оновлено",
+    deleted: "Лід видалено",
+    saved: "Лід збережено",
+    err: "Сталася помилка",
+    checkFields: "Перевірте поля форми",
+    pickLead: "Оберіть лід",
+    quick: "Швидкі дії",
+    converted: "Лід конвертовано",
   },
   en: {
-    lead: 'Lead', status: 'Status', convert: 'Convert', won: 'Won',
-    call: 'Call', task: 'Task', meeting: 'Meeting', edit: 'Edit',
-    reassign: 'Reassign', del: 'Delete', assignee: 'Manager',
-    unassigned: 'unassigned', confirmDel: 'Delete this lead? This cannot be undone.',
-    statusSaved: 'Status updated', deleted: 'Lead deleted', saved: 'Lead saved',
-    err: 'Something went wrong', checkFields: 'Check the form fields', pickLead: 'Pick a lead',
-    quick: 'Quick actions', converted: 'Lead converted',
+    lead: "Lead",
+    status: "Status",
+    convert: "Convert",
+    won: "Won",
+    call: "Call",
+    task: "Task",
+    meeting: "Meeting",
+    edit: "Edit",
+    reassign: "Reassign",
+    del: "Delete",
+    assignee: "Manager",
+    unassigned: "unassigned",
+    confirmDel: "Delete this lead? This cannot be undone.",
+    statusSaved: "Status updated",
+    deleted: "Lead deleted",
+    saved: "Lead saved",
+    err: "Something went wrong",
+    checkFields: "Check the form fields",
+    pickLead: "Pick a lead",
+    quick: "Quick actions",
+    converted: "Lead converted",
   },
   bg: {
-    lead: 'Лийд', status: 'Статус', convert: 'Конвертирай', won: 'Спечелен',
-    call: 'Обаждане', task: 'Задача', meeting: 'Среща', edit: 'Редактирай',
-    reassign: 'Преназначи', del: 'Изтрий', assignee: 'Мениджър',
-    unassigned: 'без назначение', confirmDel: 'Да изтрия този лийд? Действието е необратимо.',
-    statusSaved: 'Статусът е обновен', deleted: 'Лийдът е изтрит', saved: 'Лийдът е запазен',
-    err: 'Възникна грешка', checkFields: 'Проверете полетата', pickLead: 'Изберете лийд',
-    quick: 'Бързи действия', converted: 'Лийдът е конвертиран',
+    lead: "Лийд",
+    status: "Статус",
+    convert: "Конвертирай",
+    won: "Спечелен",
+    call: "Обаждане",
+    task: "Задача",
+    meeting: "Среща",
+    edit: "Редактирай",
+    reassign: "Преназначи",
+    del: "Изтрий",
+    assignee: "Мениджър",
+    unassigned: "без назначение",
+    confirmDel: "Да изтрия този лийд? Действието е необратимо.",
+    statusSaved: "Статусът е обновен",
+    deleted: "Лийдът е изтрит",
+    saved: "Лийдът е запазен",
+    err: "Възникна грешка",
+    checkFields: "Проверете полетата",
+    pickLead: "Изберете лийд",
+    quick: "Бързи действия",
+    converted: "Лийдът е конвертиран",
   },
 };
 
-const ActionBtn = ({ icon: Icon, label, onClick, tone = 'default', testId, disabled }) => {
+const ActionBtn = ({
+  icon: Icon,
+  label,
+  onClick,
+  tone = "default",
+  testId,
+  disabled,
+}) => {
   const tones = {
-    default: 'bg-white border-[#E4E4E7] text-[#3F3F46] hover:border-[#A1A1AA] hover:bg-[#FAFAFA]',
-    primary: 'bg-[#18181B] border-[#18181B] text-white hover:bg-[#27272A]',
-    success: 'bg-[#16A34A] border-[#16A34A] text-white hover:bg-[#15803D]',
-    danger:  'bg-white border-[#FCA5A5] text-[#DC2626] hover:bg-[#FEF2F2]',
+    default:
+      "bg-white border-[#E4E4E7] text-[#3F3F46] hover:border-[#A1A1AA] hover:bg-[#FAFAFA]",
+    primary: "bg-[#18181B] border-[#18181B] text-white hover:bg-[#27272A]",
+    success: "bg-[#16A34A] border-[#16A34A] text-white hover:bg-[#15803D]",
+    danger: "bg-white border-[#FCA5A5] text-[#DC2626] hover:bg-[#FEF2F2]",
   };
   return (
     <button
@@ -107,7 +152,7 @@ const ActionBtn = ({ icon: Icon, label, onClick, tone = 'default', testId, disab
 const LeadActionBar = ({
   leads = [],
   activeLeadId,
-  lang = 'uk',
+  lang = "uk",
   canReassign = false,
   managersMap = {},
   onChanged = () => {},
@@ -125,7 +170,7 @@ const LeadActionBar = ({
     }
     // newest first by created_at
     return [...leads].sort((a, b) =>
-      String(b.created_at || '').localeCompare(String(a.created_at || ''))
+      String(b.created_at || "").localeCompare(String(a.created_at || "")),
     )[0];
   }, [leads, activeLeadId]);
 
@@ -138,10 +183,11 @@ const LeadActionBar = ({
   if (!activeLead) return null;
 
   const theme = STATUS_THEME[activeLead.status] || STATUS_THEME.new;
-  const isConverted = activeLead.status === 'converted';
+  const isConverted = activeLead.status === "converted";
   const assignee =
     activeLead.managerId && managersMap[activeLead.managerId]
-      ? managersMap[activeLead.managerId].name || managersMap[activeLead.managerId].email
+      ? managersMap[activeLead.managerId].name ||
+        managersMap[activeLead.managerId].email
       : L.unassigned;
 
   const changeStatus = async (newStatus) => {
@@ -150,7 +196,7 @@ const LeadActionBar = ({
     try {
       await axios.patch(`${API_URL}/api/leads/${activeLead.id}/status`, {
         status: newStatus,
-        reason: 'card_change',
+        reason: "card_change",
       });
       toast.success(`${L.statusSaved} → ${statusLabel(lang, newStatus)}`);
       onChanged();
@@ -161,20 +207,21 @@ const LeadActionBar = ({
     }
   };
 
-  const doConvert = () => changeStatus('converted');
+  const doConvert = () => changeStatus("converted");
 
   const openEdit = () => {
     const detected = detectCountry(activeLead.phone);
     setEditForm({
-      firstName: activeLead.firstName || '',
-      lastName: activeLead.lastName || '',
-      email: activeLead.email || '',
-      phone: activeLead.phone || '',
-      phoneCountry: activeLead.phoneCountry || (detected && detected.code) || 'BG',
-      vehicleInterest: activeLead.vehicleInterest || activeLead.company || '',
-      source: activeLead.source || 'website',
-      description: activeLead.description || activeLead.notes || '',
-      budgetEur: activeLead.budgetEur || activeLead.budgetUsd || '',
+      firstName: activeLead.firstName || "",
+      lastName: activeLead.lastName || "",
+      email: activeLead.email || "",
+      phone: activeLead.phone || "",
+      phoneCountry:
+        activeLead.phoneCountry || (detected && detected.code) || "BG",
+      vehicleInterest: activeLead.vehicleInterest || activeLead.company || "",
+      source: activeLead.source || "website",
+      description: activeLead.description || activeLead.notes || "",
+      budgetEur: activeLead.budgetEur || activeLead.budgetUsd || "",
     });
     setEditErrors({});
     setShowEdit(true);
@@ -183,15 +230,22 @@ const LeadActionBar = ({
   const submitEdit = async (e) => {
     e.preventDefault();
     const errs = {};
-    if (!(editForm.firstName || '').trim()) errs.firstName = 'Required';
-    if (!(editForm.lastName || '').trim()) errs.lastName = 'Required';
-    if (!(editForm.email || '').trim()) errs.email = 'Required';
-    else if (!EMAIL_RE.test(editForm.email.trim())) errs.email = 'Invalid email';
-    if (editForm.phone && !isValidForCountry(editForm.phone, editForm.phoneCountry)) {
-      errs.phone = 'Invalid phone';
+    if (!(editForm.firstName || "").trim()) errs.firstName = "Required";
+    if (!(editForm.lastName || "").trim()) errs.lastName = "Required";
+    if (!(editForm.email || "").trim()) errs.email = "Required";
+    else if (!EMAIL_RE.test(editForm.email.trim()))
+      errs.email = "Invalid email";
+    if (
+      editForm.phone &&
+      !isValidForCountry(editForm.phone, editForm.phoneCountry)
+    ) {
+      errs.phone = "Invalid phone";
     }
     setEditErrors(errs);
-    if (Object.keys(errs).length) { toast.error(L.checkFields); return; }
+    if (Object.keys(errs).length) {
+      toast.error(L.checkFields);
+      return;
+    }
     try {
       await axios.put(`${API_URL}/api/leads/${activeLead.id}`, {
         firstName: editForm.firstName.trim(),
@@ -239,9 +293,13 @@ const LeadActionBar = ({
             <Target size={18} weight="bold" style={{ color: theme.hex }} />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-wider text-[#A1A1AA] leading-none">{L.lead}</p>
+            <p className="text-[11px] uppercase tracking-wider text-[#A1A1AA] leading-none">
+              {L.lead}
+            </p>
             <p className="text-sm font-semibold text-[#18181B] truncate">
-              {activeLead.name || `${activeLead.firstName || ''} ${activeLead.lastName || ''}`.trim() || activeLead.email}
+              {activeLead.name ||
+                `${activeLead.firstName || ""} ${activeLead.lastName || ""}`.trim() ||
+                activeLead.email}
             </p>
           </div>
           <span
@@ -255,21 +313,32 @@ const LeadActionBar = ({
 
         {/* Lead switcher when the customer has multiple leads */}
         {leads.length > 1 && (
-          <Select value={activeLead.id} onValueChange={(v) => onActiveLeadChange(v)}>
+          <Select
+            value={activeLead.id}
+            onValueChange={(v) => onActiveLeadChange(v)}
+          >
             <SelectTrigger
               className="h-9 w-auto min-w-[180px] rounded-xl border-[#E4E4E7] text-[12.5px]"
               data-testid="lead-switcher"
             >
               <span className="truncate">
-                {activeLead.name || activeLead.email} · {statusLabel(lang, activeLead.status)}
+                {activeLead.name || activeLead.email} ·{" "}
+                {statusLabel(lang, activeLead.status)}
               </span>
             </SelectTrigger>
             <SelectContent>
               {[...leads]
-                .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+                .sort((a, b) =>
+                  String(b.created_at || "").localeCompare(
+                    String(a.created_at || ""),
+                  ),
+                )
                 .map((l) => (
                   <SelectItem key={l.id} value={l.id}>
-                    {(l.name || `${l.firstName || ''} ${l.lastName || ''}`.trim() || l.email)} · {statusLabel(lang, l.status)}
+                    {l.name ||
+                      `${l.firstName || ""} ${l.lastName || ""}`.trim() ||
+                      l.email}{" "}
+                    · {statusLabel(lang, l.status)}
                   </SelectItem>
                 ))}
             </SelectContent>
@@ -281,22 +350,40 @@ const LeadActionBar = ({
       <div className="mt-4 flex items-center gap-2 flex-wrap">
         {/* Pipeline status selector */}
         <div className="flex items-center gap-2">
-          <span className="text-[11px] uppercase tracking-wider text-[#A1A1AA]">{L.status}</span>
-          <Select value={activeLead.status} onValueChange={changeStatus} disabled={statusSaving}>
+          <span className="text-[11px] uppercase tracking-wider text-[#A1A1AA]">
+            {L.status}
+          </span>
+          <Select
+            value={activeLead.status}
+            onValueChange={changeStatus}
+            disabled={statusSaving}
+          >
             <SelectTrigger
               className="h-9 w-auto min-w-[150px] rounded-xl border-[#E4E4E7] text-[12.5px] font-medium"
               data-testid="lead-status-select"
             >
               <span className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full" style={{ background: theme.dot }} />
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ background: theme.dot }}
+                />
                 {statusLabel(lang, activeLead.status)}
               </span>
             </SelectTrigger>
             <SelectContent>
               {LEAD_PIPELINE.map((s) => (
-                <SelectItem key={s} value={s} data-testid={`lead-status-opt-${s}`}>
+                <SelectItem
+                  key={s}
+                  value={s}
+                  data-testid={`lead-status-opt-${s}`}
+                >
                   <span className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full" style={{ background: (STATUS_THEME[s] || STATUS_THEME.new).dot }} />
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{
+                        background: (STATUS_THEME[s] || STATUS_THEME.new).dot,
+                      }}
+                    />
                     {statusLabel(lang, s)}
                   </span>
                 </SelectItem>
@@ -323,17 +410,42 @@ const LeadActionBar = ({
             jump to their card tabs. Call/Viber only render with a phone. */}
         {activeLead.phone && (
           <>
-            <QuickCallButton phone={activeLead.phone} lang={lang} variant="ghost" testId="lead-action-call" />
-            <ViberButton phone={activeLead.phone} lang={lang} variant="ghost" testId="lead-action-viber" />
+            <QuickCallButton
+              phone={activeLead.phone}
+              lang={lang}
+              variant="ghost"
+              testId="lead-action-call"
+            />
+            <ViberButton
+              phone={activeLead.phone}
+              lang={lang}
+              variant="ghost"
+              testId="lead-action-viber"
+            />
           </>
         )}
-        <ActionBtn icon={ListChecks} label={L.task} onClick={() => onJumpTab('tasks')} testId="lead-action-task" />
-        <ActionBtn icon={CalendarBlank} label={L.meeting} onClick={() => onJumpTab('meetings')} testId="lead-action-meeting" />
+        <ActionBtn
+          icon={ListChecks}
+          label={L.task}
+          onClick={() => onJumpTab("tasks")}
+          testId="lead-action-task"
+        />
+        <ActionBtn
+          icon={CalendarBlank}
+          label={L.meeting}
+          onClick={() => onJumpTab("meetings")}
+          testId="lead-action-meeting"
+        />
 
         <div className="h-6 w-px bg-[#E4E4E7] mx-1 hidden sm:block" />
 
         {/* Edit */}
-        <ActionBtn icon={PencilSimple} label={L.edit} onClick={openEdit} testId="lead-action-edit" />
+        <ActionBtn
+          icon={PencilSimple}
+          label={L.edit}
+          onClick={openEdit}
+          testId="lead-action-edit"
+        />
 
         {/* Reassign */}
         {canReassign && (
@@ -346,18 +458,27 @@ const LeadActionBar = ({
         )}
 
         {/* Delete */}
-        <ActionBtn icon={Trash} label={L.del} tone="danger" onClick={doDelete} testId="lead-action-delete" />
+        <ActionBtn
+          icon={Trash}
+          label={L.del}
+          tone="danger"
+          onClick={doDelete}
+          testId="lead-action-delete"
+        />
 
         {/* Assignee chip (read-only, right aligned) */}
         <span className="ml-auto text-[12px] text-[#71717A] hidden md:inline">
-          {L.assignee}: <span className="font-medium text-[#3F3F46]">{assignee}</span>
+          {L.assignee}:{" "}
+          <span className="font-medium text-[#3F3F46]">{assignee}</span>
         </span>
       </div>
 
       {/* Edit modal — reuses the canonical lead form */}
       <LeadCreateModal
         open={showEdit}
-        onOpenChange={(open) => { setShowEdit(open); }}
+        onOpenChange={(open) => {
+          setShowEdit(open);
+        }}
         formData={editForm}
         setFormData={setEditForm}
         formErrors={editErrors}
@@ -374,7 +495,10 @@ const LeadActionBar = ({
           entity="lead"
           ids={[activeLead.id]}
           currentManagerId={activeLead.managerId}
-          onSuccess={() => { setReassignOpen(false); onChanged(); }}
+          onSuccess={() => {
+            setReassignOpen(false);
+            onChanged();
+          }}
         />
       )}
     </div>

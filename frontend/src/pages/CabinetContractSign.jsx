@@ -9,9 +9,9 @@
  *
  * Routed at /cabinet/contracts/:token (NO auth gate).
  */
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { useParams } from 'react-router-dom';
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { useParams } from "react-router-dom";
 import {
   ShieldCheck,
   FilePdf,
@@ -19,17 +19,25 @@ import {
   WarningCircle,
   Download,
   PenNib,
-} from '@phosphor-icons/react';
+} from "@phosphor-icons/react";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 const LIFECYCLE_TEXT = {
-  draft:     { en: 'Draft', uk: 'Чернетка', bg: 'Чернова' },
-  sent:      { en: 'Awaiting your review', uk: 'Очікує перегляду', bg: 'Да бъде прегледана' },
-  viewed:    { en: 'Awaiting your signature', uk: 'Очікує підпису', bg: 'Очаква подпис' },
-  signed:    { en: 'Signed', uk: 'Підписано', bg: 'Подписан' },
-  archived:  { en: 'Archived', uk: 'Архівовано', bg: 'Архивиран' },
-  cancelled: { en: 'Cancelled', uk: 'Скасовано', bg: 'Отказан' },
+  draft: { en: "Draft", uk: "Чернетка", bg: "Чернова" },
+  sent: {
+    en: "Awaiting your review",
+    uk: "Очікує перегляду",
+    bg: "Да бъде прегледана",
+  },
+  viewed: {
+    en: "Awaiting your signature",
+    uk: "Очікує підпису",
+    bg: "Очаква подпис",
+  },
+  signed: { en: "Signed", uk: "Підписано", bg: "Подписан" },
+  archived: { en: "Archived", uk: "Архівовано", bg: "Архивиран" },
+  cancelled: { en: "Cancelled", uk: "Скасовано", bg: "Отказан" },
 };
 
 const CabinetContractSign = () => {
@@ -39,7 +47,7 @@ const CabinetContractSign = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [accepted, setAccepted] = useState(false);
-  const [fullName, setFullName] = useState('');
+  const [fullName, setFullName] = useState("");
   const [signing, setSigning] = useState(false);
   const [signed, setSigned] = useState(false);
 
@@ -47,51 +55,70 @@ const CabinetContractSign = () => {
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await axios.get(`${API_URL}/api/contracts/view/${token}`);
+        const { data } = await axios.get(
+          `${API_URL}/api/contracts/view/${token}`,
+        );
         if (cancelled) return;
         setContract(data.contract);
         setCustomer(data.customer || {});
         const cust = data.customer || {};
-        const full = `${cust.firstName || ''} ${cust.lastName || ''}`.trim();
+        const full = `${cust.firstName || ""} ${cust.lastName || ""}`.trim();
         if (full) setFullName(full);
-        if ((data.contract?.lifecycle) === 'signed') setSigned(true);
+        if (data.contract?.lifecycle === "signed") setSigned(true);
       } catch (e) {
-        if (!cancelled) setError(e.response?.data?.detail || 'Contract not found or no longer accessible.');
+        if (!cancelled)
+          setError(
+            e.response?.data?.detail ||
+              "Contract not found or no longer accessible.",
+          );
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   const submit = async () => {
     if (!accepted || !fullName.trim()) return;
     setSigning(true);
     try {
-      await axios.post(
-        `${API_URL}/api/contracts/view/${token}/sign`,
-        { full_name: fullName.trim(), terms_accepted: true },
-      );
+      await axios.post(`${API_URL}/api/contracts/view/${token}/sign`, {
+        full_name: fullName.trim(),
+        terms_accepted: true,
+      });
       setSigned(true);
     } catch (e) {
-      setError(e.response?.data?.detail || 'Signing failed. Please try again.');
+      setError(e.response?.data?.detail || "Signing failed. Please try again.");
     } finally {
       setSigning(false);
     }
   };
 
   if (loading) {
-    return <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
-      <div className="animate-spin w-10 h-10 border-2 border-[#4F46E5] border-t-transparent rounded-full" />
-    </div>;
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+        <div className="animate-spin w-10 h-10 border-2 border-[#4F46E5] border-t-transparent rounded-full" />
+      </div>
+    );
   }
 
   if (error && !contract) {
     return (
       <div className="min-h-screen bg-zinc-50 flex items-center justify-center px-4">
-        <div className="bg-white border border-red-200 rounded-2xl p-8 max-w-md text-center shadow-xl" data-testid="cabinet-sign-error">
-          <WarningCircle size={48} weight="duotone" className="text-red-500 mx-auto mb-3" />
-          <h1 className="text-xl font-semibold text-zinc-900">Не вдалося відкрити договір</h1>
+        <div
+          className="bg-white border border-red-200 rounded-2xl p-8 max-w-md text-center shadow-xl"
+          data-testid="cabinet-sign-error"
+        >
+          <WarningCircle
+            size={48}
+            weight="duotone"
+            className="text-red-500 mx-auto mb-3"
+          />
+          <h1 className="text-xl font-semibold text-zinc-900">
+            Не вдалося відкрити договір
+          </h1>
           <p className="mt-2 text-sm text-zinc-600">{error}</p>
         </div>
       </div>
@@ -99,11 +126,14 @@ const CabinetContractSign = () => {
   }
 
   const pdfUrl = `${API_URL}/api/contracts/view/${token}/download`;
-  const lc = contract?.lifecycle || 'sent';
+  const lc = contract?.lifecycle || "sent";
   const lcText = LIFECYCLE_TEXT[lc]?.en || lc;
 
   return (
-    <div className="min-h-screen bg-zinc-50 py-8 px-4" data-testid="cabinet-sign-page">
+    <div
+      className="min-h-screen bg-zinc-50 py-8 px-4"
+      data-testid="cabinet-sign-page"
+    >
       <div className="max-w-5xl mx-auto">
         {/* Hero */}
         <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6 md:p-8 mb-6">
@@ -111,16 +141,36 @@ const CabinetContractSign = () => {
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <FilePdf size={22} weight="duotone" className="text-rose-500" />
-                <span className="text-[11px] uppercase tracking-wider font-bold text-zinc-500">Contract / Договор</span>
+                <span className="text-[11px] uppercase tracking-wider font-bold text-zinc-500">
+                  Contract / Договор
+                </span>
               </div>
-              <h1 className="text-2xl font-bold text-zinc-900">{contract?.title || 'Service contract'}</h1>
+              <h1 className="text-2xl font-bold text-zinc-900">
+                {contract?.title || "Service contract"}
+              </h1>
               <p className="text-sm text-zinc-500 mt-1">
-                Version <span className="font-mono">v{contract?.version || 1}</span>
-                {customer?.firstName && <> · For <span className="font-medium text-zinc-700">{customer.firstName} {customer.lastName}</span></>}
+                Version{" "}
+                <span className="font-mono">v{contract?.version || 1}</span>
+                {customer?.firstName && (
+                  <>
+                    {" "}
+                    · For{" "}
+                    <span className="font-medium text-zinc-700">
+                      {customer.firstName} {customer.lastName}
+                    </span>
+                  </>
+                )}
               </p>
             </div>
-            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${signed || lc === 'signed' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
-              {(signed || lc === 'signed') ? <CheckCircle size={12} weight="fill" /> : <ShieldCheck size={12} />} {signed || lc === 'signed' ? 'Signed' : lcText}
+            <span
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${signed || lc === "signed" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-amber-100 text-amber-700 border-amber-200"}`}
+            >
+              {signed || lc === "signed" ? (
+                <CheckCircle size={12} weight="fill" />
+              ) : (
+                <ShieldCheck size={12} />
+              )}{" "}
+              {signed || lc === "signed" ? "Signed" : lcText}
             </span>
           </div>
 
@@ -134,31 +184,60 @@ const CabinetContractSign = () => {
             />
           </div>
           <div className="mt-3 text-right">
-            <a href={pdfUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:underline">
+            <a
+              href={pdfUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:underline"
+            >
               <Download size={14} /> Download PDF
             </a>
           </div>
         </div>
 
         {/* Sign block */}
-        {(signed || lc === 'signed') ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-emerald-200 p-6 md:p-8 text-center" data-testid="contract-signed-banner">
-            <CheckCircle size={48} weight="fill" className="text-emerald-500 mx-auto mb-3" />
-            <h2 className="text-xl font-semibold text-zinc-900">Дякуємо! Договір підписано.</h2>
-            <p className="text-sm text-zinc-600 mt-2">Ми отримали ваш підпис. Копія договору буде надіслана вам електронною поштою та зберігається у вашому особистому кабінеті.</p>
+        {signed || lc === "signed" ? (
+          <div
+            className="bg-white rounded-2xl shadow-sm border border-emerald-200 p-6 md:p-8 text-center"
+            data-testid="contract-signed-banner"
+          >
+            <CheckCircle
+              size={48}
+              weight="fill"
+              className="text-emerald-500 mx-auto mb-3"
+            />
+            <h2 className="text-xl font-semibold text-zinc-900">
+              Дякуємо! Договір підписано.
+            </h2>
+            <p className="text-sm text-zinc-600 mt-2">
+              Ми отримали ваш підпис. Копія договору буде надіслана вам
+              електронною поштою та зберігається у вашому особистому кабінеті.
+            </p>
             {contract?.signed_full_name && (
-              <p className="mt-4 text-xs text-zinc-500">Підписав: <span className="font-mono">{contract.signed_full_name}</span></p>
+              <p className="mt-4 text-xs text-zinc-500">
+                Підписав:{" "}
+                <span className="font-mono">{contract.signed_full_name}</span>
+              </p>
             )}
             {contract?.signed_at && (
-              <p className="text-xs text-zinc-400">{new Date(contract.signed_at).toLocaleString()}</p>
+              <p className="text-xs text-zinc-400">
+                {new Date(contract.signed_at).toLocaleString()}
+              </p>
             )}
           </div>
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6 md:p-8" data-testid="contract-sign-card">
+          <div
+            className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6 md:p-8"
+            data-testid="contract-sign-card"
+          >
             <h2 className="text-lg font-semibold text-zinc-900 mb-1 flex items-center gap-2">
-              <PenNib size={20} weight="duotone" className="text-indigo-500" /> Підписання договору
+              <PenNib size={20} weight="duotone" className="text-indigo-500" />{" "}
+              Підписання договору
             </h2>
-            <p className="text-sm text-zinc-500 mb-5">Будь ласка, уважно прочитайте документ вище. Для підписання прийміть умови та введіть ваше повне ім'я.</p>
+            <p className="text-sm text-zinc-500 mb-5">
+              Будь ласка, уважно прочитайте документ вище. Для підписання
+              прийміть умови та введіть ваше повне ім'я.
+            </p>
 
             <label className="flex items-start gap-3 mb-4 cursor-pointer">
               <input
@@ -169,12 +248,15 @@ const CabinetContractSign = () => {
                 data-testid="contract-terms-checkbox"
               />
               <span className="text-sm text-zinc-700">
-                Я ознайомився з умовами договору, погоджуюсь із ними та дію добровільно.
+                Я ознайомився з умовами договору, погоджуюсь із ними та дію
+                добровільно.
               </span>
             </label>
 
             <div className="mb-5">
-              <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Повне ім'я</label>
+              <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">
+                Повне ім'я
+              </label>
               <input
                 type="text"
                 value={fullName}
@@ -183,11 +265,16 @@ const CabinetContractSign = () => {
                 className="w-full border-2 border-zinc-200 rounded-xl px-4 py-3 text-base font-medium font-serif italic focus:outline-none focus:border-[#18181B]"
                 data-testid="contract-fullname-input"
               />
-              <p className="text-[11px] text-zinc-400 mt-1">Це буде вашим електронним підписом. Ми фіксуємо дату, IP та браузер для юридичного підтвердження.</p>
+              <p className="text-[11px] text-zinc-400 mt-1">
+                Це буде вашим електронним підписом. Ми фіксуємо дату, IP та
+                браузер для юридичного підтвердження.
+              </p>
             </div>
 
             {error && (
-              <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
+              <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+                {error}
+              </div>
             )}
 
             <button
@@ -196,13 +283,20 @@ const CabinetContractSign = () => {
               className="w-full px-4 py-3 bg-[#18181B] text-white rounded-xl hover:bg-[#27272A] disabled:opacity-50 font-semibold flex items-center justify-center gap-2"
               data-testid="contract-sign-submit"
             >
-              {signing ? '…' : (<><PenNib size={16} weight="fill" /> Підписати</>)}
+              {signing ? (
+                "…"
+              ) : (
+                <>
+                  <PenNib size={16} weight="fill" /> Підписати
+                </>
+              )}
             </button>
           </div>
         )}
 
         <p className="mt-6 text-center text-[11px] text-zinc-400">
-          Посилання дійсне лише для цього договору. BIBI Cars · Імпорт автомобілів у Болгарію
+          Посилання дійсне лише для цього договору. BIBI Cars · Імпорт
+          автомобілів у Болгарію
         </p>
       </div>
     </div>

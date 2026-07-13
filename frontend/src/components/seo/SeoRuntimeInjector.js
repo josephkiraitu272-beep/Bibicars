@@ -19,10 +19,10 @@
  * decides whether to inject (skips admin/cabinet routes by default so we
  * don't bloat internal navigation with tracking pixels they don't need).
  */
-import { useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
+const BACKEND_URL = "https://backend-production-ae6d.up.railway.app";
 
 // ─── Memoised fetch — survives StrictMode double-invocation in dev and
 //    avoids hammering the backend across route transitions in prod.
@@ -30,7 +30,7 @@ let _cachedPromise = null;
 const fetchRuntimeConfig = () => {
   if (!_cachedPromise) {
     _cachedPromise = fetch(`${BACKEND_URL}/api/seo/runtime-config`, {
-      credentials: 'omit',
+      credentials: "omit",
     })
       .then((r) => (r.ok ? r.json() : {}))
       .catch(() => ({}));
@@ -41,15 +41,15 @@ const fetchRuntimeConfig = () => {
 const _hasScript = (id) => !!document.getElementById(id);
 
 const injectGtagBase = (gtagId) => {
-  if (_hasScript('gtag-base')) return;
-  const s = document.createElement('script');
-  s.id   = 'gtag-base';
+  if (_hasScript("gtag-base")) return;
+  const s = document.createElement("script");
+  s.id = "gtag-base";
   s.async = true;
-  s.src  = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gtagId)}`;
+  s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gtagId)}`;
   document.head.appendChild(s);
 
-  const init = document.createElement('script');
-  init.id = 'gtag-init';
+  const init = document.createElement("script");
+  init.id = "gtag-init";
   init.text = `
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
@@ -62,7 +62,7 @@ const injectGtagBase = (gtagId) => {
 const injectGa4 = (measurementId) => {
   if (!measurementId || _hasScript(`gtag-config-${measurementId}`)) return;
   injectGtagBase(measurementId);
-  const cfg = document.createElement('script');
+  const cfg = document.createElement("script");
   cfg.id = `gtag-config-${measurementId}`;
   cfg.text = `
     gtag('config', '${measurementId}', {
@@ -76,20 +76,20 @@ const injectGa4 = (measurementId) => {
 const injectGoogleAds = (conversionId, sendPageView) => {
   if (!conversionId || _hasScript(`gtag-config-${conversionId}`)) return;
   injectGtagBase(conversionId);
-  const cfg = document.createElement('script');
+  const cfg = document.createElement("script");
   cfg.id = `gtag-config-${conversionId}`;
   cfg.text = `
     gtag('config', '${conversionId}', {
-      send_page_view: ${sendPageView ? 'true' : 'false'}
+      send_page_view: ${sendPageView ? "true" : "false"}
     });
   `;
   document.head.appendChild(cfg);
 };
 
 const injectFacebookPixel = (pixelId) => {
-  if (!pixelId || _hasScript('fbq-base')) return;
-  const s = document.createElement('script');
-  s.id = 'fbq-base';
+  if (!pixelId || _hasScript("fbq-base")) return;
+  const s = document.createElement("script");
+  s.id = "fbq-base";
   s.text = `
     !function(f,b,e,v,n,t,s){
       if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};
@@ -106,11 +106,11 @@ const setVerificationMeta = (name, value) => {
   if (!value) return;
   let el = document.head.querySelector(`meta[name="${name}"]`);
   if (!el) {
-    el = document.createElement('meta');
-    el.setAttribute('name', name);
+    el = document.createElement("meta");
+    el.setAttribute("name", name);
     document.head.appendChild(el);
   }
-  el.setAttribute('content', value);
+  el.setAttribute("content", value);
 };
 
 export default function SeoRuntimeInjector() {
@@ -119,23 +119,31 @@ export default function SeoRuntimeInjector() {
   useEffect(() => {
     // Skip authenticated areas — no tracking on admin / cabinet pages.
     if (
-      pathname.startsWith('/admin') ||
-      pathname.startsWith('/cabinet') ||
-      pathname.startsWith('/login')
+      pathname.startsWith("/admin") ||
+      pathname.startsWith("/cabinet") ||
+      pathname.startsWith("/login")
     ) {
       return;
     }
     let cancelled = false;
     fetchRuntimeConfig().then((cfg) => {
       if (cancelled || !cfg) return;
-      setVerificationMeta('google-site-verification', cfg.google_site_verification);
-      setVerificationMeta('msvalidate.01',           cfg.bing_site_verification);
-      setVerificationMeta('yandex-verification',     cfg.yandex_site_verification);
+      setVerificationMeta(
+        "google-site-verification",
+        cfg.google_site_verification,
+      );
+      setVerificationMeta("msvalidate.01", cfg.bing_site_verification);
+      setVerificationMeta("yandex-verification", cfg.yandex_site_verification);
       injectGa4(cfg.ga4_measurement_id);
-      injectGoogleAds(cfg.google_ads_conversion_id, cfg.google_ads_send_page_view !== false);
+      injectGoogleAds(
+        cfg.google_ads_conversion_id,
+        cfg.google_ads_send_page_view !== false,
+      );
       injectFacebookPixel(cfg.facebook_pixel_id);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [pathname]);
 
   return null;
@@ -148,10 +156,10 @@ export default function SeoRuntimeInjector() {
 export const fireConversion = async (eventKey, eventData = {}) => {
   try {
     const cfg = await fetchRuntimeConfig();
-    const id  = cfg?.google_ads_conversion_id;
+    const id = cfg?.google_ads_conversion_id;
     const lbl = cfg?.google_ads_conversion_labels?.[eventKey];
-    if (!id || !lbl || typeof window.gtag !== 'function') return;
-    window.gtag('event', 'conversion', {
+    if (!id || !lbl || typeof window.gtag !== "function") return;
+    window.gtag("event", "conversion", {
       send_to: `${id}/${lbl}`,
       ...eventData,
     });

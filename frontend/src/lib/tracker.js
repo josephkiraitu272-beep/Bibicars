@@ -22,24 +22,30 @@
  *   trackLeadSubmit();
  */
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
+const BACKEND_URL = "https://backend-production-ae6d.up.railway.app";
 
 // ── Session ID (sessionStorage, живёт пока открыта вкладка) ──────────
 function getSessionId() {
   try {
-    let sid = window.sessionStorage.getItem('bibi_session_id');
+    let sid = window.sessionStorage.getItem("bibi_session_id");
     if (!sid) {
       sid = `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-      window.sessionStorage.setItem('bibi_session_id', sid);
+      window.sessionStorage.setItem("bibi_session_id", sid);
     }
     return sid;
   } catch (_e) {
-    return '';
+    return "";
   }
 }
 
 // ── UTM sticky: запоминаем UTM при первом заходе в сессию ────────────
-const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+const UTM_KEYS = [
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+];
 
 function captureUtm() {
   try {
@@ -50,7 +56,7 @@ function captureUtm() {
       if (v) captured[k] = v.slice(0, 128);
     });
     if (Object.keys(captured).length) {
-      window.sessionStorage.setItem('bibi_utm', JSON.stringify(captured));
+      window.sessionStorage.setItem("bibi_utm", JSON.stringify(captured));
     }
   } catch (_e) {
     /* noop */
@@ -59,7 +65,7 @@ function captureUtm() {
 
 function readUtm() {
   try {
-    const raw = window.sessionStorage.getItem('bibi_utm');
+    const raw = window.sessionStorage.getItem("bibi_utm");
     if (!raw) return {};
     return JSON.parse(raw) || {};
   } catch (_e) {
@@ -72,11 +78,11 @@ async function sendEvent(type, extra = {}) {
   if (!BACKEND_URL) return;
   const body = {
     type,
-    path: window.location.pathname || '/',
+    path: window.location.pathname || "/",
     session_id: getSessionId(),
-    referrer: document.referrer || '',
-    host: window.location.host || '',
-    user_agent: navigator.userAgent || '',
+    referrer: document.referrer || "",
+    host: window.location.host || "",
+    user_agent: navigator.userAgent || "",
     ...readUtm(),
     ...extra,
   };
@@ -85,16 +91,16 @@ async function sendEvent(type, extra = {}) {
     const url = `${BACKEND_URL}/api/track/event`;
     const payload = JSON.stringify(body);
     if (navigator.sendBeacon) {
-      const blob = new Blob([payload], { type: 'application/json' });
+      const blob = new Blob([payload], { type: "application/json" });
       navigator.sendBeacon(url, blob);
       return;
     }
     await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: payload,
       keepalive: true,
-      credentials: 'omit',
+      credentials: "omit",
     });
   } catch (_e) {
     /* network errors — silent */
@@ -106,23 +112,23 @@ let _initialized = false;
 let _lastPath = null;
 
 export function initTracker() {
-  if (_initialized || typeof window === 'undefined') return;
+  if (_initialized || typeof window === "undefined") return;
   _initialized = true;
   captureUtm();
   // Первый page_view
   _lastPath = window.location.pathname;
-  sendEvent('page_view');
+  sendEvent("page_view");
 
   // Слушаем смену history (React Router pushState/popstate)
   const fire = () => {
     const p = window.location.pathname;
     if (p === _lastPath) return;
     _lastPath = p;
-    sendEvent('page_view');
+    sendEvent("page_view");
   };
 
   // popstate (back/forward)
-  window.addEventListener('popstate', fire);
+  window.addEventListener("popstate", fire);
 
   // monkey-patch pushState/replaceState — стандартный приём для SPA-трекинга
   const _push = window.history.pushState.bind(window.history);
@@ -143,7 +149,9 @@ export function trackEvent(type, extra = {}) {
   return sendEvent(type, extra);
 }
 
-export const trackVehicleView   = (extra = {}) => sendEvent('vehicle_view', extra);
-export const trackVinSearch     = (extra = {}) => sendEvent('vin_search', extra);
-export const trackCalculatorUse = (extra = {}) => sendEvent('calculator_use', extra);
-export const trackLeadSubmit    = (extra = {}) => sendEvent('lead_submit', extra);
+export const trackVehicleView = (extra = {}) =>
+  sendEvent("vehicle_view", extra);
+export const trackVinSearch = (extra = {}) => sendEvent("vin_search", extra);
+export const trackCalculatorUse = (extra = {}) =>
+  sendEvent("calculator_use", extra);
+export const trackLeadSubmit = (extra = {}) => sendEvent("lead_submit", extra);

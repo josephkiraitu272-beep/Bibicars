@@ -1,16 +1,16 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
-import { Search } from 'lucide-react';
-import Breadcrumbs from '../../components/public/Breadcrumbs';
-import CatalogFiltersSidebar from '../../components/public/CatalogFiltersSidebar';
-import CatalogActiveChips from '../../components/public/CatalogActiveChips';
-import CarRowCard from '../../components/public/CarRowCard';
-import Pagination from '../../components/public/Pagination';
-import HaveAQuestionBlock from '../../components/public/HaveAQuestionBlock';
-import ConsultationCTAForm from '../../components/public/ConsultationCTAForm';
+import React, { useEffect, useMemo, useState } from "react";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import { Search } from "lucide-react";
+import Breadcrumbs from "../../components/public/Breadcrumbs";
+import CatalogFiltersSidebar from "../../components/public/CatalogFiltersSidebar";
+import CatalogActiveChips from "../../components/public/CatalogActiveChips";
+import CarRowCard from "../../components/public/CarRowCard";
+import Pagination from "../../components/public/Pagination";
+import HaveAQuestionBlock from "../../components/public/HaveAQuestionBlock";
+import ConsultationCTAForm from "../../components/public/ConsultationCTAForm";
 
-const API = process.env.REACT_APP_BACKEND_URL || '';
+const API = "https://backend-production-ae6d.up.railway.app";
 const PER_PAGE = 6;
 const MIN_YEAR = 1990;
 const MAX_YEAR = 2026;
@@ -22,10 +22,10 @@ const MAX_YEAR = 2026;
  * to local catalog filtering.
  */
 const detectVinOrLot = (raw) => {
-  const s = (raw || '').trim();
+  const s = (raw || "").trim();
   if (!s) return null;
   if (/^https?:\/\//i.test(s)) return s; // URL routes through result page too
-  const clean = s.toUpperCase().replace(/[\s-]/g, '');
+  const clean = s.toUpperCase().replace(/[\s-]/g, "");
   if (/^[A-HJ-NPR-Z0-9]{17}$/.test(clean)) return clean; // full VIN
   if (/^[A-HJ-NPR-Z0-9]{4,16}$/.test(clean)) return clean; // partial VIN / lot
   if (/^\d{4,10}$/.test(clean)) return clean; // numeric lot
@@ -38,7 +38,7 @@ export default function VehiclesPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const navigate = useNavigate();
 
   // Submit handler: VIN / LOT / URL -> redirect to unified result page;
@@ -85,7 +85,8 @@ export default function VehiclesPage() {
       arr.push({
         id: `brand-${filters.brand}`,
         label: filters.brand,
-        onRemove: () => setFilters({ ...filters, brand: undefined, model: undefined }),
+        onRemove: () =>
+          setFilters({ ...filters, brand: undefined, model: undefined }),
       });
     }
     if (filters.model) {
@@ -95,19 +96,26 @@ export default function VehiclesPage() {
         onRemove: () => setFilters({ ...filters, model: undefined }),
       });
     }
-    if (filters.yearRange && (filters.yearRange[0] !== MIN_YEAR || filters.yearRange[1] !== MAX_YEAR)) {
+    if (
+      filters.yearRange &&
+      (filters.yearRange[0] !== MIN_YEAR || filters.yearRange[1] !== MAX_YEAR)
+    ) {
       arr.push({
-        id: 'year',
+        id: "year",
         label: `${filters.yearRange[0]}–${filters.yearRange[1]}`,
         onRemove: () => setFilters({ ...filters, yearRange: undefined }),
       });
     }
     if (filters.mileageMin || filters.mileageMax) {
       arr.push({
-        id: 'mileage',
-        label: `Mileage ${filters.mileageMin || 0}–${filters.mileageMax || '∞'} km`,
+        id: "mileage",
+        label: `Mileage ${filters.mileageMin || 0}–${filters.mileageMax || "∞"} km`,
         onRemove: () =>
-          setFilters({ ...filters, mileageMin: undefined, mileageMax: undefined }),
+          setFilters({
+            ...filters,
+            mileageMin: undefined,
+            mileageMax: undefined,
+          }),
       });
     }
     (filters.auctions || []).forEach((a) =>
@@ -115,32 +123,44 @@ export default function VehiclesPage() {
         id: `auction-${a}`,
         label: a,
         onRemove: () =>
-          setFilters({ ...filters, auctions: filters.auctions.filter((x) => x !== a) }),
-      })
+          setFilters({
+            ...filters,
+            auctions: filters.auctions.filter((x) => x !== a),
+          }),
+      }),
     );
     (filters.conditions || []).forEach((c) =>
       arr.push({
         id: `cond-${c}`,
         label: c,
         onRemove: () =>
-          setFilters({ ...filters, conditions: filters.conditions.filter((x) => x !== c) }),
-      })
+          setFilters({
+            ...filters,
+            conditions: filters.conditions.filter((x) => x !== c),
+          }),
+      }),
     );
     (filters.fuels || []).forEach((f) =>
       arr.push({
         id: `fuel-${f}`,
         label: f,
         onRemove: () =>
-          setFilters({ ...filters, fuels: filters.fuels.filter((x) => x !== f) }),
-      })
+          setFilters({
+            ...filters,
+            fuels: filters.fuels.filter((x) => x !== f),
+          }),
+      }),
     );
     (filters.damages || []).forEach((d) =>
       arr.push({
         id: `dmg-${d}`,
         label: d,
         onRemove: () =>
-          setFilters({ ...filters, damages: filters.damages.filter((x) => x !== d) }),
-      })
+          setFilters({
+            ...filters,
+            damages: filters.damages.filter((x) => x !== d),
+          }),
+      }),
     );
     return arr;
   }, [filters]);
@@ -151,7 +171,9 @@ export default function VehiclesPage() {
         <div className="max-w-[1920px] mx-auto px-6 md:px-10 lg:px-[60px] xl:px-[100px]">
           {/* Top row: Breadcrumbs + Search */}
           <div className="flex items-start justify-between gap-6 flex-wrap">
-            <Breadcrumbs items={[{ label: 'HOME', to: '/' }, { label: 'CATALOG' }]} />
+            <Breadcrumbs
+              items={[{ label: "HOME", to: "/" }, { label: "CATALOG" }]}
+            />
             <form
               onSubmit={onSubmitSearch}
               className="flex items-center h-11 w-full md:w-[380px] xl:w-[420px] border border-[#FEAE00]/50 rounded bg-[#0F0F0F] focus-within:border-[#FEAE00] transition-colors"
@@ -179,7 +201,7 @@ export default function VehiclesPage() {
 
           <h1
             className="font-bold uppercase text-white mt-10 leading-none"
-            style={{ fontSize: 'clamp(40px, 5vw, 72px)' }}
+            style={{ fontSize: "clamp(40px, 5vw, 72px)" }}
           >
             Catalog
           </h1>
@@ -205,7 +227,9 @@ export default function VehiclesPage() {
               </div>
 
               {loading && (
-                <div className="text-[#5E5E5E] py-20 text-center">Loading vehicles…</div>
+                <div className="text-[#5E5E5E] py-20 text-center">
+                  Loading vehicles…
+                </div>
               )}
               {!loading && items.length === 0 && (
                 <div

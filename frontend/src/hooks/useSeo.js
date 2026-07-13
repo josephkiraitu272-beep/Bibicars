@@ -26,7 +26,7 @@
  *     path:        '/catalog',                 // override canonical path
  *   });
  */
-import { useEffect } from 'react';
+import { useEffect } from "react";
 
 // Public-origin shim. Resolved at runtime from the active browser
 // origin so SEO tags follow whichever domain the app is actually
@@ -34,30 +34,33 @@ import { useEffect } from 'react';
 // hook executes server-side (SSR/SSG) we fall back to the value of
 // REACT_APP_PUBLIC_ORIGIN or, lastly, the API origin.
 const _publicOrigin = () => {
-  if (typeof window !== 'undefined' && window.location && window.location.origin) {
+  if (
+    typeof window !== "undefined" &&
+    window.location &&
+    window.location.origin
+  ) {
     return window.location.origin;
   }
-  return (process.env.REACT_APP_PUBLIC_ORIGIN
-       || process.env.REACT_APP_BACKEND_URL
-       || '').replace(/\/$/, '');
+  return "https://backend-production-ae6d.up.railway.app".replace(/\/$/, "");
 };
 const ORIGIN = _publicOrigin();
 
 const DEFAULTS = {
-  title:       'BIBI Cars — Pre-owned car import from US & Korea to Bulgaria',
-  description: 'BIBI Cars — auction-to-keys car import platform. Live calculator, VIN check, customs handling and door-to-door delivery of pre-owned vehicles from the United States and South Korea to Bulgaria.',
-  image:       `${ORIGIN}/og-image.png`,
-  type:        'website',
+  title: "BIBI Cars — Pre-owned car import from US & Korea to Bulgaria",
+  description:
+    "BIBI Cars — auction-to-keys car import platform. Live calculator, VIN check, customs handling and door-to-door delivery of pre-owned vehicles from the United States and South Korea to Bulgaria.",
+  image: `${ORIGIN}/og-image.png`,
+  type: "website",
 };
 
-const TAG_FLAG = 'data-managed-by-useSeo';
+const TAG_FLAG = "data-managed-by-useSeo";
 
 const _ensureMeta = (selector, attrs) => {
   let el = document.head.querySelector(selector);
   if (!el) {
-    el = document.createElement('meta');
+    el = document.createElement("meta");
     Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
-    el.setAttribute(TAG_FLAG, '1');
+    el.setAttribute(TAG_FLAG, "1");
     document.head.appendChild(el);
   }
   return el;
@@ -69,10 +72,10 @@ const _ensureLink = (rel, hreflang = null) => {
     : `link[rel="${rel}"]:not([hreflang])`;
   let el = document.head.querySelector(sel);
   if (!el) {
-    el = document.createElement('link');
-    el.setAttribute('rel', rel);
-    if (hreflang) el.setAttribute('hreflang', hreflang);
-    el.setAttribute(TAG_FLAG, '1');
+    el = document.createElement("link");
+    el.setAttribute("rel", rel);
+    if (hreflang) el.setAttribute("hreflang", hreflang);
+    el.setAttribute(TAG_FLAG, "1");
     document.head.appendChild(el);
   }
   return el;
@@ -81,58 +84,75 @@ const _ensureLink = (rel, hreflang = null) => {
 const _setMeta = (selector, attrs, value) => {
   if (!value) return;
   const el = _ensureMeta(selector, attrs);
-  el.setAttribute('content', value);
+  el.setAttribute("content", value);
 };
 
 export function useSeo(opts = {}) {
   useEffect(() => {
     const o = { ...DEFAULTS, ...opts };
     const fullUrl = o.path
-      ? `${ORIGIN}${o.path.startsWith('/') ? o.path : '/' + o.path}`
-      : `${ORIGIN}${window.location.pathname}${window.location.search || ''}`;
+      ? `${ORIGIN}${o.path.startsWith("/") ? o.path : "/" + o.path}`
+      : `${ORIGIN}${window.location.pathname}${window.location.search || ""}`;
 
     // Title — always update
     if (o.title) document.title = o.title;
 
     // Description / keywords / robots
-    _setMeta('meta[name="description"]',  { name: 'description' },  o.description);
-    _setMeta('meta[name="keywords"]',     { name: 'keywords' },     o.keywords);
+    _setMeta(
+      'meta[name="description"]',
+      { name: "description" },
+      o.description,
+    );
+    _setMeta('meta[name="keywords"]', { name: "keywords" }, o.keywords);
     _setMeta(
       'meta[name="robots"]',
-      { name: 'robots' },
-      o.noindex ? 'noindex, nofollow' : 'index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1',
+      { name: "robots" },
+      o.noindex
+        ? "noindex, nofollow"
+        : "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1",
     );
 
     // Canonical
-    const canonical = _ensureLink('canonical');
-    canonical.setAttribute('href', fullUrl);
+    const canonical = _ensureLink("canonical");
+    canonical.setAttribute("href", fullUrl);
 
     // Open Graph
-    _setMeta('meta[property="og:title"]',       { property: 'og:title' },       o.title);
-    _setMeta('meta[property="og:description"]', { property: 'og:description' }, o.description);
-    _setMeta('meta[property="og:url"]',         { property: 'og:url' },         fullUrl);
-    _setMeta('meta[property="og:type"]',        { property: 'og:type' },        o.type);
-    _setMeta('meta[property="og:image"]',       { property: 'og:image' },       o.image);
+    _setMeta('meta[property="og:title"]', { property: "og:title" }, o.title);
+    _setMeta(
+      'meta[property="og:description"]',
+      { property: "og:description" },
+      o.description,
+    );
+    _setMeta('meta[property="og:url"]', { property: "og:url" }, fullUrl);
+    _setMeta('meta[property="og:type"]', { property: "og:type" }, o.type);
+    _setMeta('meta[property="og:image"]', { property: "og:image" }, o.image);
 
     // Twitter
-    _setMeta('meta[name="twitter:title"]',       { name: 'twitter:title' },       o.title);
-    _setMeta('meta[name="twitter:description"]', { name: 'twitter:description' }, o.description);
-    _setMeta('meta[name="twitter:image"]',       { name: 'twitter:image' },       o.image);
+    _setMeta('meta[name="twitter:title"]', { name: "twitter:title" }, o.title);
+    _setMeta(
+      'meta[name="twitter:description"]',
+      { name: "twitter:description" },
+      o.description,
+    );
+    _setMeta('meta[name="twitter:image"]', { name: "twitter:image" }, o.image);
 
     // Language alternates — replace whole set on each call
-    if (o.alternates && typeof o.alternates === 'object') {
+    if (o.alternates && typeof o.alternates === "object") {
       Object.entries(o.alternates).forEach(([lang, href]) => {
-        const el = _ensureLink('alternate', lang);
-        el.setAttribute('href', href.startsWith('http') ? href : `${ORIGIN}${href}`);
+        const el = _ensureLink("alternate", lang);
+        el.setAttribute(
+          "href",
+          href.startsWith("http") ? href : `${ORIGIN}${href}`,
+        );
       });
     }
 
     // Optional per-page JSON-LD
     let ldEl = null;
     if (o.structuredData) {
-      ldEl = document.createElement('script');
-      ldEl.setAttribute('type', 'application/ld+json');
-      ldEl.setAttribute(TAG_FLAG, 'jsonld');
+      ldEl = document.createElement("script");
+      ldEl.setAttribute("type", "application/ld+json");
+      ldEl.setAttribute(TAG_FLAG, "jsonld");
       ldEl.textContent = JSON.stringify(o.structuredData);
       document.head.appendChild(ldEl);
     }

@@ -28,14 +28,19 @@
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 
-const API = process.env.REACT_APP_BACKEND_URL || "";
+const API = "https://backend-production-ae6d.up.railway.app";
 
 /**
  * Build the axios params object from UI filter state. Empty/null/undefined
  * values are stripped so the cache key stays stable as the user toggles
  * controls.
  */
-export function buildVehiclesParams(filters = {}, sort = "popular", skip = 0, limit = 24) {
+export function buildVehiclesParams(
+  filters = {},
+  sort = "popular",
+  skip = 0,
+  limit = 24,
+) {
   const p = { skip, limit, sort };
   const f = filters || {};
 
@@ -65,8 +70,10 @@ export function buildVehiclesParams(filters = {}, sort = "popular", skip = 0, li
     if (arr.length) p.auction_name = arr.join("|");
   }
   if (Array.isArray(f.fuel) && f.fuel.length) p.fuel = f.fuel.join(",");
-  if (Array.isArray(f.transmission) && f.transmission.length) p.transmission = f.transmission.join(",");
-  if (Array.isArray(f.auctionStatus) && f.auctionStatus.length) p.auction_status = f.auctionStatus.join(",");
+  if (Array.isArray(f.transmission) && f.transmission.length)
+    p.transmission = f.transmission.join(",");
+  if (Array.isArray(f.auctionStatus) && f.auctionStatus.length)
+    p.auction_status = f.auctionStatus.join(",");
 
   return p;
 }
@@ -113,7 +120,11 @@ export default function usePublicVehicles({
       });
       const data = res?.data || {};
       return {
-        items: Array.isArray(data.data) ? data.data : Array.isArray(data.items) ? data.items : [],
+        items: Array.isArray(data.data)
+          ? data.data
+          : Array.isArray(data.items)
+            ? data.items
+            : [],
         total: Number.isFinite(data.total) ? Number(data.total) : 0,
         limit: data.limit ?? pageSize,
         skip: data.skip ?? skip,

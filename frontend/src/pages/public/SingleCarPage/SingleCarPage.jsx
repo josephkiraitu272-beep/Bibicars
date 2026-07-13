@@ -1,23 +1,23 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import axios from 'axios';
-import NavigationHeader from './components/NavigationHeader';
-import ImageGrid from './components/ImageGrid';
-import CostCalculator from './components/CostCalculator';
-import NavigationFooter from './components/NavigationFooter';
-import SimilarCars from './components/SimilarCars';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import axios from "axios";
+import NavigationHeader from "./components/NavigationHeader";
+import ImageGrid from "./components/ImageGrid";
+import CostCalculator from "./components/CostCalculator";
+import NavigationFooter from "./components/NavigationFooter";
+import SimilarCars from "./components/SimilarCars";
 // FreshnessBadge intentionally hidden in production UI (no Live/updated chip)
 // import FreshnessBadge from './components/FreshnessBadge';
-import useCarByVin from './useCarByVin';
-import { useLang } from '../../../i18n';
-import { useSingleCarT } from './i18n';
-import './single-car.tokens.css';
-import styles from './SingleCarPage.module.css';
-import { trackEvent, EVENT_NAMES } from '../../../hooks/useTrackEvent';
-import { trackVehicleView } from '../../../lib/tracker';
-import useSeo from '../../../hooks/useSeo';
+import useCarByVin from "./useCarByVin";
+import { useLang } from "../../../i18n";
+import { useSingleCarT } from "./i18n";
+import "./single-car.tokens.css";
+import styles from "./SingleCarPage.module.css";
+import { trackEvent, EVENT_NAMES } from "../../../hooks/useTrackEvent";
+import { trackVehicleView } from "../../../lib/tracker";
+import useSeo from "../../../hooks/useSeo";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 /**
  * BIBI Cars — Single Car page (EN/BG i18n).
@@ -37,35 +37,40 @@ const SingleCarPage = () => {
   // For an unknown VIN we still emit a sane, indexable head so Google
   // Ads landing-page quality remains green on the URL.
   const seoTitle = car?.vehicle
-    ? `${car.vehicle.year || ''} ${car.vehicle.make || ''} ${car.vehicle.model || ''}`.trim() + ' · BIBI Cars'
-    : `${vinOrSlug || 'Vehicle'} — BIBI Cars`;
+    ? `${car.vehicle.year || ""} ${car.vehicle.make || ""} ${car.vehicle.model || ""}`.trim() +
+      " · BIBI Cars"
+    : `${vinOrSlug || "Vehicle"} — BIBI Cars`;
   const seoDescription = car?.vehicle
-    ? `${car.vehicle.year || ''} ${car.vehicle.make || ''} ${car.vehicle.model || ''}${car.vehicle.bodyType ? ', ' + car.vehicle.bodyType : ''}. VIN ${car.vehicle.vin || ''}. Imported by BIBI Cars from US/Korean auctions to Bulgaria — turn-key pricing, customs handled.`
-    : 'Pre-owned vehicle imported from US & Korean auctions by BIBI Cars. Transparent pricing in EUR, customs and delivery to Bulgaria included.';
+    ? `${car.vehicle.year || ""} ${car.vehicle.make || ""} ${car.vehicle.model || ""}${car.vehicle.bodyType ? ", " + car.vehicle.bodyType : ""}. VIN ${car.vehicle.vin || ""}. Imported by BIBI Cars from US/Korean auctions to Bulgaria — turn-key pricing, customs handled.`
+    : "Pre-owned vehicle imported from US & Korean auctions by BIBI Cars. Transparent pricing in EUR, customs and delivery to Bulgaria included.";
   useSeo({
-    title:        seoTitle,
-    description:  seoDescription,
-    path:         `/cars/${vinOrSlug || ''}`,
-    image:        car?.vehicle?.images?.[0] || car?.images?.[0] || undefined,
-    type:         'product',
-    structuredData: car?.vehicle ? {
-      '@context': 'https://schema.org',
-      '@type':    'Vehicle',
-      'name':     `${car.vehicle.year || ''} ${car.vehicle.make || ''} ${car.vehicle.model || ''}`.trim(),
-      'vehicleIdentificationNumber': car.vehicle.vin,
-      'brand':           { '@type': 'Brand', 'name': car.vehicle.make || 'Unknown' },
-      'model':           car.vehicle.model || undefined,
-      'modelDate':       car.vehicle.year || undefined,
-      'bodyType':        car.vehicle.bodyType || undefined,
-      'vehicleTransmission': car.vehicle.transmission || undefined,
-      'fuelType':        car.vehicle.fuel || undefined,
-      'mileageFromOdometer': car.vehicle.mileage ? {
-        '@type': 'QuantitativeValue',
-        'value': car.vehicle.mileage,
-        'unitCode': car.vehicle.mileageUnit === 'km' ? 'KMT' : 'SMI',
-      } : undefined,
-      'image':           car.vehicle.images || car.images || undefined,
-    } : undefined,
+    title: seoTitle,
+    description: seoDescription,
+    path: `/cars/${vinOrSlug || ""}`,
+    image: car?.vehicle?.images?.[0] || car?.images?.[0] || undefined,
+    type: "product",
+    structuredData: car?.vehicle
+      ? {
+          "@context": "https://schema.org",
+          "@type": "Vehicle",
+          name: `${car.vehicle.year || ""} ${car.vehicle.make || ""} ${car.vehicle.model || ""}`.trim(),
+          vehicleIdentificationNumber: car.vehicle.vin,
+          brand: { "@type": "Brand", name: car.vehicle.make || "Unknown" },
+          model: car.vehicle.model || undefined,
+          modelDate: car.vehicle.year || undefined,
+          bodyType: car.vehicle.bodyType || undefined,
+          vehicleTransmission: car.vehicle.transmission || undefined,
+          fuelType: car.vehicle.fuel || undefined,
+          mileageFromOdometer: car.vehicle.mileage
+            ? {
+                "@type": "QuantitativeValue",
+                value: car.vehicle.mileage,
+                unitCode: car.vehicle.mileageUnit === "km" ? "KMT" : "SMI",
+              }
+            : undefined,
+          image: car.vehicle.images || car.images || undefined,
+        }
+      : undefined,
   });
 
   /* ── Cost calculator state — derived from the car's auction price ── */
@@ -74,11 +79,15 @@ const SingleCarPage = () => {
 
   // Vehicle classification → calculator `vehicleType`
   const vehicleType = useMemo(() => {
-    const body = (car?.vehicle?.bodyType || '').toLowerCase();
-    if (body.includes('suv') && /(big|full)/i.test(car?.vehicle?.bodyType || '')) return 'bigSUV';
-    if (body.includes('suv')) return 'suv';
-    if (body.includes('pickup')) return 'pickup';
-    return 'sedan';
+    const body = (car?.vehicle?.bodyType || "").toLowerCase();
+    if (
+      body.includes("suv") &&
+      /(big|full)/i.test(car?.vehicle?.bodyType || "")
+    )
+      return "bigSUV";
+    if (body.includes("suv")) return "suv";
+    if (body.includes("pickup")) return "pickup";
+    return "sedan";
   }, [car]);
 
   // Phase B3 — detail view + bounce observation (Wave 3 freeze).
@@ -103,31 +112,34 @@ const SingleCarPage = () => {
     };
   }, [car?.vehicle?.vin, car?.vehicle?.make, car?.vehicle?.year]);
 
-  const runCalc = useCallback(async (priceUsd, auction) => {
-    if (!priceUsd || priceUsd <= 0) {
-      setCalc(null);
-      return;
-    }
-    setCalcLoading(true);
-    try {
-      const res = await axios.post(
-        `${API_URL}/api/calculator/calculate`,
-        {
-          origin: 'usa',
-          price: priceUsd,
-          port: 'burgas',
-          auction: (auction || 'copart').toLowerCase(),
-          vehicleType,
-        },
-        { timeout: 12000 },
-      );
-      setCalc(res.data);
-    } catch {
-      setCalc(null);
-    } finally {
-      setCalcLoading(false);
-    }
-  }, [vehicleType]);
+  const runCalc = useCallback(
+    async (priceUsd, auction) => {
+      if (!priceUsd || priceUsd <= 0) {
+        setCalc(null);
+        return;
+      }
+      setCalcLoading(true);
+      try {
+        const res = await axios.post(
+          `${API_URL}/api/calculator/calculate`,
+          {
+            origin: "usa",
+            price: priceUsd,
+            port: "burgas",
+            auction: (auction || "copart").toLowerCase(),
+            vehicleType,
+          },
+          { timeout: 12000 },
+        );
+        setCalc(res.data);
+      } catch {
+        setCalc(null);
+      } finally {
+        setCalcLoading(false);
+      }
+    },
+    [vehicleType],
+  );
 
   // Auto-run calculator with parsed bid price on car load.
   useEffect(() => {
@@ -137,54 +149,64 @@ const SingleCarPage = () => {
 
   /* ── handlers ── */
   const handleExactCost = () => {
-    if (typeof window !== 'undefined') {
-      const el = document.getElementById('cost-calculator');
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (typeof window !== "undefined") {
+      const el = document.getElementById("cost-calculator");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
-  const handleBackToCatalog = () => navigate('/catalog');
+  const handleBackToCatalog = () => navigate("/catalog");
 
   /* ── derived view-model ── */
-  const title = car?.title
-    || (loading
-        ? t.loading
-        : (error === 'not_found' ? t.vinNotFound : t.vehicle));
+  const title =
+    car?.title ||
+    (loading ? t.loading : error === "not_found" ? t.vinNotFound : t.vehicle);
   const breadcrumb = [t.home, t.catalog];
 
   const preFilled = car
     ? {
         auction: car.auction.auction,
-        car: `${(car.vehicle.brand || '').toUpperCase()} ${(car.vehicle.model || '').toUpperCase()} ${car.vehicle.year || ''}`.trim(),
+        car: `${(car.vehicle.brand || "").toUpperCase()} ${(car.vehicle.model || "").toUpperCase()} ${car.vehicle.year || ""}`.trim(),
         fuelType: car.vehicle.fuel,
         mileage: car.vehicle.mileage,
       }
     : undefined;
 
-  const fmt = (v) => (v == null ? '€0' : `€${Math.round(Number(v) || 0).toLocaleString('en-US')}`);
+  const fmt = (v) =>
+    v == null ? "€0" : `€${Math.round(Number(v) || 0).toLocaleString("en-US")}`;
   // Calculator response shape: { calculation: { total, vehiclePrice, auctionFees, ... }, formattedBreakdown: [{key,label,value}, ...] }
-  const breakdown = Array.isArray(calc?.formattedBreakdown) ? calc.formattedBreakdown : (calc?.calculation?.breakdown || []);
+  const breakdown = Array.isArray(calc?.formattedBreakdown)
+    ? calc.formattedBreakdown
+    : calc?.calculation?.breakdown || [];
   const pick = (k) => {
     const item = breakdown.find((b) => b.key === k);
     return Number(item?.value || 0);
   };
   const calculation = calc?.calculation || {};
   const vehiclePrice = Number(calculation.vehiclePrice || 0);
-  const auctionFeesTotal = pick('auctionBuyerFee') + pick('auctionGateFee') + pick('auctionTitleFee');
-  const logisticsTotal = pick('usaInland') + pick('ocean') + pick('portForwarding') + pick('portParking') + pick('parkingBG');
-  const vat = Math.round(vehiclePrice * 0.20);             // 20 % VAT on vehicle value
-  const customsTotalDisplay = pick('customs') + vat;
+  const auctionFeesTotal =
+    pick("auctionBuyerFee") + pick("auctionGateFee") + pick("auctionTitleFee");
+  const logisticsTotal =
+    pick("usaInland") +
+    pick("ocean") +
+    pick("portForwarding") +
+    pick("portParking") +
+    pick("parkingBG");
+  const vat = Math.round(vehiclePrice * 0.2); // 20 % VAT on vehicle value
+  const customsTotalDisplay = pick("customs") + vat;
   const costs = calc
     ? {
         carAuction: fmt(vehiclePrice + auctionFeesTotal),
-        portLoadingHandling: fmt(pick('usaInland')),
-        oceanFreight: fmt(pick('ocean')),
-        marineInsurance: fmt(pick('insurance')),
-        portHandlingBg: fmt(pick('portForwarding') + pick('portParking') + pick('parkingBG')),
+        portLoadingHandling: fmt(pick("usaInland")),
+        oceanFreight: fmt(pick("ocean")),
+        marineInsurance: fmt(pick("insurance")),
+        portHandlingBg: fmt(
+          pick("portForwarding") + pick("portParking") + pick("parkingBG"),
+        ),
         logisticsTotal: fmt(logisticsTotal),
-        customsDuty: fmt(pick('customs')),
+        customsDuty: fmt(pick("customs")),
         vat: fmt(vat),
-        bibiServiceFee: fmt(pick('companyServices')),
-        transportBg: fmt(pick('euDelivery')),
+        bibiServiceFee: fmt(pick("companyServices")),
+        transportBg: fmt(pick("euDelivery")),
         technotest: fmt(0),
         customsTotal: fmt(customsTotalDisplay),
         totalApproximate: fmt((calculation.total || 0) + vat),
@@ -196,89 +218,131 @@ const SingleCarPage = () => {
       <NavigationHeader
         breadcrumb={breadcrumb}
         title={title}
-        vin={car?.auction?.vin || car?.vehicle?.vin || (vinOrSlug ? String(vinOrSlug).toUpperCase() : '')}
+        vin={
+          car?.auction?.vin ||
+          car?.vehicle?.vin ||
+          (vinOrSlug ? String(vinOrSlug).toUpperCase() : "")
+        }
         loading={loading}
-        shareSnapshot={car ? {
-          title: car.title,
-          make: car.vehicle?.brand,
-          model: car.vehicle?.model,
-          year: car.vehicle?.year,
-          price: car.auction?.bidPriceRaw,
-          currency: 'EUR',
-          image: Array.isArray(car.images) && car.images.length ? car.images[0] : undefined,
-          lot_number: car.auction?.lot,
-          auction_name: car.auction?.auction,
-          odometer: (() => {
-            const raw = car.raw?.data?.odometer;
-            const n = typeof raw === 'number' ? raw : parseInt(String(raw || '').replace(/[^\d]/g, ''), 10);
-            return Number.isFinite(n) && n > 0 ? n : undefined;
-          })(),
-          odometer_unit: car.raw?.data?.odometer_unit,
-          description: car.description,
-        } : null}
+        shareSnapshot={
+          car
+            ? {
+                title: car.title,
+                make: car.vehicle?.brand,
+                model: car.vehicle?.model,
+                year: car.vehicle?.year,
+                price: car.auction?.bidPriceRaw,
+                currency: "EUR",
+                image:
+                  Array.isArray(car.images) && car.images.length
+                    ? car.images[0]
+                    : undefined,
+                lot_number: car.auction?.lot,
+                auction_name: car.auction?.auction,
+                odometer: (() => {
+                  const raw = car.raw?.data?.odometer;
+                  const n =
+                    typeof raw === "number"
+                      ? raw
+                      : parseInt(String(raw || "").replace(/[^\d]/g, ""), 10);
+                  return Number.isFinite(n) && n > 0 ? n : undefined;
+                })(),
+                odometer_unit: car.raw?.data?.odometer_unit,
+                description: car.description,
+              }
+            : null
+        }
       />
 
       {loading && !car && (
         <div className={styles.stateBox}>
           <div className={styles.spinner} />
           <div className={styles.stateText}>
-            {t.loadingVehicleData} <code>{String(vinOrSlug || '').toUpperCase()}</code>…
+            {t.loadingVehicleData}{" "}
+            <code>{String(vinOrSlug || "").toUpperCase()}</code>…
           </div>
         </div>
       )}
 
-      {!loading && error === 'not_found' && (
+      {!loading && error === "not_found" && (
         <div className={styles.stateBox}>
           <div className={styles.stateTitle}>{t.vinNotFound}</div>
           <div className={styles.stateText}>
-            {t.vinNotFoundDesc.split('{vin}').map((chunk, i, arr) => (
+            {t.vinNotFoundDesc.split("{vin}").map((chunk, i, arr) => (
               <React.Fragment key={i}>
                 {chunk}
                 {i < arr.length - 1 && (
-                  <code>{String(vinOrSlug || '').toUpperCase()}</code>
+                  <code>{String(vinOrSlug || "").toUpperCase()}</code>
                 )}
               </React.Fragment>
             ))}
           </div>
-          <button type="button" className={styles.stateBtn} onClick={handleBackToCatalog}>
+          <button
+            type="button"
+            className={styles.stateBtn}
+            onClick={handleBackToCatalog}
+          >
             {t.browseCatalog}
           </button>
         </div>
       )}
 
-      {!loading && error && error !== 'not_found' && (
+      {!loading && error && error !== "not_found" && (
         <div className={styles.stateBox}>
           <div className={styles.stateTitle}>{t.couldNotLoad}</div>
-          <div className={styles.stateText}>{typeof error === 'string' ? error : t.unexpectedErr}</div>
-          <button type="button" className={styles.stateBtn} onClick={() => window.location.reload()}>
+          <div className={styles.stateText}>
+            {typeof error === "string" ? error : t.unexpectedErr}
+          </div>
+          <button
+            type="button"
+            className={styles.stateBtn}
+            onClick={() => window.location.reload()}
+          >
             {t.tryAgain}
           </button>
         </div>
       )}
 
-      {!loading && car && (() => {
-        const grand = Math.round((calc?.calculation?.total || 0) + (calc?.calculation?.vehiclePrice ? calc.calculation.vehiclePrice * 0.2 : 0));
-        const carWithTotal = grand > 0
-          ? { ...car, auction: { ...car.auction, estimatedTotalPrice: `€${grand.toLocaleString('en-US')}` } }
-          : car;
-        return (
-          <>
-            {/* Freshness/Live badge hidden by product decision (no production
+      {!loading &&
+        car &&
+        (() => {
+          const grand = Math.round(
+            (calc?.calculation?.total || 0) +
+              (calc?.calculation?.vehiclePrice
+                ? calc.calculation.vehiclePrice * 0.2
+                : 0),
+          );
+          const carWithTotal =
+            grand > 0
+              ? {
+                  ...car,
+                  auction: {
+                    ...car.auction,
+                    estimatedTotalPrice: `€${grand.toLocaleString("en-US")}`,
+                  },
+                }
+              : car;
+          return (
+            <>
+              {/* Freshness/Live badge hidden by product decision (no production
                 status chips on the customer-facing page). */}
-            <ImageGrid car={carWithTotal} onExactCostClick={handleExactCost} />
-            <div id="cost-calculator">
-              <CostCalculator
-                preFilled={preFilled}
-                costs={costs}
-                loading={calcLoading}
-                onFullCalculationClick={handleExactCost}
+              <ImageGrid
+                car={carWithTotal}
+                onExactCostClick={handleExactCost}
               />
-            </div>
-            <NavigationFooter />
-            <SimilarCars />
-          </>
-        );
-      })()}
+              <div id="cost-calculator">
+                <CostCalculator
+                  preFilled={preFilled}
+                  costs={costs}
+                  loading={calcLoading}
+                  onFullCalculationClick={handleExactCost}
+                />
+              </div>
+              <NavigationFooter />
+              <SimilarCars />
+            </>
+          );
+        })()}
     </div>
   );
 };

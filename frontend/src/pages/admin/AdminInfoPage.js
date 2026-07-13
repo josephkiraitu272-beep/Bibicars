@@ -21,15 +21,21 @@
  *   PUT  /api/admin/site-info                        admin/master_admin
  *   POST /api/admin/site-info/upload-review-image    admin/master_admin
  */
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import axios from 'axios';
-import { toast } from 'sonner';
-import ReactQuill from 'react-quill-new';
-import 'react-quill-new/dist/quill.snow.css';
-import BlogArticlesEditor from './BlogArticlesEditor';
-import GoogleReviewsEditor from './GoogleReviewsEditor';
-import RefreshButton from '../../components/ui/RefreshButton';
-import { useLang } from '../../i18n';
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
+import BlogArticlesEditor from "./BlogArticlesEditor";
+import GoogleReviewsEditor from "./GoogleReviewsEditor";
+import RefreshButton from "../../components/ui/RefreshButton";
+import { useLang } from "../../i18n";
 import {
   ShieldCheck,
   FileText,
@@ -57,71 +63,95 @@ import {
   PencilSimple,
   CaretDown,
   Check,
-} from '@phosphor-icons/react';
+} from "@phosphor-icons/react";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 // ─────────────────────────────────────────────────────────────────────────
 //  Sidebar configuration — groups of related pages
 // ─────────────────────────────────────────────────────────────────────────
 const NAV_GROUPS = [
   {
-    id: 'legal',
-    label: 'Legal & Privacy',
+    id: "legal",
+    label: "Legal & Privacy",
     items: [
-      { id: 'privacy',       label: 'Privacy Policy', icon: ShieldCheck },
-      { id: 'terms',         label: 'Terms of Use',   icon: FileText },
-      { id: 'cookies',       label: 'Cookie Policy',  icon: Cookie },
-      { id: 'conditions',    label: 'Conditions',     icon: ListChecks },
-      { id: 'cookie_banner', label: 'Cookie Banner',  icon: Megaphone },
+      { id: "privacy", label: "Privacy Policy", icon: ShieldCheck },
+      { id: "terms", label: "Terms of Use", icon: FileText },
+      { id: "cookies", label: "Cookie Policy", icon: Cookie },
+      { id: "conditions", label: "Conditions", icon: ListChecks },
+      { id: "cookie_banner", label: "Cookie Banner", icon: Megaphone },
     ],
   },
   {
-    id: 'content',
-    label: 'Content',
+    id: "content",
+    label: "Content",
     items: [
-      { id: 'faq',            label: 'FAQ',            icon: Question },
-      { id: 'reviews',        label: 'Reviews',        icon: ChatCircle },
-      { id: 'google_reviews', label: 'Google Reviews', icon: Star },
-      { id: 'before_after',   label: 'Before / After', icon: ImageIcon },
-      { id: 'blog',           label: 'Blog Articles',  icon: Newspaper },
+      { id: "faq", label: "FAQ", icon: Question },
+      { id: "reviews", label: "Reviews", icon: ChatCircle },
+      { id: "google_reviews", label: "Google Reviews", icon: Star },
+      { id: "before_after", label: "Before / After", icon: ImageIcon },
+      { id: "blog", label: "Blog Articles", icon: Newspaper },
     ],
   },
   {
-    id: 'layout',
-    label: 'Layout',
+    id: "layout",
+    label: "Layout",
     items: [
-      { id: 'hero',   label: 'Hero Banner', icon: ImageIcon },
-      { id: 'header', label: 'Header', icon: PhoneCall },
-      { id: 'footer', label: 'Footer', icon: PhoneCall },
+      { id: "hero", label: "Hero Banner", icon: ImageIcon },
+      { id: "header", label: "Header", icon: PhoneCall },
+      { id: "footer", label: "Footer", icon: PhoneCall },
     ],
   },
 ];
 
-const POLICY_KEYS = ['privacy', 'terms', 'cookies', 'conditions'];
+const POLICY_KEYS = ["privacy", "terms", "cookies", "conditions"];
 
 const LANGS = [
-  { code: 'en', label: 'English' },
-  { code: 'bg', label: 'Bulgarian' },
+  { code: "en", label: "English" },
+  { code: "bg", label: "Bulgarian" },
 ];
 
 const SOCIALS = [
-  { key: 'instagram', label: 'Instagram', placeholder: 'https://instagram.com/your-page' },
-  { key: 'facebook',  label: 'Facebook',  placeholder: 'https://facebook.com/your-page' },
-  { key: 'telegram',  label: 'Telegram',  placeholder: 'https://t.me/your-channel' },
-  { key: 'tiktok',    label: 'TikTok',    placeholder: 'https://tiktok.com/@your-page' },
-  { key: 'whatsapp',  label: 'WhatsApp',  placeholder: 'https://wa.me/359XXXXXXXXX' },
-  { key: 'viber',     label: 'Viber',     placeholder: 'viber://chat?number=%2B359XXXXXXXXX' },
+  {
+    key: "instagram",
+    label: "Instagram",
+    placeholder: "https://instagram.com/your-page",
+  },
+  {
+    key: "facebook",
+    label: "Facebook",
+    placeholder: "https://facebook.com/your-page",
+  },
+  {
+    key: "telegram",
+    label: "Telegram",
+    placeholder: "https://t.me/your-channel",
+  },
+  {
+    key: "tiktok",
+    label: "TikTok",
+    placeholder: "https://tiktok.com/@your-page",
+  },
+  {
+    key: "whatsapp",
+    label: "WhatsApp",
+    placeholder: "https://wa.me/359XXXXXXXXX",
+  },
+  {
+    key: "viber",
+    label: "Viber",
+    placeholder: "viber://chat?number=%2B359XXXXXXXXX",
+  },
 ];
 
 const quillModules = {
   toolbar: [
     [{ header: [1, 2, 3, false] }],
-    ['bold', 'italic', 'underline', 'strike'],
-    [{ list: 'ordered' }, { list: 'bullet' }],
-    ['link', 'blockquote'],
+    ["bold", "italic", "underline", "strike"],
+    [{ list: "ordered" }, { list: "bullet" }],
+    ["link", "blockquote"],
     [{ align: [] }],
-    ['clean'],
+    ["clean"],
   ],
 };
 
@@ -134,12 +164,24 @@ function Block({ title, description, children, footer }) {
     <div className="bg-white border border-[#E4E4E7] rounded-2xl">
       {(title || description) && (
         <div className="px-5 pt-5 pb-4">
-          {title && <h2 className="font-semibold text-[#18181B] text-[15px]">{title}</h2>}
-          {description && <p className="text-[12.5px] text-[#71717A] mt-1 leading-relaxed">{description}</p>}
+          {title && (
+            <h2 className="font-semibold text-[#18181B] text-[15px]">
+              {title}
+            </h2>
+          )}
+          {description && (
+            <p className="text-[12.5px] text-[#71717A] mt-1 leading-relaxed">
+              {description}
+            </p>
+          )}
         </div>
       )}
       <div className="px-5 pb-5">{children}</div>
-      {footer && <div className="px-5 py-3 border-t border-[#F4F4F5] bg-[#FAFAFA] rounded-b-2xl text-[12px] text-[#71717A]">{footer}</div>}
+      {footer && (
+        <div className="px-5 py-3 border-t border-[#F4F4F5] bg-[#FAFAFA] rounded-b-2xl text-[12px] text-[#71717A]">
+          {footer}
+        </div>
+      )}
     </div>
   );
 }
@@ -148,18 +190,22 @@ function Field({ label, hint, children }) {
   const { t } = useLang();
   return (
     <label className="block">
-      <span className="block text-[12px] font-semibold text-[#52525B] mb-1.5 uppercase tracking-wider">{label}</span>
+      <span className="block text-[12px] font-semibold text-[#52525B] mb-1.5 uppercase tracking-wider">
+        {label}
+      </span>
       {children}
-      {hint && <span className="block text-[11.5px] text-[#A1A1AA] mt-1">{hint}</span>}
+      {hint && (
+        <span className="block text-[11.5px] text-[#A1A1AA] mt-1">{hint}</span>
+      )}
     </label>
   );
 }
 
 const inputCls =
-  'w-full bg-white border border-[#E4E4E7] rounded-lg px-3.5 h-10 text-[14px] text-[#18181B] placeholder:text-[#A1A1AA] focus:outline-none focus:border-[#18181B] focus:ring-2 focus:ring-[#18181B]/10 transition-all';
+  "w-full bg-white border border-[#E4E4E7] rounded-lg px-3.5 h-10 text-[14px] text-[#18181B] placeholder:text-[#A1A1AA] focus:outline-none focus:border-[#18181B] focus:ring-2 focus:ring-[#18181B]/10 transition-all";
 
 const textareaCls =
-  'w-full bg-white border border-[#E4E4E7] rounded-lg px-3.5 py-2.5 text-[14px] text-[#18181B] placeholder:text-[#A1A1AA] focus:outline-none focus:border-[#18181B] focus:ring-2 focus:ring-[#18181B]/10 transition-all resize-y';
+  "w-full bg-white border border-[#E4E4E7] rounded-lg px-3.5 py-2.5 text-[14px] text-[#18181B] placeholder:text-[#A1A1AA] focus:outline-none focus:border-[#18181B] focus:ring-2 focus:ring-[#18181B]/10 transition-all resize-y";
 
 // ─────────────────────────────────────────────────────────────────────────
 //  GroupDropdown — compact section picker (replaces the tall vertical sidebar).
@@ -181,36 +227,47 @@ function GroupDropdown({ group, activeId, onPick }) {
         setOpen(false);
       }
     };
-    const onEsc = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    document.addEventListener('keydown', onEsc);
+    const onEsc = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("keydown", onEsc);
     return () => {
-      document.removeEventListener('mousedown', handler);
-      document.removeEventListener('keydown', onEsc);
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", onEsc);
     };
   }, [open]);
 
   return (
-    <div className="relative min-w-0 flex-1 sm:flex-none sm:w-[200px]" ref={containerRef}>
+    <div
+      className="relative min-w-0 flex-1 sm:flex-none sm:w-[200px]"
+      ref={containerRef}
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         data-testid={`info-group-${group.id}`}
         className={`w-full flex items-center justify-between gap-2 px-3.5 h-10 rounded-xl text-[13px] font-semibold transition-all border ${
           ownsActive
-            ? 'bg-[#18181B] text-white border-[#18181B]'
-            : 'bg-white text-[#52525B] border-[#E4E4E7] hover:bg-[#FAFAFA] hover:border-[#D4D4D8]'
+            ? "bg-[#18181B] text-white border-[#18181B]"
+            : "bg-white text-[#52525B] border-[#E4E4E7] hover:bg-[#FAFAFA] hover:border-[#D4D4D8]"
         }`}
       >
-        <span className="flex items-center gap-2 min-w-0">
-          <span className="truncate uppercase tracking-[0.04em] text-[11.5px]">{group.label}</span>
+        <span className="flex items-center min-w-0 gap-2">
+          <span className="truncate uppercase tracking-[0.04em] text-[11.5px]">
+            {group.label}
+          </span>
           {ownsActive && activeItem && (
             <span className="text-[11.5px] font-normal opacity-80 truncate hidden md:inline">
               · {activeItem.label}
             </span>
           )}
         </span>
-        <CaretDown size={14} weight="bold" className={`flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <CaretDown
+          size={14}
+          weight="bold"
+          className={`flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+        />
       </button>
 
       {open && (
@@ -228,17 +285,30 @@ function GroupDropdown({ group, activeId, onPick }) {
                   type="button"
                   role="option"
                   aria-selected={isActive}
-                  onClick={() => { onPick(it.id); setOpen(false); }}
+                  onClick={() => {
+                    onPick(it.id);
+                    setOpen(false);
+                  }}
                   data-testid={`info-tab-${it.id}`}
                   className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13.5px] font-medium text-left transition-colors ${
                     isActive
-                      ? 'bg-[#F4F4F5] text-[#18181B]'
-                      : 'text-[#52525B] hover:bg-[#FAFAFA] hover:text-[#18181B]'
+                      ? "bg-[#F4F4F5] text-[#18181B]"
+                      : "text-[#52525B] hover:bg-[#FAFAFA] hover:text-[#18181B]"
                   }`}
                 >
-                  <Icon size={16} weight={isActive ? 'fill' : 'regular'} className="flex-shrink-0" />
+                  <Icon
+                    size={16}
+                    weight={isActive ? "fill" : "regular"}
+                    className="flex-shrink-0"
+                  />
                   <span className="flex-1 truncate">{it.label}</span>
-                  {isActive && <Check size={14} weight="bold" className="text-[#18181B] flex-shrink-0" />}
+                  {isActive && (
+                    <Check
+                      size={14}
+                      weight="bold"
+                      className="text-[#18181B] flex-shrink-0"
+                    />
+                  )}
                 </button>
               );
             })}
@@ -252,8 +322,8 @@ function GroupDropdown({ group, activeId, onPick }) {
 // ─────────────────────────────────────────────────────────────────────────
 export default function AdminInfoPage() {
   const { t } = useLang();
-  const [tab, setTab] = useState('privacy');
-  const [activeLang, setActiveLang] = useState('en');
+  const [tab, setTab] = useState("privacy");
+  const [activeLang, setActiveLang] = useState("en");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -267,13 +337,15 @@ export default function AdminInfoPage() {
       setData(r.data);
       setDirty(false);
     } catch {
-      toast.error(t('adm_failed_to_load_site_settings'));
+      toast.error(t("adm_failed_to_load_site_settings"));
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   // ── Policy helpers ──────────────────────────────────────────────────────
   const updatePolicy = (key, lang, field, value) => {
@@ -298,7 +370,7 @@ export default function AdminInfoPage() {
     setData((prev) => {
       const next = { ...(prev || {}) };
       next.footer = { ...(prev?.footer || {}) };
-      const segments = path.split('.');
+      const segments = path.split(".");
       let cur = next.footer;
       for (let i = 0; i < segments.length - 1; i++) {
         const seg = segments[i];
@@ -338,7 +410,7 @@ export default function AdminInfoPage() {
 
   const updateFaqItem = (idx, patch) => {
     setData((prev) => {
-      const items = [...((prev?.faq?.items) || [])];
+      const items = [...(prev?.faq?.items || [])];
       if (idx < 0 || idx >= items.length) return prev;
       items[idx] = { ...items[idx], ...patch };
       return { ...prev, faq: { ...(prev?.faq || {}), items } };
@@ -348,14 +420,14 @@ export default function AdminInfoPage() {
 
   const addFaqItem = () => {
     setData((prev) => {
-      const items = [...((prev?.faq?.items) || [])];
+      const items = [...(prev?.faq?.items || [])];
       items.push({
         id: `faq-${Date.now()}`,
         enabled: true,
-        question_en: '',
-        question_bg: '',
-        answer_en: '',
-        answer_bg: '',
+        question_en: "",
+        question_bg: "",
+        answer_en: "",
+        answer_bg: "",
       });
       return { ...prev, faq: { ...(prev?.faq || { enabled: true }), items } };
     });
@@ -364,7 +436,7 @@ export default function AdminInfoPage() {
 
   const removeFaqItem = (idx) => {
     setData((prev) => {
-      const items = [...((prev?.faq?.items) || [])];
+      const items = [...(prev?.faq?.items || [])];
       if (idx < 0 || idx >= items.length) return prev;
       items.splice(idx, 1);
       return { ...prev, faq: { ...(prev?.faq || {}), items } };
@@ -374,7 +446,7 @@ export default function AdminInfoPage() {
 
   const moveFaqItem = (idx, dir) => {
     setData((prev) => {
-      const items = [...((prev?.faq?.items) || [])];
+      const items = [...(prev?.faq?.items || [])];
       const target = idx + dir;
       if (target < 0 || target >= items.length) return prev;
       const tmp = items[idx];
@@ -396,7 +468,7 @@ export default function AdminInfoPage() {
 
   const updateReviewItem = (idx, patch) => {
     setData((prev) => {
-      const items = [...((prev?.reviews?.items) || [])];
+      const items = [...(prev?.reviews?.items || [])];
       if (idx < 0 || idx >= items.length) return prev;
       items[idx] = { ...items[idx], ...patch };
       return { ...prev, reviews: { ...(prev?.reviews || {}), items } };
@@ -406,16 +478,16 @@ export default function AdminInfoPage() {
 
   const addReviewItem = () => {
     setData((prev) => {
-      const items = [...((prev?.reviews?.items) || [])];
+      const items = [...(prev?.reviews?.items || [])];
       items.push({
         id: `rev-${Date.now()}`,
         enabled: true,
-        name: '',
-        name_bg: '',
-        image_url: '',
+        name: "",
+        name_bg: "",
+        image_url: "",
         rating: 5,
-        text_en: '',
-        text_bg: '',
+        text_en: "",
+        text_bg: "",
       });
       return {
         ...prev,
@@ -427,7 +499,7 @@ export default function AdminInfoPage() {
 
   const removeReviewItem = (idx) => {
     setData((prev) => {
-      const items = [...((prev?.reviews?.items) || [])];
+      const items = [...(prev?.reviews?.items || [])];
       if (idx < 0 || idx >= items.length) return prev;
       items.splice(idx, 1);
       return { ...prev, reviews: { ...(prev?.reviews || {}), items } };
@@ -437,7 +509,7 @@ export default function AdminInfoPage() {
 
   const moveReviewItem = (idx, dir) => {
     setData((prev) => {
-      const items = [...((prev?.reviews?.items) || [])];
+      const items = [...(prev?.reviews?.items || [])];
       const target = idx + dir;
       if (target < 0 || target >= items.length) return prev;
       const tmp = items[idx];
@@ -451,26 +523,26 @@ export default function AdminInfoPage() {
   const uploadReviewImage = useCallback(async (idx, file) => {
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image too large (max 5MB)');
+      toast.error("Image too large (max 5MB)");
       return;
     }
     const fd = new FormData();
-    fd.append('image', file);
+    fd.append("image", file);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const r = await axios.post(
         `${API_URL}/api/admin/site-info/upload-review-image`,
         fd,
-        { headers: { ...headers, 'Content-Type': 'multipart/form-data' } },
+        { headers: { ...headers, "Content-Type": "multipart/form-data" } },
       );
       const url = r?.data?.url;
       if (url) {
         updateReviewItem(idx, { image_url: url });
-        toast.success(t('adm_image_uploaded'));
+        toast.success(t("adm_image_uploaded"));
       }
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Upload failed');
+      toast.error(e?.response?.data?.detail || "Upload failed");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -486,26 +558,29 @@ export default function AdminInfoPage() {
 
   const updateBeforeAfterItem = (idx, patch) => {
     setData((prev) => {
-      const items = [...((prev?.before_after?.items) || [])];
+      const items = [...(prev?.before_after?.items || [])];
       if (idx < 0 || idx >= items.length) return prev;
       items[idx] = { ...items[idx], ...patch };
-      return { ...prev, before_after: { ...(prev?.before_after || {}), items } };
+      return {
+        ...prev,
+        before_after: { ...(prev?.before_after || {}), items },
+      };
     });
     setDirty(true);
   };
 
   const addBeforeAfterItem = () => {
     setData((prev) => {
-      const items = [...((prev?.before_after?.items) || [])];
+      const items = [...(prev?.before_after?.items || [])];
       items.push({
         id: `ba-${Date.now()}`,
         enabled: true,
-        model: '',
-        order_date: '',
-        finished_date: '',
-        price: '',
-        before_image_url: '',
-        after_image_url: '',
+        model: "",
+        order_date: "",
+        finished_date: "",
+        price: "",
+        before_image_url: "",
+        after_image_url: "",
       });
       return {
         ...prev,
@@ -517,23 +592,29 @@ export default function AdminInfoPage() {
 
   const removeBeforeAfterItem = (idx) => {
     setData((prev) => {
-      const items = [...((prev?.before_after?.items) || [])];
+      const items = [...(prev?.before_after?.items || [])];
       if (idx < 0 || idx >= items.length) return prev;
       items.splice(idx, 1);
-      return { ...prev, before_after: { ...(prev?.before_after || {}), items } };
+      return {
+        ...prev,
+        before_after: { ...(prev?.before_after || {}), items },
+      };
     });
     setDirty(true);
   };
 
   const moveBeforeAfterItem = (idx, dir) => {
     setData((prev) => {
-      const items = [...((prev?.before_after?.items) || [])];
+      const items = [...(prev?.before_after?.items || [])];
       const target = idx + dir;
       if (target < 0 || target >= items.length) return prev;
       const tmp = items[idx];
       items[idx] = items[target];
       items[target] = tmp;
-      return { ...prev, before_after: { ...(prev?.before_after || {}), items } };
+      return {
+        ...prev,
+        before_after: { ...(prev?.before_after || {}), items },
+      };
     });
     setDirty(true);
   };
@@ -541,26 +622,26 @@ export default function AdminInfoPage() {
   const uploadBeforeAfterImage = useCallback(async (idx, side, file) => {
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
-      toast.error('Image too large (max 10MB)');
+      toast.error("Image too large (max 10MB)");
       return;
     }
     const fd = new FormData();
-    fd.append('image', file);
+    fd.append("image", file);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const r = await axios.post(
         `${API_URL}/api/admin/site-info/upload-before-after-image`,
         fd,
-        { headers: { ...headers, 'Content-Type': 'multipart/form-data' } },
+        { headers: { ...headers, "Content-Type": "multipart/form-data" } },
       );
       const url = r?.data?.url;
       if (url) {
         updateBeforeAfterItem(idx, { [`${side}_image_url`]: url });
-        toast.success(t('adm_image_uploaded'));
+        toast.success(t("adm_image_uploaded"));
       }
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Upload failed');
+      toast.error(e?.response?.data?.detail || "Upload failed");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -574,28 +655,28 @@ export default function AdminInfoPage() {
     setDirty(true);
   };
 
-  const uploadHeroImage = useCallback(async (file, variant = 'web') => {
+  const uploadHeroImage = useCallback(async (file, variant = "web") => {
     if (!file) return;
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
-      toast.error(t('adm_unsupported_format_use_jpg_png_or_webp'));
+      toast.error(t("adm_unsupported_format_use_jpg_png_or_webp"));
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image too large (max 5 MB)');
+      toast.error("Image too large (max 5 MB)");
       return;
     }
-    const v = variant === 'mobile' ? 'mobile' : 'web';
-    const targetField = v === 'mobile' ? 'image_url_mobile' : 'image_url';
+    const v = variant === "mobile" ? "mobile" : "web";
+    const targetField = v === "mobile" ? "image_url_mobile" : "image_url";
     const fd = new FormData();
-    fd.append('image', file);
+    fd.append("image", file);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const r = await axios.post(
         `${API_URL}/api/admin/site-info/upload-hero-image?variant=${v}`,
         fd,
-        { headers: { ...headers, 'Content-Type': 'multipart/form-data' } },
+        { headers: { ...headers, "Content-Type": "multipart/form-data" } },
       );
       const url = r?.data?.url;
       if (url) {
@@ -604,10 +685,10 @@ export default function AdminInfoPage() {
           hero: { ...(prev?.hero || {}), [targetField]: url },
         }));
         setDirty(true);
-        toast.success(t('adm_hero_image_uploaded'));
+        toast.success(t("adm_hero_image_uploaded"));
       }
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Upload failed');
+      toast.error(e?.response?.data?.detail || "Upload failed");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -615,9 +696,9 @@ export default function AdminInfoPage() {
   // ── Socials ─────────────────────────────────────────────────────────────
   const readSocial = (key) => {
     const v = data?.footer?.socials?.[key];
-    if (!v) return { enabled: false, url: '' };
-    if (typeof v === 'string') return { enabled: !!v, url: v };
-    return { enabled: !!v.enabled, url: v.url || '' };
+    if (!v) return { enabled: false, url: "" };
+    if (typeof v === "string") return { enabled: !!v, url: v };
+    return { enabled: !!v.enabled, url: v.url || "" };
   };
 
   const updateSocial = (key, patch) => {
@@ -630,7 +711,7 @@ export default function AdminInfoPage() {
   const save = async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const r = await axios.put(
         `${API_URL}/api/admin/site-info`,
@@ -649,16 +730,16 @@ export default function AdminInfoPage() {
       setData(r.data);
       setDirty(false);
       setSavedAt(new Date());
-      toast.success(t('adm_saved'));
+      toast.success(t("adm_saved"));
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Save failed');
+      toast.error(e?.response?.data?.detail || "Save failed");
     } finally {
       setSaving(false);
     }
   };
 
   const policy = useMemo(
-    () => data?.policies?.[tab]?.[activeLang] || { title: '', content: '' },
+    () => data?.policies?.[tab]?.[activeLang] || { title: "", content: "" },
     [data, tab, activeLang],
   );
 
@@ -677,7 +758,7 @@ export default function AdminInfoPage() {
       <div>
         <div className="text-center text-[#71717A] py-10 flex items-center justify-center gap-2">
           <ArrowsClockwise size={18} className="animate-spin" />
-          {t('adm_loading')}
+          {t("adm_loading")}
         </div>
       </div>
     );
@@ -708,16 +789,19 @@ export default function AdminInfoPage() {
             save action close to the page-level controls. */}
         <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold text-[#18181B] leading-tight break-words">{t('adm_info_site_content')}</h1>
+            <h1 className="text-2xl font-bold text-[#18181B] leading-tight break-words">
+              {t("adm_info_site_content")}
+            </h1>
             <p className="text-sm text-[#71717A] mt-1 break-words">
-              {t('adm_legal_documents_faq_reviews_header_footer_and_cook')}
+              {t("adm_legal_documents_faq_reviews_header_footer_and_cook")}
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {/* Desktop-only: Save status + Save button live inline with Refresh. */}
             {savedAt && !dirty && (
               <span className="hidden md:inline-flex items-center gap-1.5 text-[12px] text-[#16A34A]">
-                <CheckCircle size={14} weight="fill" /> Saved {savedAt.toLocaleTimeString()}
+                <CheckCircle size={14} weight="fill" /> Saved{" "}
+                {savedAt.toLocaleTimeString()}
               </span>
             )}
             <button
@@ -726,33 +810,36 @@ export default function AdminInfoPage() {
               className="hidden md:inline-flex items-center gap-2 px-4 h-10 rounded-lg bg-[#18181B] hover:bg-black text-white text-[13px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               data-testid="info-save-desktop"
             >
-              <FloppyDisk size={15} weight="fill" /> {saving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
+              <FloppyDisk size={15} weight="fill" />{" "}
+              {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
             </button>
             <RefreshButton
               onClick={load}
               disabled={saving}
               loading={false}
-              ariaLabel={t('adm_reload')}
+              ariaLabel={t("adm_reload")}
               testId="info-reload"
-              title={t('adm_reload')}
+              title={t("adm_reload")}
             />
           </div>
         </div>
 
         {/* Row 2 (mobile-only): Save changes as primary action, full-width.
             Status badge ("Saved 11:15:23") sits to its right. */}
-        <div className="mt-4 md:hidden flex items-center gap-3">
+        <div className="flex items-center gap-3 mt-4 md:hidden">
           <button
             onClick={save}
             disabled={!dirty || saving}
             className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-lg bg-[#18181B] hover:bg-black text-white text-[13px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="info-save"
           >
-            <FloppyDisk size={15} weight="fill" /> {saving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
+            <FloppyDisk size={15} weight="fill" />{" "}
+            {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
           </button>
           {savedAt && !dirty && (
             <span className="inline-flex items-center gap-1.5 text-[12px] text-[#16A34A]">
-              <CheckCircle size={14} weight="fill" /> Saved {savedAt.toLocaleTimeString()}
+              <CheckCircle size={14} weight="fill" /> Saved{" "}
+              {savedAt.toLocaleTimeString()}
             </span>
           )}
         </div>
@@ -760,7 +847,7 @@ export default function AdminInfoPage() {
 
       {/* Section picker — 3 compact dropdowns (Legal & Privacy / Content / Layout) */}
       <div className="bg-white border border-[#E4E4E7] rounded-2xl p-3 sm:p-4 mb-5">
-        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-3">
           {NAV_GROUPS.map((grp) => (
             <GroupDropdown
               key={grp.id}
@@ -775,418 +862,532 @@ export default function AdminInfoPage() {
           <div className="mt-3 sm:hidden flex items-center gap-2 text-[12.5px] text-[#71717A]">
             <span>{activeItem.group}</span>
             <span className="text-[#D4D4D8]">/</span>
-            <span className="text-[#18181B] font-semibold">{activeItem.item.label}</span>
+            <span className="text-[#18181B] font-semibold">
+              {activeItem.item.label}
+            </span>
           </div>
         )}
       </div>
 
       {/* Main content area — full width now that the sidebar is gone */}
       <div className="min-w-0 space-y-5">
-          {/* Breadcrumb */}
-          {activeItem && (
-            <div className="flex items-center gap-2 text-[12.5px] text-[#71717A]">
-              <span>{activeItem.group}</span>
-              <span className="text-[#D4D4D8]">/</span>
-              <span className="text-[#18181B] font-semibold">{activeItem.item.label}</span>
+        {/* Breadcrumb */}
+        {activeItem && (
+          <div className="flex items-center gap-2 text-[12.5px] text-[#71717A]">
+            <span>{activeItem.group}</span>
+            <span className="text-[#D4D4D8]">/</span>
+            <span className="text-[#18181B] font-semibold">
+              {activeItem.item.label}
+            </span>
+          </div>
+        )}
+
+        {/* Policy editor (privacy / terms / cookies / conditions) */}
+        {isPolicy && (
+          <Block
+            title={activeItem?.item?.label || "Policy"}
+            description={t(
+              "adm_edit_title_and_richtext_body_for_both_languages_bo",
+            )}
+          >
+            {/* Lang selector */}
+            <div className="inline-flex items-center gap-1 rounded-lg p-0.5 bg-[#F4F4F5] border border-[#E4E4E7] mb-5">
+              {LANGS.map((l) => (
+                <button
+                  key={l.code}
+                  onClick={() => setActiveLang(l.code)}
+                  className={`px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wider rounded-md transition-all flex items-center gap-1.5 ${
+                    activeLang === l.code
+                      ? "bg-white text-[#18181B] shadow-sm border border-[#E4E4E7]"
+                      : "text-[#71717A] hover:text-[#18181B]"
+                  }`}
+                  data-testid={`info-lang-${l.code}`}
+                >
+                  <Globe size={12} />
+                  {l.label}
+                </button>
+              ))}
             </div>
-          )}
 
-          {/* Policy editor (privacy / terms / cookies / conditions) */}
-          {isPolicy && (
-            <Block
-              title={activeItem?.item?.label || 'Policy'}
-              description={t('adm_edit_title_and_richtext_body_for_both_languages_bo')}
-            >
-              {/* Lang selector */}
-              <div className="inline-flex items-center gap-1 rounded-lg p-0.5 bg-[#F4F4F5] border border-[#E4E4E7] mb-5">
-                {LANGS.map((l) => (
-                  <button
-                    key={l.code}
-                    onClick={() => setActiveLang(l.code)}
-                    className={`px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wider rounded-md transition-all flex items-center gap-1.5 ${
-                      activeLang === l.code
-                        ? 'bg-white text-[#18181B] shadow-sm border border-[#E4E4E7]'
-                        : 'text-[#71717A] hover:text-[#18181B]'
-                    }`}
-                    data-testid={`info-lang-${l.code}`}
-                  >
-                    <Globe size={12} />
-                    {l.label}
-                  </button>
-                ))}
-              </div>
+            <div className="grid grid-cols-1 gap-4">
+              <Field label={t("taskTitle")}>
+                <input
+                  type="text"
+                  value={policy.title || ""}
+                  onChange={(e) =>
+                    updatePolicy(tab, activeLang, "title", e.target.value)
+                  }
+                  className={inputCls}
+                  placeholder={t("adm_eg_privacy_policy")}
+                  data-testid="info-policy-title"
+                />
+              </Field>
 
-              <div className="grid grid-cols-1 gap-4">
-                <Field label={t('taskTitle')}>
-                  <input
-                    type="text"
-                    value={policy.title || ''}
-                    onChange={(e) => updatePolicy(tab, activeLang, 'title', e.target.value)}
-                    className={inputCls}
-                    placeholder={t('adm_eg_privacy_policy')}
-                    data-testid="info-policy-title"
+              <div>
+                <span className="block text-[12px] font-semibold text-[#52525B] mb-1.5 uppercase tracking-wider">
+                  {t("contentLabel")}
+                </span>
+                <div className="bibi-admin-quill">
+                  <ReactQuill
+                    theme="snow"
+                    value={policy.content || ""}
+                    onChange={(v) =>
+                      updatePolicy(tab, activeLang, "content", v)
+                    }
+                    modules={quillModules}
                   />
-                </Field>
-
-                <div>
-                  <span className="block text-[12px] font-semibold text-[#52525B] mb-1.5 uppercase tracking-wider">{t('contentLabel')}</span>
-                  <div className="bibi-admin-quill">
-                    <ReactQuill
-                      theme="snow"
-                      value={policy.content || ''}
-                      onChange={(v) => updatePolicy(tab, activeLang, 'content', v)}
-                      modules={quillModules}
-                    />
-                  </div>
                 </div>
               </div>
-            </Block>
-          )}
+            </div>
+          </Block>
+        )}
 
-          {/* Cookie banner — grouped under Legal */}
-          {tab === 'cookie_banner' && (
-            <Block
-              title={t('cookieConsentBanner')}
-              description={t('adm_bilingual_copy_shown_at_the_bottom_of_the_public_s')}
-            >
-              <label className="flex items-center gap-3 text-[14px] text-[#18181B] mb-5 cursor-pointer">
+        {/* Cookie banner — grouped under Legal */}
+        {tab === "cookie_banner" && (
+          <Block
+            title={t("cookieConsentBanner")}
+            description={t(
+              "adm_bilingual_copy_shown_at_the_bottom_of_the_public_s",
+            )}
+          >
+            <label className="flex items-center gap-3 text-[14px] text-[#18181B] mb-5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!data?.cookie_banner?.enabled}
+                onChange={(e) => updateBanner("enabled", e.target.checked)}
+                className="w-4 h-4 accent-[#18181B] cursor-pointer"
+                data-testid="info-banner-enabled"
+              />
+              <span className="font-medium">{t("showCookieBanner")}</span>
+            </label>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label="Title (EN)">
                 <input
-                  type="checkbox"
-                  checked={!!data?.cookie_banner?.enabled}
-                  onChange={(e) => updateBanner('enabled', e.target.checked)}
-                  className="w-4 h-4 accent-[#18181B] cursor-pointer"
-                  data-testid="info-banner-enabled"
+                  type="text"
+                  value={data?.cookie_banner?.title_en || ""}
+                  onChange={(e) => updateBanner("title_en", e.target.value)}
+                  className={inputCls}
                 />
-                <span className="font-medium">{t('showCookieBanner')}</span>
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label="Title (EN)">
+              </Field>
+              <Field label="Title (BG)">
+                <input
+                  type="text"
+                  value={data?.cookie_banner?.title_bg || ""}
+                  onChange={(e) => updateBanner("title_bg", e.target.value)}
+                  className={inputCls}
+                />
+              </Field>
+              <Field label="Body (EN)">
+                <textarea
+                  rows={4}
+                  value={data?.cookie_banner?.body_en || ""}
+                  onChange={(e) => updateBanner("body_en", e.target.value)}
+                  className={textareaCls}
+                />
+              </Field>
+              <Field label="Body (BG)">
+                <textarea
+                  rows={4}
+                  value={data?.cookie_banner?.body_bg || ""}
+                  onChange={(e) => updateBanner("body_bg", e.target.value)}
+                  className={textareaCls}
+                />
+              </Field>
+            </div>
+          </Block>
+        )}
+
+        {/* FAQ editor */}
+        {tab === "faq" && (
+          <FAQEditor
+            data={data}
+            updateFaq={updateFaq}
+            updateFaqItem={updateFaqItem}
+            addFaqItem={addFaqItem}
+            removeFaqItem={removeFaqItem}
+            moveFaqItem={moveFaqItem}
+          />
+        )}
+
+        {/* Reviews editor — NEW */}
+        {tab === "reviews" && (
+          <ReviewsEditor
+            data={data}
+            updateReviews={updateReviews}
+            updateReviewItem={updateReviewItem}
+            addReviewItem={addReviewItem}
+            removeReviewItem={removeReviewItem}
+            moveReviewItem={moveReviewItem}
+            uploadReviewImage={uploadReviewImage}
+          />
+        )}
+
+        {/* Before / After editor — NEW */}
+        {tab === "before_after" && (
+          <BeforeAfterEditor
+            data={data}
+            updateBeforeAfter={updateBeforeAfter}
+            updateBeforeAfterItem={updateBeforeAfterItem}
+            addBeforeAfterItem={addBeforeAfterItem}
+            removeBeforeAfterItem={removeBeforeAfterItem}
+            moveBeforeAfterItem={moveBeforeAfterItem}
+            uploadBeforeAfterImage={uploadBeforeAfterImage}
+          />
+        )}
+
+        {/* Blog Articles editor — bilingual CMS for the public /blog page */}
+        {tab === "blog" && <BlogArticlesEditor />}
+
+        {/* Google Reviews integration — config + moderation table */}
+        {tab === "google_reviews" && <GoogleReviewsEditor />}
+
+        {/* Hero Banner editor — homepage */}
+        {tab === "hero" && (
+          <HeroEditor
+            data={data}
+            updateHero={updateHero}
+            uploadHeroImage={uploadHeroImage}
+          />
+        )}
+
+        {/* Header settings */}
+        {tab === "header" && (
+          <Block
+            title={t("publicHeader")}
+            description={t(
+              "adm_phone_numbers_shown_in_the_public_site_header_one",
+            )}
+          >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field
+                label={t("phonesLabel")}
+                hint={t("adm_one_number_per_line_eg_359_875_313_158")}
+              >
+                <textarea
+                  rows={3}
+                  value={(data?.header?.phones || []).join("\n")}
+                  onChange={(e) =>
+                    updateHeader(
+                      "phones",
+                      e.target.value
+                        .split("\n")
+                        .map((s) => s.trim())
+                        .filter(Boolean),
+                    )
+                  }
+                  className={textareaCls}
+                  placeholder={"+359 875 313 158\n+359 897 884 804"}
+                  data-testid="info-header-phones"
+                />
+              </Field>
+              <div className="space-y-4">
+                <Field
+                  label="CTA button label (EN)"
+                  hint={t("adm_yellow_button_on_the_right_of_the_header")}
+                >
                   <input
                     type="text"
-                    value={data?.cookie_banner?.title_en || ''}
-                    onChange={(e) => updateBanner('title_en', e.target.value)}
+                    value={data?.header?.cta_label_en || ""}
+                    onChange={(e) =>
+                      updateHeader("cta_label_en", e.target.value)
+                    }
                     className={inputCls}
+                    placeholder={t("contactUs")}
+                    data-testid="info-header-cta-en"
                   />
                 </Field>
-                <Field label="Title (BG)">
+                <Field label="CTA button label (BG)">
                   <input
                     type="text"
-                    value={data?.cookie_banner?.title_bg || ''}
-                    onChange={(e) => updateBanner('title_bg', e.target.value)}
+                    value={data?.header?.cta_label_bg || ""}
+                    onChange={(e) =>
+                      updateHeader("cta_label_bg", e.target.value)
+                    }
                     className={inputCls}
-                  />
-                </Field>
-                <Field label="Body (EN)">
-                  <textarea
-                    rows={4}
-                    value={data?.cookie_banner?.body_en || ''}
-                    onChange={(e) => updateBanner('body_en', e.target.value)}
-                    className={textareaCls}
-                  />
-                </Field>
-                <Field label="Body (BG)">
-                  <textarea
-                    rows={4}
-                    value={data?.cookie_banner?.body_bg || ''}
-                    onChange={(e) => updateBanner('body_bg', e.target.value)}
-                    className={textareaCls}
+                    placeholder={t("adm_contact_us")}
+                    data-testid="info-header-cta-bg"
                   />
                 </Field>
               </div>
-            </Block>
-          )}
+            </div>
+          </Block>
+        )}
 
-          {/* FAQ editor */}
-          {tab === 'faq' && (
-            <FAQEditor
-              data={data}
-              updateFaq={updateFaq}
-              updateFaqItem={updateFaqItem}
-              addFaqItem={addFaqItem}
-              removeFaqItem={removeFaqItem}
-              moveFaqItem={moveFaqItem}
-            />
-          )}
-
-          {/* Reviews editor — NEW */}
-          {tab === 'reviews' && (
-            <ReviewsEditor
-              data={data}
-              updateReviews={updateReviews}
-              updateReviewItem={updateReviewItem}
-              addReviewItem={addReviewItem}
-              removeReviewItem={removeReviewItem}
-              moveReviewItem={moveReviewItem}
-              uploadReviewImage={uploadReviewImage}
-            />
-          )}
-
-          {/* Before / After editor — NEW */}
-          {tab === 'before_after' && (
-            <BeforeAfterEditor
-              data={data}
-              updateBeforeAfter={updateBeforeAfter}
-              updateBeforeAfterItem={updateBeforeAfterItem}
-              addBeforeAfterItem={addBeforeAfterItem}
-              removeBeforeAfterItem={removeBeforeAfterItem}
-              moveBeforeAfterItem={moveBeforeAfterItem}
-              uploadBeforeAfterImage={uploadBeforeAfterImage}
-            />
-          )}
-
-          {/* Blog Articles editor — bilingual CMS for the public /blog page */}
-          {tab === 'blog' && <BlogArticlesEditor />}
-
-          {/* Google Reviews integration — config + moderation table */}
-          {tab === 'google_reviews' && <GoogleReviewsEditor />}
-
-          {/* Hero Banner editor — homepage */}
-          {tab === 'hero' && (
-            <HeroEditor
-              data={data}
-              updateHero={updateHero}
-              uploadHeroImage={uploadHeroImage}
-            />
-          )}
-
-          {/* Header settings */}
-          {tab === 'header' && (
+        {/* Footer settings */}
+        {tab === "footer" && (
+          <div className="space-y-5">
             <Block
-              title={t('publicHeader')}
-              description={t('adm_phone_numbers_shown_in_the_public_site_header_one')}
+              title={t("navContacts")}
+              description={t(
+                "adm_phones_email_addresses_and_working_hours_displayed",
+              )}
             >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label={t('phonesLabel')} hint={t('adm_one_number_per_line_eg_359_875_313_158')}>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field
+                  label={t("phonesLabel")}
+                  hint={t("adm_one_number_per_line")}
+                >
                   <textarea
                     rows={3}
-                    value={(data?.header?.phones || []).join('\n')}
+                    value={(data?.footer?.contacts?.phones || []).join("\n")}
                     onChange={(e) =>
-                      updateHeader(
-                        'phones',
-                        e.target.value.split('\n').map((s) => s.trim()).filter(Boolean),
+                      updateFooter(
+                        "contacts.phones",
+                        e.target.value
+                          .split("\n")
+                          .map((s) => s.trim())
+                          .filter(Boolean),
                       )
                     }
                     className={textareaCls}
-                    placeholder={'+359 875 313 158\n+359 897 884 804'}
-                    data-testid="info-header-phones"
+                    placeholder="+359 875 313 158"
+                    data-testid="info-footer-phones"
                   />
                 </Field>
                 <div className="space-y-4">
-                  <Field label="CTA button label (EN)" hint={t('adm_yellow_button_on_the_right_of_the_header')}>
+                  <Field label={t("emailLabel")}>
                     <input
-                      type="text"
-                      value={data?.header?.cta_label_en || ''}
-                      onChange={(e) => updateHeader('cta_label_en', e.target.value)}
+                      type="email"
+                      value={data?.footer?.contacts?.email || ""}
+                      onChange={(e) =>
+                        updateFooter("contacts.email", e.target.value)
+                      }
                       className={inputCls}
-                      placeholder={t('contactUs')}
-                      data-testid="info-header-cta-en"
-                    />
-                  </Field>
-                  <Field label="CTA button label (BG)">
-                    <input
-                      type="text"
-                      value={data?.header?.cta_label_bg || ''}
-                      onChange={(e) => updateHeader('cta_label_bg', e.target.value)}
-                      className={inputCls}
-                      placeholder={t('adm_contact_us')}
-                      data-testid="info-header-cta-bg"
+                      placeholder={t("adm_infobibicarsbg")}
+                      data-testid="info-footer-email"
                     />
                   </Field>
                 </div>
+
+                {/* Working hours — paired EN / BG */}
+                <Field label="Working hours (English)">
+                  <input
+                    type="text"
+                    value={data?.footer?.contacts?.working_hours || ""}
+                    onChange={(e) =>
+                      updateFooter("contacts.working_hours", e.target.value)
+                    }
+                    className={inputCls}
+                    placeholder={t("adm_mon_fri_1000_1900")}
+                    data-testid="info-footer-hours"
+                  />
+                </Field>
+                <Field
+                  label={t("adm3_9aafd2e0a0")}
+                  hint={t("adm_shown_to_visitors_when_language_is_bg")}
+                >
+                  <input
+                    type="text"
+                    value={data?.footer?.contacts?.working_hours_bg || ""}
+                    onChange={(e) =>
+                      updateFooter("contacts.working_hours_bg", e.target.value)
+                    }
+                    className={inputCls}
+                    placeholder={t("adm_mon_fri_1000_1900_2")}
+                    data-testid="info-footer-hours-bg"
+                  />
+                </Field>
+
+                {/* Addresses — paired EN / BG */}
+                <Field
+                  label="Addresses (English)"
+                  hint={t("adm_one_address_per_line")}
+                >
+                  <textarea
+                    rows={3}
+                    value={(data?.footer?.contacts?.addresses || []).join("\n")}
+                    onChange={(e) =>
+                      updateFooter(
+                        "contacts.addresses",
+                        e.target.value
+                          .split("\n")
+                          .map((s) => s.trim())
+                          .filter(Boolean),
+                      )
+                    }
+                    className={textareaCls}
+                    placeholder={t("adm_bulgaria_sofia_vitosha_blvd_230")}
+                    data-testid="info-footer-addresses"
+                  />
+                </Field>
+                <Field
+                  label={t("adm3_df848915fc")}
+                  hint={t(
+                    "adm_one_address_per_line_falls_back_to_canonical_trans",
+                  )}
+                >
+                  <textarea
+                    rows={3}
+                    value={(data?.footer?.contacts?.addresses_bg || []).join(
+                      "\n",
+                    )}
+                    onChange={(e) =>
+                      updateFooter(
+                        "contacts.addresses_bg",
+                        e.target.value
+                          .split("\n")
+                          .map((s) => s.trim())
+                          .filter(Boolean),
+                      )
+                    }
+                    className={textareaCls}
+                    placeholder={t("adm_bulgaria_sofia_vitosha_blvd_230_2")}
+                    data-testid="info-footer-addresses-bg"
+                  />
+                </Field>
+
+                {/* Registration address — paired EN / BG (new) */}
+                <Field label="Registration address (English)">
+                  <input
+                    type="text"
+                    value={data?.footer?.contacts?.registration_address || ""}
+                    onChange={(e) =>
+                      updateFooter(
+                        "contacts.registration_address",
+                        e.target.value,
+                      )
+                    }
+                    className={inputCls}
+                    placeholder={t(
+                      "adm_republic_of_bulgaria_1415_sofia_cherni_vrah_blvd_2",
+                    )}
+                    data-testid="info-footer-reg-address"
+                  />
+                </Field>
+                <Field label={t("adm3_d4d76851ee")}>
+                  <input
+                    type="text"
+                    value={
+                      data?.footer?.contacts?.registration_address_bg || ""
+                    }
+                    onChange={(e) =>
+                      updateFooter(
+                        "contacts.registration_address_bg",
+                        e.target.value,
+                      )
+                    }
+                    className={inputCls}
+                    placeholder={t(
+                      "adm_republic_of_bulgaria_1415_sofia_cherni_vrah_blvd_2_2",
+                    )}
+                    data-testid="info-footer-reg-address-bg"
+                  />
+                </Field>
               </div>
             </Block>
-          )}
 
-          {/* Footer settings */}
-          {tab === 'footer' && (
-            <div className="space-y-5">
-              <Block title={t('navContacts')} description={t('adm_phones_email_addresses_and_working_hours_displayed')}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label={t('phonesLabel')} hint={t('adm_one_number_per_line')}>
-                    <textarea
-                      rows={3}
-                      value={(data?.footer?.contacts?.phones || []).join('\n')}
-                      onChange={(e) =>
-                        updateFooter(
-                          'contacts.phones',
-                          e.target.value.split('\n').map((s) => s.trim()).filter(Boolean),
-                        )
-                      }
-                      className={textareaCls}
-                      placeholder="+359 875 313 158"
-                      data-testid="info-footer-phones"
-                    />
-                  </Field>
-                  <div className="space-y-4">
-                    <Field label={t('emailLabel')}>
-                      <input
-                        type="email"
-                        value={data?.footer?.contacts?.email || ''}
-                        onChange={(e) => updateFooter('contacts.email', e.target.value)}
-                        className={inputCls}
-                        placeholder={t('adm_infobibicarsbg')}
-                        data-testid="info-footer-email"
-                      />
-                    </Field>
-                  </div>
-
-                  {/* Working hours — paired EN / BG */}
-                  <Field label="Working hours (English)">
-                    <input
-                      type="text"
-                      value={data?.footer?.contacts?.working_hours || ''}
-                      onChange={(e) => updateFooter('contacts.working_hours', e.target.value)}
-                      className={inputCls}
-                      placeholder={t('adm_mon_fri_1000_1900')}
-                      data-testid="info-footer-hours"
-                    />
-                  </Field>
-                  <Field label={t('adm3_9aafd2e0a0')} hint={t('adm_shown_to_visitors_when_language_is_bg')}>
-                    <input
-                      type="text"
-                      value={data?.footer?.contacts?.working_hours_bg || ''}
-                      onChange={(e) => updateFooter('contacts.working_hours_bg', e.target.value)}
-                      className={inputCls}
-                      placeholder={t('adm_mon_fri_1000_1900_2')}
-                      data-testid="info-footer-hours-bg"
-                    />
-                  </Field>
-
-                  {/* Addresses — paired EN / BG */}
-                  <Field label="Addresses (English)" hint={t('adm_one_address_per_line')}>
-                    <textarea
-                      rows={3}
-                      value={(data?.footer?.contacts?.addresses || []).join('\n')}
-                      onChange={(e) =>
-                        updateFooter(
-                          'contacts.addresses',
-                          e.target.value.split('\n').map((s) => s.trim()).filter(Boolean),
-                        )
-                      }
-                      className={textareaCls}
-                      placeholder={t('adm_bulgaria_sofia_vitosha_blvd_230')}
-                      data-testid="info-footer-addresses"
-                    />
-                  </Field>
-                  <Field label={t('adm3_df848915fc')} hint={t('adm_one_address_per_line_falls_back_to_canonical_trans')}>
-                    <textarea
-                      rows={3}
-                      value={(data?.footer?.contacts?.addresses_bg || []).join('\n')}
-                      onChange={(e) =>
-                        updateFooter(
-                          'contacts.addresses_bg',
-                          e.target.value.split('\n').map((s) => s.trim()).filter(Boolean),
-                        )
-                      }
-                      className={textareaCls}
-                      placeholder={t('adm_bulgaria_sofia_vitosha_blvd_230_2')}
-                      data-testid="info-footer-addresses-bg"
-                    />
-                  </Field>
-
-                  {/* Registration address — paired EN / BG (new) */}
-                  <Field label="Registration address (English)">
-                    <input
-                      type="text"
-                      value={data?.footer?.contacts?.registration_address || ''}
-                      onChange={(e) => updateFooter('contacts.registration_address', e.target.value)}
-                      className={inputCls}
-                      placeholder={t('adm_republic_of_bulgaria_1415_sofia_cherni_vrah_blvd_2')}
-                      data-testid="info-footer-reg-address"
-                    />
-                  </Field>
-                  <Field label={t('adm3_d4d76851ee')}>
-                    <input
-                      type="text"
-                      value={data?.footer?.contacts?.registration_address_bg || ''}
-                      onChange={(e) => updateFooter('contacts.registration_address_bg', e.target.value)}
-                      className={inputCls}
-                      placeholder={t('adm_republic_of_bulgaria_1415_sofia_cherni_vrah_blvd_2_2')}
-                      data-testid="info-footer-reg-address-bg"
-                    />
-                  </Field>
-                </div>
-              </Block>
-
-              <Block title={t('socialMediaLinks')} description={t('adm_public_social_channels_toggle_a_channel_to_showhid')}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {SOCIALS.map((s) => {
-                    const cur = readSocial(s.key);
-                    return (
-                      <div key={s.key} className="flex items-start gap-3 p-3 bg-[#FAFAFA] border border-[#E4E4E7] rounded-lg">
-                        <label className="flex items-center mt-7 cursor-pointer shrink-0" title={cur.enabled ? 'Enabled' : 'Disabled'}>
+            <Block
+              title={t("socialMediaLinks")}
+              description={t(
+                "adm_public_social_channels_toggle_a_channel_to_showhid",
+              )}
+            >
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {SOCIALS.map((s) => {
+                  const cur = readSocial(s.key);
+                  return (
+                    <div
+                      key={s.key}
+                      className="flex items-start gap-3 p-3 bg-[#FAFAFA] border border-[#E4E4E7] rounded-lg"
+                    >
+                      <label
+                        className="flex items-center cursor-pointer mt-7 shrink-0"
+                        title={cur.enabled ? "Enabled" : "Disabled"}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={cur.enabled}
+                          onChange={(e) =>
+                            updateSocial(s.key, { enabled: e.target.checked })
+                          }
+                          className="w-4 h-4 accent-[#18181B] cursor-pointer"
+                          data-testid={`info-social-enabled-${s.key}`}
+                        />
+                      </label>
+                      <div className="flex-1 min-w-0">
+                        <Field
+                          label={s.label}
+                          hint={
+                            cur.enabled
+                              ? "Visible in footer"
+                              : "Hidden from footer"
+                          }
+                        >
                           <input
-                            type="checkbox"
-                            checked={cur.enabled}
-                            onChange={(e) => updateSocial(s.key, { enabled: e.target.checked })}
-                            className="w-4 h-4 accent-[#18181B] cursor-pointer"
-                            data-testid={`info-social-enabled-${s.key}`}
+                            type="text"
+                            value={cur.url}
+                            onChange={(e) =>
+                              updateSocial(s.key, { url: e.target.value })
+                            }
+                            className={inputCls}
+                            placeholder={s.placeholder}
+                            data-testid={`info-social-${s.key}`}
+                            disabled={!cur.enabled}
                           />
-                        </label>
-                        <div className="flex-1 min-w-0">
-                          <Field label={s.label} hint={cur.enabled ? 'Visible in footer' : 'Hidden from footer'}>
-                            <input
-                              type="text"
-                              value={cur.url}
-                              onChange={(e) => updateSocial(s.key, { url: e.target.value })}
-                              className={inputCls}
-                              placeholder={s.placeholder}
-                              data-testid={`info-social-${s.key}`}
-                              disabled={!cur.enabled}
-                            />
-                          </Field>
-                        </div>
+                        </Field>
                       </div>
-                    );
-                  })}
-                </div>
-              </Block>
+                    </div>
+                  );
+                })}
+              </div>
+            </Block>
 
-              <Block title={t('viberCommunityBlock')} description="Separate &lsquo;Join our group&rsquo; block in the footer (not a regular social icon).">
-                <label className="flex items-center gap-3 text-[14px] text-[#18181B] mb-4 cursor-pointer">
+            <Block
+              title={t("viberCommunityBlock")}
+              description="Separate &lsquo;Join our group&rsquo; block in the footer (not a regular social icon)."
+            >
+              <label className="flex items-center gap-3 text-[14px] text-[#18181B] mb-4 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!data?.footer?.viber_community?.enabled}
+                  onChange={(e) =>
+                    updateFooter("viber_community.enabled", e.target.checked)
+                  }
+                  className="w-4 h-4 accent-[#18181B] cursor-pointer"
+                  data-testid="info-viber-enabled"
+                />
+                <span className="font-medium">{t("showViberBlock")}</span>
+              </label>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field label={t("viberLink")}>
                   <input
-                    type="checkbox"
-                    checked={!!data?.footer?.viber_community?.enabled}
-                    onChange={(e) => updateFooter('viber_community.enabled', e.target.checked)}
-                    className="w-4 h-4 accent-[#18181B] cursor-pointer"
-                    data-testid="info-viber-enabled"
+                    type="text"
+                    value={data?.footer?.viber_community?.url || ""}
+                    onChange={(e) =>
+                      updateFooter("viber_community.url", e.target.value)
+                    }
+                    className={inputCls}
+                    placeholder="viber://chat?number=..."
+                    data-testid="info-viber-url"
                   />
-                  <span className="font-medium">{t('showViberBlock')}</span>
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label={t('viberLink')}>
-                    <input
-                      type="text"
-                      value={data?.footer?.viber_community?.url || ''}
-                      onChange={(e) => updateFooter('viber_community.url', e.target.value)}
-                      className={inputCls}
-                      placeholder="viber://chat?number=..."
-                      data-testid="info-viber-url"
-                    />
-                  </Field>
-                  <Field label="Label (EN)">
-                    <input
-                      type="text"
-                      value={data?.footer?.viber_community?.label_en || ''}
-                      onChange={(e) => updateFooter('viber_community.label_en', e.target.value)}
-                      className={inputCls}
-                      placeholder={t('mobileFooterJoinGroup')}
-                    />
-                  </Field>
-                  <Field label="Label (BG)">
-                    <input
-                      type="text"
-                      value={data?.footer?.viber_community?.label_bg || ''}
-                      onChange={(e) => updateFooter('viber_community.label_bg', e.target.value)}
-                      className={inputCls}
-                      placeholder={t('adm_join_our_group')}
-                    />
-                  </Field>
-                </div>
-              </Block>
-            </div>
-          )}
-        </div>
+                </Field>
+                <Field label="Label (EN)">
+                  <input
+                    type="text"
+                    value={data?.footer?.viber_community?.label_en || ""}
+                    onChange={(e) =>
+                      updateFooter("viber_community.label_en", e.target.value)
+                    }
+                    className={inputCls}
+                    placeholder={t("mobileFooterJoinGroup")}
+                  />
+                </Field>
+                <Field label="Label (BG)">
+                  <input
+                    type="text"
+                    value={data?.footer?.viber_community?.label_bg || ""}
+                    onChange={(e) =>
+                      updateFooter("viber_community.label_bg", e.target.value)
+                    }
+                    className={inputCls}
+                    placeholder={t("adm_join_our_group")}
+                  />
+                </Field>
+              </div>
+            </Block>
+          </div>
+        )}
+      </div>
 
       {/* Light-theme Quill styling */}
       <style>{`
@@ -1245,7 +1446,6 @@ export default function AdminInfoPage() {
   );
 }
 
-
 // ─────────────────────────────────────────────────────────────────────────
 //  Hero Variant Card — reusable upload + preview block for one form-factor.
 //  Used twice inside HeroEditor: once for the desktop 16:9 banner and once
@@ -1279,7 +1479,7 @@ function HeroVariantCard({
   return (
     <div
       className={`rounded-2xl border border-[#E4E4E7] bg-white p-3 sm:p-4 space-y-3 transition-opacity ${
-        disabled ? 'opacity-60' : ''
+        disabled ? "opacity-60" : ""
       }`}
       data-variant={variant}
     >
@@ -1299,14 +1499,14 @@ function HeroVariantCard({
         {previewUrl ? (
           <img
             src={previewUrl}
-            alt={t('heroPreview')}
-            className="absolute inset-0 w-full h-full object-cover"
+            alt={t("heroPreview")}
+            className="absolute inset-0 object-cover w-full h-full"
             data-testid={previewTestId}
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-[#A1A1AA] text-sm gap-2 px-4 text-center">
             <ImageIcon size={36} weight="thin" />
-            <span>{t('adm_no_custom_image_using_builtin_default_photo')}</span>
+            <span>{t("adm_no_custom_image_using_builtin_default_photo")}</span>
           </div>
         )}
         {/* Mock overlay matches public-site rendering. Mobile hero is full-bleed
@@ -1316,7 +1516,7 @@ function HeroVariantCard({
             className="absolute inset-0 pointer-events-none"
             style={{
               background:
-                'linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 35%, rgba(0,0,0,0.05) 65%, rgba(0,0,0,0) 100%)',
+                "linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 35%, rgba(0,0,0,0.05) 65%, rgba(0,0,0,0) 100%)",
             }}
           />
         )}
@@ -1335,7 +1535,7 @@ function HeroVariantCard({
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f && !disabled) onUpload(f);
-            e.target.value = '';
+            e.target.value = "";
           }}
           data-testid={fileInputTestId}
           disabled={disabled}
@@ -1348,7 +1548,7 @@ function HeroVariantCard({
           data-testid={uploadTestId}
         >
           <UploadSimple size={16} weight="bold" />
-          {previewUrl ? 'Replace image' : 'Upload image'}
+          {previewUrl ? "Replace image" : "Upload image"}
         </button>
         {previewUrl && currentUrl && (
           <button
@@ -1359,12 +1559,12 @@ function HeroVariantCard({
             data-testid={removeTestId}
           >
             <Trash size={14} />
-            {t('useDefaultPhoto')}
+            {t("useDefaultPhoto")}
           </button>
         )}
         <Field
-          label={t('orPasteImageUrl')}
-          hint={t('adm_external_url_or_relative_path_leave_empty_to_use_t')}
+          label={t("orPasteImageUrl")}
+          hint={t("adm_external_url_or_relative_path_leave_empty_to_use_t")}
         >
           <input
             type="text"
@@ -1382,14 +1582,13 @@ function HeroVariantCard({
           </p>
         ) : (
           <div className="text-[11.5px] text-[#71717A] leading-relaxed">
-            <strong>{t('tipsColon')}</strong> {tipsText}
+            <strong>{t("tipsColon")}</strong> {tipsText}
           </div>
         )}
       </div>
     </div>
   );
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────
 //  Hero Banner Editor — homepage banner (left text block + right photo)
@@ -1400,9 +1599,8 @@ function HeroEditor({ data, updateHero, uploadHeroImage }) {
   const enabled = hero.enabled !== false;
 
   // Build absolute URL for previews when image_url is a relative path
-  const apiBase = process.env.REACT_APP_BACKEND_URL || '';
-  const toAbs = (u) =>
-    !u ? '' : u.startsWith('http') ? u : `${apiBase}${u}`;
+  const apiBase = "https://backend-production-ae6d.up.railway.app";
+  const toAbs = (u) => (!u ? "" : u.startsWith("http") ? u : `${apiBase}${u}`);
   const previewUrlWeb = toAbs(hero.image_url);
   // When sync is on, the mobile card mirrors the web image for accurate preview.
   const previewUrlMobile = hero.sync_mobile_with_web
@@ -1412,39 +1610,42 @@ function HeroEditor({ data, updateHero, uploadHeroImage }) {
   return (
     <div className="space-y-5">
       <Block
-        title={t('adm_hero_banner_homepage')}
+        title={t("adm_hero_banner_homepage")}
         description="Top section of the public homepage. Edit eyebrow, the big 3-line title, the three KPI lines and the background photo. All texts are bilingual (EN + BG)."
       >
         <label className="flex items-center gap-3 text-[14px] text-[#18181B] mb-5 cursor-pointer">
           <input
             type="checkbox"
             checked={enabled}
-            onChange={(e) => updateHero('enabled', e.target.checked)}
+            onChange={(e) => updateHero("enabled", e.target.checked)}
             className="w-4 h-4 accent-[#18181B] cursor-pointer"
             data-testid="info-hero-enabled"
           />
-          <span className="font-medium">{t('showHeroBanner')}</span>
+          <span className="font-medium">{t("showHeroBanner")}</span>
         </label>
 
         {/* Eyebrow */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
-          <Field label="Eyebrow (EN)" hint={t('adm_shown_above_the_big_title_eg_america_korea')}>
+        <div className="grid grid-cols-1 gap-4 mb-5 md:grid-cols-2">
+          <Field
+            label="Eyebrow (EN)"
+            hint={t("adm_shown_above_the_big_title_eg_america_korea")}
+          >
             <input
               type="text"
-              value={hero.eyebrow_en || ''}
-              onChange={(e) => updateHero('eyebrow_en', e.target.value)}
+              value={hero.eyebrow_en || ""}
+              onChange={(e) => updateHero("eyebrow_en", e.target.value)}
               className={inputCls}
-              placeholder={t('adm_america_korea')}
+              placeholder={t("adm_america_korea")}
               data-testid="info-hero-eyebrow-en"
             />
           </Field>
           <Field label="Eyebrow (BG)">
             <input
               type="text"
-              value={hero.eyebrow_bg || ''}
-              onChange={(e) => updateHero('eyebrow_bg', e.target.value)}
+              value={hero.eyebrow_bg || ""}
+              onChange={(e) => updateHero("eyebrow_bg", e.target.value)}
               className={inputCls}
-              placeholder={t('adm_america_korea_2')}
+              placeholder={t("adm_america_korea_2")}
               data-testid="info-hero-eyebrow-bg"
             />
           </Field>
@@ -1456,24 +1657,41 @@ function HeroEditor({ data, updateHero, uploadHeroImage }) {
             Big title — three lines (line 2 renders in amber)
           </div>
           {[1, 2, 3].map((n) => (
-            <div key={n} className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3 last:mb-0">
-              <Field label={`Line ${n} (EN)${n === 2 ? '  •  amber accent' : ''}`}>
+            <div
+              key={n}
+              className="grid grid-cols-1 gap-4 mb-3 md:grid-cols-2 last:mb-0"
+            >
+              <Field
+                label={`Line ${n} (EN)${n === 2 ? "  •  amber accent" : ""}`}
+              >
                 <input
                   type="text"
-                  value={hero[`title_line${n}_en`] || ''}
-                  onChange={(e) => updateHero(`title_line${n}_en`, e.target.value)}
+                  value={hero[`title_line${n}_en`] || ""}
+                  onChange={(e) =>
+                    updateHero(`title_line${n}_en`, e.target.value)
+                  }
                   className={inputCls}
-                  placeholder={['From auction', 'to keys', 'in your hands'][n - 1]}
+                  placeholder={
+                    ["From auction", "to keys", "in your hands"][n - 1]
+                  }
                   data-testid={`info-hero-title${n}-en`}
                 />
               </Field>
               <Field label={`Line ${n} (BG)`}>
                 <input
                   type="text"
-                  value={hero[`title_line${n}_bg`] || ''}
-                  onChange={(e) => updateHero(`title_line${n}_bg`, e.target.value)}
+                  value={hero[`title_line${n}_bg`] || ""}
+                  onChange={(e) =>
+                    updateHero(`title_line${n}_bg`, e.target.value)
+                  }
                   className={inputCls}
-                  placeholder={[t('adm3_546405c33b'), t('adm3_ccb59cc168'), t('adm3_b679087e59')][n - 1]}
+                  placeholder={
+                    [
+                      t("adm3_546405c33b"),
+                      t("adm3_ccb59cc168"),
+                      t("adm3_b679087e59"),
+                    ][n - 1]
+                  }
                   data-testid={`info-hero-title${n}-bg`}
                 />
               </Field>
@@ -1484,27 +1702,40 @@ function HeroEditor({ data, updateHero, uploadHeroImage }) {
         {/* KPI strip */}
         <div className="bg-[#FAFAFA] border border-[#E4E4E7] rounded-xl p-4 mb-5">
           <div className="text-[12px] font-semibold text-[#52525B] uppercase tracking-wider mb-3">
-            {t('adm_kpi_strip_three_short_lines_under_the_title')}
+            {t("adm_kpi_strip_three_short_lines_under_the_title")}
           </div>
           {[1, 2, 3].map((n) => (
-            <div key={n} className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3 last:mb-0">
+            <div
+              key={n}
+              className="grid grid-cols-1 gap-4 mb-3 md:grid-cols-2 last:mb-0"
+            >
               <Field label={`KPI ${n} (EN)`}>
                 <input
                   type="text"
-                  value={hero[`kpi${n}_en`] || ''}
+                  value={hero[`kpi${n}_en`] || ""}
                   onChange={(e) => updateHero(`kpi${n}_en`, e.target.value)}
                   className={inputCls}
-                  placeholder={['Over 5,000 cars', 'Real-time bids', '500+ happy clients'][n - 1]}
+                  placeholder={
+                    ["Over 5,000 cars", "Real-time bids", "500+ happy clients"][
+                      n - 1
+                    ]
+                  }
                   data-testid={`info-hero-kpi${n}-en`}
                 />
               </Field>
               <Field label={`KPI ${n} (BG)`}>
                 <input
                   type="text"
-                  value={hero[`kpi${n}_bg`] || ''}
+                  value={hero[`kpi${n}_bg`] || ""}
                   onChange={(e) => updateHero(`kpi${n}_bg`, e.target.value)}
                   className={inputCls}
-                  placeholder={[t('adm3_084425742c'), t('adm3_1e2ca583be'), t('adm3_5fe0801150')][n - 1]}
+                  placeholder={
+                    [
+                      t("adm3_084425742c"),
+                      t("adm3_1e2ca583be"),
+                      t("adm3_5fe0801150"),
+                    ][n - 1]
+                  }
                   data-testid={`info-hero-kpi${n}-bg`}
                 />
               </Field>
@@ -1514,14 +1745,17 @@ function HeroEditor({ data, updateHero, uploadHeroImage }) {
       </Block>
 
       <Block
-        title={t('backgroundImage')}
-        description={t('heroBackgroundDescription')}
-        footer={(
+        title={t("backgroundImage")}
+        description={t("heroBackgroundDescription")}
+        footer={
           <span>
-            <strong>{t('recommendedLabel')}</strong>{' '}
-            <span>Web 16:9 — JPG/WebP 1920 × 1080 px. Mobile portrait — JPG/WebP 1080 × 976 px (aspect ≈ 361:326). ≤ 5 MB. sRGB.</span>
+            <strong>{t("recommendedLabel")}</strong>{" "}
+            <span>
+              Web 16:9 — JPG/WebP 1920 × 1080 px. Mobile portrait — JPG/WebP
+              1080 × 976 px (aspect ≈ 361:326). ≤ 5 MB. sRGB.
+            </span>
           </span>
-        )}
+        }
       >
         {/* Sync toggle — when ON, the mobile landing reuses the web image
             and the mobile upload is hidden / disabled. Useful when the same
@@ -1530,7 +1764,9 @@ function HeroEditor({ data, updateHero, uploadHeroImage }) {
           <input
             type="checkbox"
             checked={hero.sync_mobile_with_web === true}
-            onChange={(e) => updateHero('sync_mobile_with_web', e.target.checked)}
+            onChange={(e) =>
+              updateHero("sync_mobile_with_web", e.target.checked)
+            }
             className="w-4 h-4 mt-0.5 accent-[#18181B] cursor-pointer flex-shrink-0"
             data-testid="info-hero-sync-mobile"
           />
@@ -1539,12 +1775,13 @@ function HeroEditor({ data, updateHero, uploadHeroImage }) {
               Use the same image on mobile
             </span>
             <span className="block text-[11.5px] text-[#71717A] mt-0.5 leading-snug">
-              When enabled, the mobile landing reuses the web banner and ignores the dedicated mobile upload below.
+              When enabled, the mobile landing reuses the web banner and ignores
+              the dedicated mobile upload below.
             </span>
           </div>
         </label>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div className="grid items-start grid-cols-1 gap-6 lg:grid-cols-2">
           {/* ── WEB (16:9) ────────────────────────────────────────── */}
           <HeroVariantCard
             variant="web"
@@ -1552,11 +1789,11 @@ function HeroEditor({ data, updateHero, uploadHeroImage }) {
             label="Web banner · 16:9"
             ratioHint="Recommended 1920 × 1080 px"
             previewUrl={previewUrlWeb}
-            currentUrl={hero.image_url || ''}
-            eyebrow={hero.eyebrow_en || 'AMERICA | KOREA'}
-            onUpload={(f) => uploadHeroImage(f, 'web')}
-            onClear={() => updateHero('image_url', '')}
-            onUrlChange={(v) => updateHero('image_url', v)}
+            currentUrl={hero.image_url || ""}
+            eyebrow={hero.eyebrow_en || "AMERICA | KOREA"}
+            onUpload={(f) => uploadHeroImage(f, "web")}
+            onClear={() => updateHero("image_url", "")}
+            onUrlChange={(v) => updateHero("image_url", v)}
             urlPlaceholder="/api/static/hero/your-image.jpg"
             previewTestId="info-hero-preview"
             uploadTestId="info-hero-upload-btn"
@@ -1574,11 +1811,11 @@ function HeroEditor({ data, updateHero, uploadHeroImage }) {
             label="Mobile banner · 361 : 326"
             ratioHint="Recommended 1080 × 976 px (or 720 × 650)"
             previewUrl={previewUrlMobile}
-            currentUrl={hero.image_url_mobile || ''}
-            eyebrow={hero.eyebrow_en || 'AMERICA | KOREA'}
-            onUpload={(f) => uploadHeroImage(f, 'mobile')}
-            onClear={() => updateHero('image_url_mobile', '')}
-            onUrlChange={(v) => updateHero('image_url_mobile', v)}
+            currentUrl={hero.image_url_mobile || ""}
+            eyebrow={hero.eyebrow_en || "AMERICA | KOREA"}
+            onUpload={(f) => uploadHeroImage(f, "mobile")}
+            onClear={() => updateHero("image_url_mobile", "")}
+            onUrlChange={(v) => updateHero("image_url_mobile", v)}
             urlPlaceholder="/api/static/hero/your-mobile-image.jpg"
             previewTestId="info-hero-mobile-preview"
             uploadTestId="info-hero-mobile-upload-btn"
@@ -1590,7 +1827,7 @@ function HeroEditor({ data, updateHero, uploadHeroImage }) {
             disabled={hero.sync_mobile_with_web === true}
             disabledHint={
               hero.sync_mobile_with_web === true
-                ? 'Sync is ON — the mobile landing currently uses the web banner. Turn off the toggle above to upload a dedicated mobile image.'
+                ? "Sync is ON — the mobile landing currently uses the web banner. Turn off the toggle above to upload a dedicated mobile image."
                 : null
             }
             t={t}
@@ -1601,34 +1838,42 @@ function HeroEditor({ data, updateHero, uploadHeroImage }) {
   );
 }
 
-
 // ─────────────────────────────────────────────────────────────────────────
 //  FAQ Editor — extracted into a sub-component for clarity
 // ─────────────────────────────────────────────────────────────────────────
-function FAQEditor({ data, updateFaq, updateFaqItem, addFaqItem, removeFaqItem, moveFaqItem }) {
+function FAQEditor({
+  data,
+  updateFaq,
+  updateFaqItem,
+  addFaqItem,
+  removeFaqItem,
+  moveFaqItem,
+}) {
   const { t } = useLang();
   return (
     <div className="space-y-5">
       <Block
-        title={t('faqSectionSettings')}
-        description={t('adm_the_faq_block_is_shown_above_the_public_footer_and')}
+        title={t("faqSectionSettings")}
+        description={t(
+          "adm_the_faq_block_is_shown_above_the_public_footer_and",
+        )}
       >
         <label className="flex items-center gap-3 text-[14px] text-[#18181B] mb-5 cursor-pointer">
           <input
             type="checkbox"
             checked={data?.faq?.enabled !== false}
-            onChange={(e) => updateFaq('enabled', e.target.checked)}
+            onChange={(e) => updateFaq("enabled", e.target.checked)}
             className="w-4 h-4 accent-[#18181B] cursor-pointer"
             data-testid="info-faq-enabled"
           />
-          <span className="font-medium">{t('showFaqBlock')}</span>
+          <span className="font-medium">{t("showFaqBlock")}</span>
         </label>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label="Section title (EN)">
             <input
               type="text"
-              value={data?.faq?.title_en || ''}
-              onChange={(e) => updateFaq('title_en', e.target.value)}
+              value={data?.faq?.title_en || ""}
+              onChange={(e) => updateFaq("title_en", e.target.value)}
               className={inputCls}
               placeholder="FAQ"
               data-testid="info-faq-title-en"
@@ -1637,10 +1882,10 @@ function FAQEditor({ data, updateFaq, updateFaqItem, addFaqItem, removeFaqItem, 
           <Field label="Section title (BG)">
             <input
               type="text"
-              value={data?.faq?.title_bg || ''}
-              onChange={(e) => updateFaq('title_bg', e.target.value)}
+              value={data?.faq?.title_bg || ""}
+              onChange={(e) => updateFaq("title_bg", e.target.value)}
               className={inputCls}
-              placeholder={t('adm_frequently_asked_questions')}
+              placeholder={t("adm_frequently_asked_questions")}
               data-testid="info-faq-title-bg"
             />
           </Field>
@@ -1648,24 +1893,32 @@ function FAQEditor({ data, updateFaq, updateFaqItem, addFaqItem, removeFaqItem, 
       </Block>
 
       <Block
-        title={t('adm_questions_answers')}
-        description={`${(data?.faq?.items || []).length} item${(data?.faq?.items || []).length === 1 ? '' : 's'}. Reorder via arrows. Disabled items stay in storage but are hidden from the public site.`}
+        title={t("adm_questions_answers")}
+        description={`${(data?.faq?.items || []).length} item${(data?.faq?.items || []).length === 1 ? "" : "s"}. Reorder via arrows. Disabled items stay in storage but are hidden from the public site.`}
         footer={
           <div className="flex items-center justify-between">
-            <span>Tip: HTML formatting (bold, lists, links) is supported in answers.</span>
+            <span>
+              Tip: HTML formatting (bold, lists, links) is supported in answers.
+            </span>
             <button
               onClick={addFaqItem}
               className="inline-flex items-center gap-1.5 px-3 h-8 rounded-md bg-[#18181B] hover:bg-black text-white text-[12px] font-semibold transition-colors"
               data-testid="info-faq-add"
             >
-              <Plus size={14} weight="bold" />{t('addQuestionAction')}</button>
+              <Plus size={14} weight="bold" />
+              {t("addQuestionAction")}
+            </button>
           </div>
         }
       >
         {(data?.faq?.items || []).length === 0 && (
           <div className="text-center py-10 text-[#71717A]">
             <Question size={28} className="mx-auto mb-2" />
-            <p className="text-[13px]">{t('noFaqYetClick')}<strong>{t('addQuestionAction')}</strong> {t('adm_below_to_create_your_first_item')}</p>
+            <p className="text-[13px]">
+              {t("noFaqYetClick")}
+              <strong>{t("addQuestionAction")}</strong>{" "}
+              {t("adm_below_to_create_your_first_item")}
+            </p>
           </div>
         )}
 
@@ -1676,35 +1929,61 @@ function FAQEditor({ data, updateFaq, updateFaqItem, addFaqItem, removeFaqItem, 
               <div
                 key={item.id || idx}
                 className={`border rounded-xl overflow-hidden transition-colors ${
-                  isEnabled ? 'border-[#E4E4E7] bg-white' : 'border-[#E4E4E7] bg-[#FAFAFA] opacity-80'
+                  isEnabled
+                    ? "border-[#E4E4E7] bg-white"
+                    : "border-[#E4E4E7] bg-[#FAFAFA] opacity-80"
                 }`}
                 data-testid={`info-faq-item-${idx}`}
               >
                 <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[#F4F4F5] bg-[#FAFAFA]">
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center min-w-0 gap-2">
                     <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#18181B] text-white text-[11px] font-bold shrink-0">
                       {idx + 1}
                     </span>
                     <span className="text-[13px] font-semibold text-[#18181B] truncate">
-                      {item.question_en || item.question_bg || <em className="text-[#A1A1AA] font-normal">{t('untitledQuestion')}</em>}
+                      {item.question_en || item.question_bg || (
+                        <em className="text-[#A1A1AA] font-normal">
+                          {t("untitledQuestion")}
+                        </em>
+                      )}
                     </span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => updateFaqItem(idx, { enabled: !isEnabled })} className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#52525B] hover:bg-[#F4F4F5] transition-colors" title={isEnabled ? 'Hide' : 'Show'} data-testid={`info-faq-toggle-${idx}`}>
+                    <button
+                      onClick={() =>
+                        updateFaqItem(idx, { enabled: !isEnabled })
+                      }
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#52525B] hover:bg-[#F4F4F5] transition-colors"
+                      title={isEnabled ? "Hide" : "Show"}
+                      data-testid={`info-faq-toggle-${idx}`}
+                    >
                       {isEnabled ? <Eye size={16} /> : <EyeSlash size={16} />}
                     </button>
-                    <button onClick={() => moveFaqItem(idx, -1)} disabled={idx === 0} className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#52525B] hover:bg-[#F4F4F5] transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title={t('moveUpAction')} data-testid={`info-faq-up-${idx}`}>
+                    <button
+                      onClick={() => moveFaqItem(idx, -1)}
+                      disabled={idx === 0}
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#52525B] hover:bg-[#F4F4F5] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      title={t("moveUpAction")}
+                      data-testid={`info-faq-up-${idx}`}
+                    >
                       <ArrowUp size={16} />
                     </button>
-                    <button onClick={() => moveFaqItem(idx, +1)} disabled={idx === (data?.faq?.items || []).length - 1} className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#52525B] hover:bg-[#F4F4F5] transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title={t('moveDownAction')} data-testid={`info-faq-down-${idx}`}>
+                    <button
+                      onClick={() => moveFaqItem(idx, +1)}
+                      disabled={idx === (data?.faq?.items || []).length - 1}
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#52525B] hover:bg-[#F4F4F5] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      title={t("moveDownAction")}
+                      data-testid={`info-faq-down-${idx}`}
+                    >
                       <ArrowDown size={16} />
                     </button>
                     <button
                       onClick={() => {
-                        if (window.confirm('Remove this FAQ item?')) removeFaqItem(idx);
+                        if (window.confirm("Remove this FAQ item?"))
+                          removeFaqItem(idx);
                       }}
                       className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#DC2626] hover:bg-[#FEE2E2] transition-colors"
-                      title={t('deleteAction')}
+                      title={t("deleteAction")}
                       data-testid={`info-faq-delete-${idx}`}
                     >
                       <Trash size={16} />
@@ -1713,12 +1992,14 @@ function FAQEditor({ data, updateFaq, updateFaqItem, addFaqItem, removeFaqItem, 
                 </div>
 
                 <div className="p-4 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <Field label="Question (EN)">
                       <input
                         type="text"
-                        value={item.question_en || ''}
-                        onChange={(e) => updateFaqItem(idx, { question_en: e.target.value })}
+                        value={item.question_en || ""}
+                        onChange={(e) =>
+                          updateFaqItem(idx, { question_en: e.target.value })
+                        }
                         className={inputCls}
                         data-testid={`info-faq-q-en-${idx}`}
                       />
@@ -1726,8 +2007,10 @@ function FAQEditor({ data, updateFaq, updateFaqItem, addFaqItem, removeFaqItem, 
                     <Field label="Question (BG)">
                       <input
                         type="text"
-                        value={item.question_bg || ''}
-                        onChange={(e) => updateFaqItem(idx, { question_bg: e.target.value })}
+                        value={item.question_bg || ""}
+                        onChange={(e) =>
+                          updateFaqItem(idx, { question_bg: e.target.value })
+                        }
                         className={inputCls}
                         data-testid={`info-faq-q-bg-${idx}`}
                       />
@@ -1735,11 +2018,13 @@ function FAQEditor({ data, updateFaq, updateFaqItem, addFaqItem, removeFaqItem, 
                   </div>
 
                   <div>
-                    <span className="block text-[12px] font-semibold text-[#52525B] mb-1.5 uppercase tracking-wider">Answer (EN)</span>
+                    <span className="block text-[12px] font-semibold text-[#52525B] mb-1.5 uppercase tracking-wider">
+                      Answer (EN)
+                    </span>
                     <div className="bibi-admin-quill">
                       <ReactQuill
                         theme="snow"
-                        value={item.answer_en || ''}
+                        value={item.answer_en || ""}
                         onChange={(v) => updateFaqItem(idx, { answer_en: v })}
                         modules={quillModules}
                       />
@@ -1747,11 +2032,13 @@ function FAQEditor({ data, updateFaq, updateFaqItem, addFaqItem, removeFaqItem, 
                   </div>
 
                   <div>
-                    <span className="block text-[12px] font-semibold text-[#52525B] mb-1.5 uppercase tracking-wider">Answer (BG)</span>
+                    <span className="block text-[12px] font-semibold text-[#52525B] mb-1.5 uppercase tracking-wider">
+                      Answer (BG)
+                    </span>
                     <div className="bibi-admin-quill">
                       <ReactQuill
                         theme="snow"
-                        value={item.answer_bg || ''}
+                        value={item.answer_bg || ""}
                         onChange={(v) => updateFaqItem(idx, { answer_bg: v })}
                         modules={quillModules}
                       />
@@ -1764,13 +2051,13 @@ function FAQEditor({ data, updateFaq, updateFaqItem, addFaqItem, removeFaqItem, 
         </div>
 
         {(data?.faq?.items || []).length > 0 && (
-          <div className="mt-4 flex justify-end">
+          <div className="flex justify-end mt-4">
             <button
               onClick={addFaqItem}
               className="inline-flex items-center gap-1.5 px-3.5 h-9 rounded-lg border border-dashed border-[#D4D4D8] text-[#52525B] hover:border-[#18181B] hover:text-[#18181B] text-[12.5px] font-medium transition-colors"
               data-testid="info-faq-add-bottom"
             >
-              <Plus size={14} /> {t('adm_add_another_question')}
+              <Plus size={14} /> {t("adm_add_another_question")}
             </button>
           </div>
         )}
@@ -1800,67 +2087,74 @@ function ReviewsEditor({
   return (
     <div className="space-y-5">
       <Block
-        title={t('adm_reviews_block_general_settings')}
-        description={t('adm_controls_the_our_clients_say_section_on_the_public')}
+        title={t("adm_reviews_block_general_settings")}
+        description={t(
+          "adm_controls_the_our_clients_say_section_on_the_public",
+        )}
       >
         <label className="flex items-center gap-3 text-[14px] text-[#18181B] mb-5 cursor-pointer">
           <input
             type="checkbox"
             checked={data?.reviews?.enabled !== false}
-            onChange={(e) => updateReviews('enabled', e.target.checked)}
+            onChange={(e) => updateReviews("enabled", e.target.checked)}
             className="w-4 h-4 accent-[#18181B] cursor-pointer"
             data-testid="info-reviews-enabled"
           />
-          <span className="font-medium">{t('showReviewsBlock')}</span>
+          <span className="font-medium">{t("showReviewsBlock")}</span>
         </label>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label="Section title (EN)">
             <input
               type="text"
-              value={data?.reviews?.title_en || ''}
-              onChange={(e) => updateReviews('title_en', e.target.value)}
+              value={data?.reviews?.title_en || ""}
+              onChange={(e) => updateReviews("title_en", e.target.value)}
               className={inputCls}
-              placeholder={t('ourClientsSay')}
+              placeholder={t("ourClientsSay")}
               data-testid="info-reviews-title-en"
             />
           </Field>
           <Field label="Section title (BG)">
             <input
               type="text"
-              value={data?.reviews?.title_bg || ''}
-              onChange={(e) => updateReviews('title_bg', e.target.value)}
+              value={data?.reviews?.title_bg || ""}
+              onChange={(e) => updateReviews("title_bg", e.target.value)}
               className={inputCls}
-              placeholder={t('adm_what_our_clients_say')}
+              placeholder={t("adm_what_our_clients_say")}
               data-testid="info-reviews-title-bg"
             />
           </Field>
-          <Field label="Subtitle (EN)" hint={t('adm_the_yellow_heading_shown_on_the_left_side_of_the_c')}>
+          <Field
+            label="Subtitle (EN)"
+            hint={t("adm_the_yellow_heading_shown_on_the_left_side_of_the_c")}
+          >
             <input
               type="text"
-              value={data?.reviews?.subtitle_en || ''}
-              onChange={(e) => updateReviews('subtitle_en', e.target.value)}
+              value={data?.reviews?.subtitle_en || ""}
+              onChange={(e) => updateReviews("subtitle_en", e.target.value)}
               className={inputCls}
-              placeholder={t('whatCustomersSay')}
+              placeholder={t("whatCustomersSay")}
             />
           </Field>
           <Field label="Subtitle (BG)">
             <input
               type="text"
-              value={data?.reviews?.subtitle_bg || ''}
-              onChange={(e) => updateReviews('subtitle_bg', e.target.value)}
+              value={data?.reviews?.subtitle_bg || ""}
+              onChange={(e) => updateReviews("subtitle_bg", e.target.value)}
               className={inputCls}
-              placeholder={t('adm_what_clients_say_after_working_with_us')}
+              placeholder={t("adm_what_clients_say_after_working_with_us")}
             />
           </Field>
         </div>
       </Block>
 
       <Block
-        title={t('googleBadge')}
-        description={t('adm_the_google_rating_badge_shown_at_the_topleft_of_th')}
+        title={t("googleBadge")}
+        description={t(
+          "adm_the_google_rating_badge_shown_at_the_topleft_of_th",
+        )}
       >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Field label="Rating (1.0 – 5.0)">
             <input
               type="number"
@@ -1868,26 +2162,38 @@ function ReviewsEditor({
               min="0"
               max="5"
               value={data?.reviews?.google_rating ?? 4.9}
-              onChange={(e) => updateReviews('google_rating', parseFloat(e.target.value) || 0)}
+              onChange={(e) =>
+                updateReviews("google_rating", parseFloat(e.target.value) || 0)
+              }
               className={inputCls}
               data-testid="info-reviews-google-rating"
             />
           </Field>
-          <Field label={t('reviewsCountLabel')}>
+          <Field label={t("reviewsCountLabel")}>
             <input
               type="number"
               min="0"
               value={data?.reviews?.google_reviews_count ?? 0}
-              onChange={(e) => updateReviews('google_reviews_count', parseInt(e.target.value, 10) || 0)}
+              onChange={(e) =>
+                updateReviews(
+                  "google_reviews_count",
+                  parseInt(e.target.value, 10) || 0,
+                )
+              }
               className={inputCls}
               data-testid="info-reviews-google-count"
             />
           </Field>
-          <Field label={t('adm_31_google_reviews_link_url')} hint={t('adm_opens_when_the_badge_is_clicked')}>
+          <Field
+            label={t("adm_31_google_reviews_link_url")}
+            hint={t("adm_opens_when_the_badge_is_clicked")}
+          >
             <input
               type="text"
-              value={data?.reviews?.google_reviews_url || ''}
-              onChange={(e) => updateReviews('google_reviews_url', e.target.value)}
+              value={data?.reviews?.google_reviews_url || ""}
+              onChange={(e) =>
+                updateReviews("google_reviews_url", e.target.value)
+              }
               className={inputCls}
               placeholder="https://g.page/r/..."
               data-testid="info-reviews-google-url"
@@ -1898,15 +2204,23 @@ function ReviewsEditor({
 
       <Block
         title='Happy customers counter ("460 +")'
-        description='The big ghost number behind the cards. Final value shown publicly = baseline + count of enabled reviews below.'
+        description="The big ghost number behind the cards. Final value shown publicly = baseline + count of enabled reviews below."
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-          <Field label={t('baselineValue')} hint={t('adm_real_number_of_happy_customers_before_the_reviews')}>
+        <div className="grid items-end grid-cols-1 gap-4 md:grid-cols-2">
+          <Field
+            label={t("baselineValue")}
+            hint={t("adm_real_number_of_happy_customers_before_the_reviews")}
+          >
             <input
               type="number"
               min="0"
               value={baseline}
-              onChange={(e) => updateReviews('baseline_happy_customers', parseInt(e.target.value, 10) || 0)}
+              onChange={(e) =>
+                updateReviews(
+                  "baseline_happy_customers",
+                  parseInt(e.target.value, 10) || 0,
+                )
+              }
               className={inputCls}
               data-testid="info-reviews-baseline"
             />
@@ -1916,19 +2230,24 @@ function ReviewsEditor({
               <User size={22} weight="bold" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[11.5px] uppercase tracking-wider text-[#71717A] font-semibold">{t('publicNumber')}</div>
+              <div className="text-[11.5px] uppercase tracking-wider text-[#71717A] font-semibold">
+                {t("publicNumber")}
+              </div>
               <div className="text-[24px] font-bold text-[#18181B] leading-tight">
                 {totalCounter} <span className="text-[#FEAE00]">+</span>
               </div>
-              <div className="text-[12px] text-[#71717A]">{baseline} baseline + {enabledCount} active review{enabledCount === 1 ? '' : 's'}</div>
+              <div className="text-[12px] text-[#71717A]">
+                {baseline} baseline + {enabledCount} active review
+                {enabledCount === 1 ? "" : "s"}
+              </div>
             </div>
           </div>
         </div>
       </Block>
 
       <Block
-        title={t('reviewsListLabel')}
-        description={`${items.length} review${items.length === 1 ? '' : 's'}. Disabled reviews stay in storage but are hidden from the public site and excluded from the counter.`}
+        title={t("reviewsListLabel")}
+        description={`${items.length} review${items.length === 1 ? "" : "s"}. Disabled reviews stay in storage but are hidden from the public site and excluded from the counter.`}
         footer={
           <div className="flex items-center justify-between">
             <span>Tip: square images (~300×300) work best for the avatar.</span>
@@ -1937,14 +2256,20 @@ function ReviewsEditor({
               className="inline-flex items-center gap-1.5 px-3 h-8 rounded-md bg-[#18181B] hover:bg-black text-white text-[12px] font-semibold transition-colors"
               data-testid="info-reviews-add"
             >
-              <Plus size={14} weight="bold" />{t('addReviewAction')}</button>
+              <Plus size={14} weight="bold" />
+              {t("addReviewAction")}
+            </button>
           </div>
         }
       >
         {items.length === 0 && (
           <div className="text-center py-10 text-[#71717A]">
             <ChatCircle size={28} className="mx-auto mb-2" />
-            <p className="text-[13px]">{t('noReviewsYetClick')}<strong>{t('addReviewAction')}</strong> {t('adm_below_to_create_your_first_one')}</p>
+            <p className="text-[13px]">
+              {t("noReviewsYetClick")}
+              <strong>{t("addReviewAction")}</strong>{" "}
+              {t("adm_below_to_create_your_first_one")}
+            </p>
           </div>
         )}
 
@@ -1958,7 +2283,8 @@ function ReviewsEditor({
               onChange={(patch) => updateReviewItem(idx, patch)}
               onMove={(dir) => moveReviewItem(idx, dir)}
               onRemove={() => {
-                if (window.confirm('Remove this review?')) removeReviewItem(idx);
+                if (window.confirm("Remove this review?"))
+                  removeReviewItem(idx);
               }}
               onUpload={(file) => uploadReviewImage(idx, file)}
             />
@@ -1966,13 +2292,13 @@ function ReviewsEditor({
         </div>
 
         {items.length > 0 && (
-          <div className="mt-4 flex justify-end">
+          <div className="flex justify-end mt-4">
             <button
               onClick={addReviewItem}
               className="inline-flex items-center gap-1.5 px-3.5 h-9 rounded-lg border border-dashed border-[#D4D4D8] text-[#52525B] hover:border-[#18181B] hover:text-[#18181B] text-[12.5px] font-medium transition-colors"
               data-testid="info-reviews-add-bottom"
             >
-              <Plus size={14} /> {t('adm_add_another_review')}
+              <Plus size={14} /> {t("adm_add_another_review")}
             </button>
           </div>
         )}
@@ -1981,33 +2307,51 @@ function ReviewsEditor({
   );
 }
 
-function ReviewItemCard({ idx, total, item, onChange, onMove, onRemove, onUpload }) {
+function ReviewItemCard({
+  idx,
+  total,
+  item,
+  onChange,
+  onMove,
+  onRemove,
+  onUpload,
+}) {
   const { t } = useLang();
   const fileRef = useRef(null);
   const isEnabled = item.enabled !== false;
   const fullImageUrl = item.image_url
-    ? (/^https?:\/\//i.test(item.image_url) ? item.image_url : `${API_URL}${item.image_url}`)
-    : '';
+    ? /^https?:\/\//i.test(item.image_url)
+      ? item.image_url
+      : `${API_URL}${item.image_url}`
+    : "";
 
   return (
     <div
       className={`border rounded-xl overflow-hidden transition-colors ${
-        isEnabled ? 'border-[#E4E4E7] bg-white' : 'border-[#E4E4E7] bg-[#FAFAFA] opacity-80'
+        isEnabled
+          ? "border-[#E4E4E7] bg-white"
+          : "border-[#E4E4E7] bg-[#FAFAFA] opacity-80"
       }`}
       data-testid={`info-reviews-item-${idx}`}
     >
       {/* Header */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[#F4F4F5] bg-[#FAFAFA]">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center min-w-0 gap-2">
           <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#18181B] text-white text-[11px] font-bold shrink-0">
             {idx + 1}
           </span>
           <span className="text-[13px] font-semibold text-[#18181B] truncate">
-            {item.name || <em className="text-[#A1A1AA] font-normal">{t('unnamedReviewer')}</em>}
+            {item.name || (
+              <em className="text-[#A1A1AA] font-normal">
+                {t("unnamedReviewer")}
+              </em>
+            )}
           </span>
           {isEnabled && (
             <span className="inline-flex items-center gap-0.5 text-[#FEAE00]">
-              {[...Array(Math.max(0, Math.min(5, Number(item.rating) || 0)))].map((_, s) => (
+              {[
+                ...Array(Math.max(0, Math.min(5, Number(item.rating) || 0))),
+              ].map((_, s) => (
                 <Star key={s} size={12} weight="fill" />
               ))}
             </span>
@@ -2017,7 +2361,7 @@ function ReviewItemCard({ idx, total, item, onChange, onMove, onRemove, onUpload
           <button
             onClick={() => onChange({ enabled: !isEnabled })}
             className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#52525B] hover:bg-[#F4F4F5] transition-colors"
-            title={isEnabled ? 'Hide from public site' : 'Show on public site'}
+            title={isEnabled ? "Hide from public site" : "Show on public site"}
             data-testid={`info-reviews-toggle-${idx}`}
           >
             {isEnabled ? <Eye size={16} /> : <EyeSlash size={16} />}
@@ -2026,7 +2370,7 @@ function ReviewItemCard({ idx, total, item, onChange, onMove, onRemove, onUpload
             onClick={() => onMove(-1)}
             disabled={idx === 0}
             className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#52525B] hover:bg-[#F4F4F5] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            title={t('moveUpAction')}
+            title={t("moveUpAction")}
             data-testid={`info-reviews-up-${idx}`}
           >
             <ArrowUp size={16} />
@@ -2035,7 +2379,7 @@ function ReviewItemCard({ idx, total, item, onChange, onMove, onRemove, onUpload
             onClick={() => onMove(+1)}
             disabled={idx === total - 1}
             className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#52525B] hover:bg-[#F4F4F5] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            title={t('moveDownAction')}
+            title={t("moveDownAction")}
             data-testid={`info-reviews-down-${idx}`}
           >
             <ArrowDown size={16} />
@@ -2043,7 +2387,7 @@ function ReviewItemCard({ idx, total, item, onChange, onMove, onRemove, onUpload
           <button
             onClick={onRemove}
             className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#DC2626] hover:bg-[#FEE2E2] transition-colors"
-            title={t('deleteAction')}
+            title={t("deleteAction")}
             data-testid={`info-reviews-delete-${idx}`}
           >
             <Trash size={16} />
@@ -2055,10 +2399,16 @@ function ReviewItemCard({ idx, total, item, onChange, onMove, onRemove, onUpload
       <div className="p-4 grid grid-cols-1 md:grid-cols-[180px_1fr] gap-4">
         {/* Avatar uploader */}
         <div>
-          <span className="block text-[12px] font-semibold text-[#52525B] mb-1.5 uppercase tracking-wider">{t('photoLabel')}</span>
+          <span className="block text-[12px] font-semibold text-[#52525B] mb-1.5 uppercase tracking-wider">
+            {t("photoLabel")}
+          </span>
           <div className="aspect-square w-full max-w-[180px] rounded-xl border border-[#E4E4E7] bg-[#F4F4F5] flex items-center justify-center overflow-hidden mb-2">
             {fullImageUrl ? (
-              <img src={fullImageUrl} alt={item.name ? `${item.name}` : 'reviewer'} className="w-full h-full object-cover" />
+              <img
+                src={fullImageUrl}
+                alt={item.name ? `${item.name}` : "reviewer"}
+                className="object-cover w-full h-full"
+              />
             ) : (
               <ImageIcon size={36} className="text-[#A1A1AA]" />
             )}
@@ -2071,7 +2421,7 @@ function ReviewItemCard({ idx, total, item, onChange, onMove, onRemove, onUpload
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) onUpload(f);
-              if (fileRef.current) fileRef.current.value = '';
+              if (fileRef.current) fileRef.current.value = "";
             }}
             data-testid={`info-reviews-file-${idx}`}
           />
@@ -2082,14 +2432,14 @@ function ReviewItemCard({ idx, total, item, onChange, onMove, onRemove, onUpload
               className="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg border border-[#E4E4E7] bg-white text-[#52525B] hover:bg-[#FAFAFA] hover:border-[#D4D4D8] text-[12.5px] font-medium transition-colors"
               data-testid={`info-reviews-upload-${idx}`}
             >
-              <UploadSimple size={14} /> {fullImageUrl ? 'Replace' : 'Upload'}
+              <UploadSimple size={14} /> {fullImageUrl ? "Replace" : "Upload"}
             </button>
             {fullImageUrl && (
               <button
                 type="button"
-                onClick={() => onChange({ image_url: '' })}
+                onClick={() => onChange({ image_url: "" })}
                 className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-[#E4E4E7] bg-white text-[#DC2626] hover:bg-[#FEE2E2] hover:border-[#FCA5A5] transition-colors"
-                title={t('removePhoto')}
+                title={t("removePhoto")}
                 data-testid={`info-reviews-clear-img-${idx}`}
               >
                 <Trash size={14} />
@@ -2100,24 +2450,30 @@ function ReviewItemCard({ idx, total, item, onChange, onMove, onRemove, onUpload
 
         {/* Fields */}
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Field label="Reviewer name (EN)" hint={t('adm_shown_when_the_visitors_language_is_english')}>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Field
+              label="Reviewer name (EN)"
+              hint={t("adm_shown_when_the_visitors_language_is_english")}
+            >
               <input
                 type="text"
-                value={item.name || ''}
+                value={item.name || ""}
                 onChange={(e) => onChange({ name: e.target.value })}
                 className={inputCls}
-                placeholder={t('placeholderGeorgi')}
+                placeholder={t("placeholderGeorgi")}
                 data-testid={`info-reviews-name-${idx}`}
               />
             </Field>
-            <Field label="Reviewer name (BG)" hint={t('adm_the_same_name_in_bulgarian_cyrillic')}>
+            <Field
+              label="Reviewer name (BG)"
+              hint={t("adm_the_same_name_in_bulgarian_cyrillic")}
+            >
               <input
                 type="text"
-                value={item.name_bg || ''}
+                value={item.name_bg || ""}
                 onChange={(e) => onChange({ name_bg: e.target.value })}
                 className={inputCls}
-                placeholder={t('adm_georgi')}
+                placeholder={t("adm_georgi")}
                 data-testid={`info-reviews-name-bg-${idx}`}
               />
             </Field>
@@ -2127,30 +2483,44 @@ function ReviewItemCard({ idx, total, item, onChange, onMove, onRemove, onUpload
                 min="1"
                 max="5"
                 value={item.rating ?? 5}
-                onChange={(e) => onChange({ rating: Math.max(1, Math.min(5, parseInt(e.target.value, 10) || 5)) })}
+                onChange={(e) =>
+                  onChange({
+                    rating: Math.max(
+                      1,
+                      Math.min(5, parseInt(e.target.value, 10) || 5),
+                    ),
+                  })
+                }
                 className={inputCls}
                 data-testid={`info-reviews-rating-${idx}`}
               />
             </Field>
           </div>
 
-          <Field label="Review (EN)" hint={t('adm_plain_text_use_linebreaks_for_paragraphs')}>
+          <Field
+            label="Review (EN)"
+            hint={t("adm_plain_text_use_linebreaks_for_paragraphs")}
+          >
             <textarea
               rows={4}
-              value={item.text_en || ''}
+              value={item.text_en || ""}
               onChange={(e) => onChange({ text_en: e.target.value })}
               className={textareaCls}
-              placeholder={t('adm_i_really_liked_the_approach_everything_was_clear_t')}
+              placeholder={t(
+                "adm_i_really_liked_the_approach_everything_was_clear_t",
+              )}
               data-testid={`info-reviews-text-en-${idx}`}
             />
           </Field>
-          <Field label="Review (BG)" hint={t('adm_the_same_text_in_bulgarian')}>
+          <Field label="Review (BG)" hint={t("adm_the_same_text_in_bulgarian")}>
             <textarea
               rows={4}
-              value={item.text_bg || ''}
+              value={item.text_bg || ""}
               onChange={(e) => onChange({ text_bg: e.target.value })}
               className={textareaCls}
-              placeholder={t('adm_i_liked_the_approach_everything_was_clear_transpar')}
+              placeholder={t(
+                "adm_i_liked_the_approach_everything_was_clear_transpar",
+              )}
               data-testid={`info-reviews-text-bg-${idx}`}
             />
           </Field>
@@ -2159,7 +2529,6 @@ function ReviewItemCard({ idx, total, item, onChange, onMove, onRemove, onUpload
     </div>
   );
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────
 //  Before / After Editor — NEW
@@ -2178,64 +2547,72 @@ function BeforeAfterEditor({
   return (
     <div className="space-y-5">
       <Block
-        title={t('adm_before_after_block_general_settings')}
+        title={t("adm_before_after_block_general_settings")}
         description='Controls the "BEFORE AND AFTER" carousel on the public homepage. Each card shows two photos (auction state vs. finished car) plus model, dates and price.'
       >
         <label className="flex items-center gap-3 text-[14px] text-[#18181B] mb-5 cursor-pointer">
           <input
             type="checkbox"
             checked={data?.before_after?.enabled !== false}
-            onChange={(e) => updateBeforeAfter('enabled', e.target.checked)}
+            onChange={(e) => updateBeforeAfter("enabled", e.target.checked)}
             className="w-4 h-4 accent-[#18181B] cursor-pointer"
             data-testid="info-ba-enabled"
           />
-          <span className="font-medium">{t('adm_show_before_after_block_on_the_public_homepage')}</span>
+          <span className="font-medium">
+            {t("adm_show_before_after_block_on_the_public_homepage")}
+          </span>
         </label>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label="Section title (EN)">
             <input
               type="text"
-              value={data?.before_after?.title_en || ''}
-              onChange={(e) => updateBeforeAfter('title_en', e.target.value)}
+              value={data?.before_after?.title_en || ""}
+              onChange={(e) => updateBeforeAfter("title_en", e.target.value)}
               className={inputCls}
-              placeholder={t('beforeAndAfter')}
+              placeholder={t("beforeAndAfter")}
               data-testid="info-ba-title-en"
             />
           </Field>
           <Field label="Section title (BG)">
             <input
               type="text"
-              value={data?.before_after?.title_bg || ''}
-              onChange={(e) => updateBeforeAfter('title_bg', e.target.value)}
+              value={data?.before_after?.title_bg || ""}
+              onChange={(e) => updateBeforeAfter("title_bg", e.target.value)}
               className={inputCls}
-              placeholder={t('adm_before_and_after')}
+              placeholder={t("adm_before_and_after")}
               data-testid="info-ba-title-bg"
             />
           </Field>
           <Field label="Subtitle (EN) — yellow line">
             <input
               type="text"
-              value={data?.before_after?.subtitle_yellow_en || ''}
-              onChange={(e) => updateBeforeAfter('subtitle_yellow_en', e.target.value)}
+              value={data?.before_after?.subtitle_yellow_en || ""}
+              onChange={(e) =>
+                updateBeforeAfter("subtitle_yellow_en", e.target.value)
+              }
               className={inputCls}
-              placeholder={t('ourClientsReceive')}
+              placeholder={t("ourClientsReceive")}
             />
           </Field>
           <Field label="Subtitle (BG) — yellow line">
             <input
               type="text"
-              value={data?.before_after?.subtitle_yellow_bg || ''}
-              onChange={(e) => updateBeforeAfter('subtitle_yellow_bg', e.target.value)}
+              value={data?.before_after?.subtitle_yellow_bg || ""}
+              onChange={(e) =>
+                updateBeforeAfter("subtitle_yellow_bg", e.target.value)
+              }
               className={inputCls}
-              placeholder={t('adm_our_customers_receive')}
+              placeholder={t("adm_our_customers_receive")}
             />
           </Field>
           <Field label="Subtitle (EN) — white line">
             <input
               type="text"
-              value={data?.before_after?.subtitle_white_en || ''}
-              onChange={(e) => updateBeforeAfter('subtitle_white_en', e.target.value)}
+              value={data?.before_after?.subtitle_white_en || ""}
+              onChange={(e) =>
+                updateBeforeAfter("subtitle_white_en", e.target.value)
+              }
               className={inputCls}
               placeholder="the best service"
             />
@@ -2243,34 +2620,45 @@ function BeforeAfterEditor({
           <Field label="Subtitle (BG) — white line">
             <input
               type="text"
-              value={data?.before_after?.subtitle_white_bg || ''}
-              onChange={(e) => updateBeforeAfter('subtitle_white_bg', e.target.value)}
+              value={data?.before_after?.subtitle_white_bg || ""}
+              onChange={(e) =>
+                updateBeforeAfter("subtitle_white_bg", e.target.value)
+              }
               className={inputCls}
-              placeholder={t('adm_the_best_service')}
+              placeholder={t("adm_the_best_service")}
             />
           </Field>
         </div>
       </Block>
 
       <Block
-        title={t('cardsLabel')}
-        description={`${items.length} card${items.length === 1 ? '' : 's'}. Disabled cards stay in storage but are hidden from the public site.`}
+        title={t("cardsLabel")}
+        description={`${items.length} card${items.length === 1 ? "" : "s"}. Disabled cards stay in storage but are hidden from the public site.`}
         footer={
           <div className="flex items-center justify-between">
-            <span>Tip: use a 4:5 portrait ratio (~1080×1350) for crisp before/after images.</span>
+            <span>
+              Tip: use a 4:5 portrait ratio (~1080×1350) for crisp before/after
+              images.
+            </span>
             <button
               onClick={addBeforeAfterItem}
               className="inline-flex items-center gap-1.5 px-3 h-8 rounded-md bg-[#18181B] hover:bg-black text-white text-[12px] font-semibold transition-colors"
               data-testid="info-ba-add"
             >
-              <Plus size={14} weight="bold" />{t('addCardAction')}</button>
+              <Plus size={14} weight="bold" />
+              {t("addCardAction")}
+            </button>
           </div>
         }
       >
         {items.length === 0 && (
           <div className="text-center py-10 text-[#71717A]">
             <ImageIcon size={28} className="mx-auto mb-2" />
-            <p className="text-[13px]">{t('noCardsYetClick')}<strong>{t('addCardAction')}</strong> {t('adm_to_create_your_first_one')}</p>
+            <p className="text-[13px]">
+              {t("noCardsYetClick")}
+              <strong>{t("addCardAction")}</strong>{" "}
+              {t("adm_to_create_your_first_one")}
+            </p>
           </div>
         )}
 
@@ -2284,7 +2672,8 @@ function BeforeAfterEditor({
               onChange={(patch) => updateBeforeAfterItem(idx, patch)}
               onMove={(dir) => moveBeforeAfterItem(idx, dir)}
               onRemove={() => {
-                if (window.confirm('Remove this Before/After card?')) removeBeforeAfterItem(idx);
+                if (window.confirm("Remove this Before/After card?"))
+                  removeBeforeAfterItem(idx);
               }}
               onUpload={(side, file) => uploadBeforeAfterImage(idx, side, file)}
             />
@@ -2292,13 +2681,13 @@ function BeforeAfterEditor({
         </div>
 
         {items.length > 0 && (
-          <div className="mt-4 flex justify-end">
+          <div className="flex justify-end mt-4">
             <button
               onClick={addBeforeAfterItem}
               className="inline-flex items-center gap-1.5 px-3.5 h-9 rounded-lg border border-dashed border-[#D4D4D8] text-[#52525B] hover:border-[#18181B] hover:text-[#18181B] text-[12.5px] font-medium transition-colors"
               data-testid="info-ba-add-bottom"
             >
-              <Plus size={14} /> {t('adm_add_another_card')}
+              <Plus size={14} /> {t("adm_add_another_card")}
             </button>
           </div>
         )}
@@ -2310,13 +2699,23 @@ function BeforeAfterEditor({
 function BeforeAfterImagePicker({ label, url, onUpload, onClear, testid }) {
   const { t } = useLang();
   const fileRef = useRef(null);
-  const fullUrl = url ? (/^https?:\/\//i.test(url) ? url : `${API_URL}${url}`) : '';
+  const fullUrl = url
+    ? /^https?:\/\//i.test(url)
+      ? url
+      : `${API_URL}${url}`
+    : "";
   return (
     <div>
-      <span className="block text-[12px] font-semibold text-[#52525B] mb-1.5 uppercase tracking-wider">{label}</span>
+      <span className="block text-[12px] font-semibold text-[#52525B] mb-1.5 uppercase tracking-wider">
+        {label}
+      </span>
       <div className="aspect-[4/5] w-full rounded-xl border border-[#E4E4E7] bg-[#F4F4F5] flex items-center justify-center overflow-hidden mb-2">
         {fullUrl ? (
-          <img src={fullUrl} alt={label} className="w-full h-full object-cover" />
+          <img
+            src={fullUrl}
+            alt={label}
+            className="object-cover w-full h-full"
+          />
         ) : (
           <ImageIcon size={36} className="text-[#A1A1AA]" />
         )}
@@ -2329,7 +2728,7 @@ function BeforeAfterImagePicker({ label, url, onUpload, onClear, testid }) {
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) onUpload(f);
-          if (fileRef.current) fileRef.current.value = '';
+          if (fileRef.current) fileRef.current.value = "";
         }}
         data-testid={`${testid}-file`}
       />
@@ -2340,14 +2739,14 @@ function BeforeAfterImagePicker({ label, url, onUpload, onClear, testid }) {
           className="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg border border-[#E4E4E7] bg-white text-[#52525B] hover:bg-[#FAFAFA] hover:border-[#D4D4D8] text-[12.5px] font-medium transition-colors"
           data-testid={`${testid}-upload`}
         >
-          <UploadSimple size={14} /> {fullUrl ? 'Replace' : 'Upload'}
+          <UploadSimple size={14} /> {fullUrl ? "Replace" : "Upload"}
         </button>
         {fullUrl && (
           <button
             type="button"
             onClick={onClear}
             className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-[#E4E4E7] bg-white text-[#DC2626] hover:bg-[#FEE2E2] hover:border-[#FCA5A5] transition-colors"
-            title={t('removePhoto')}
+            title={t("removePhoto")}
             data-testid={`${testid}-clear`}
           >
             <Trash size={14} />
@@ -2358,39 +2757,77 @@ function BeforeAfterImagePicker({ label, url, onUpload, onClear, testid }) {
   );
 }
 
-function BeforeAfterItemCard({ idx, total, item, onChange, onMove, onRemove, onUpload }) {
+function BeforeAfterItemCard({
+  idx,
+  total,
+  item,
+  onChange,
+  onMove,
+  onRemove,
+  onUpload,
+}) {
   const { t } = useLang();
   const isEnabled = item.enabled !== false;
   return (
     <div
       className={`border rounded-xl overflow-hidden transition-colors ${
-        isEnabled ? 'border-[#E4E4E7] bg-white' : 'border-[#E4E4E7] bg-[#FAFAFA] opacity-80'
+        isEnabled
+          ? "border-[#E4E4E7] bg-white"
+          : "border-[#E4E4E7] bg-[#FAFAFA] opacity-80"
       }`}
       data-testid={`info-ba-item-${idx}`}
     >
       <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[#F4F4F5] bg-[#FAFAFA]">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center min-w-0 gap-2">
           <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#18181B] text-white text-[11px] font-bold shrink-0">
             {idx + 1}
           </span>
           <span className="text-[13px] font-semibold text-[#18181B] truncate">
-            {item.model || <em className="text-[#A1A1AA] font-normal">{t('unnamedModel')}</em>}
+            {item.model || (
+              <em className="text-[#A1A1AA] font-normal">
+                {t("unnamedModel")}
+              </em>
+            )}
           </span>
           {item.price && (
-            <span className="text-[11.5px] text-[#FEAE00] font-semibold ml-2 truncate">{item.price}</span>
+            <span className="text-[11.5px] text-[#FEAE00] font-semibold ml-2 truncate">
+              {item.price}
+            </span>
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={() => onChange({ enabled: !isEnabled })} className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#52525B] hover:bg-[#F4F4F5] transition-colors" title={isEnabled ? 'Hide' : 'Show'} data-testid={`info-ba-toggle-${idx}`}>
+          <button
+            onClick={() => onChange({ enabled: !isEnabled })}
+            className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#52525B] hover:bg-[#F4F4F5] transition-colors"
+            title={isEnabled ? "Hide" : "Show"}
+            data-testid={`info-ba-toggle-${idx}`}
+          >
             {isEnabled ? <Eye size={16} /> : <EyeSlash size={16} />}
           </button>
-          <button onClick={() => onMove(-1)} disabled={idx === 0} className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#52525B] hover:bg-[#F4F4F5] transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title={t('moveUpAction')} data-testid={`info-ba-up-${idx}`}>
+          <button
+            onClick={() => onMove(-1)}
+            disabled={idx === 0}
+            className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#52525B] hover:bg-[#F4F4F5] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            title={t("moveUpAction")}
+            data-testid={`info-ba-up-${idx}`}
+          >
             <ArrowUp size={16} />
           </button>
-          <button onClick={() => onMove(+1)} disabled={idx === total - 1} className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#52525B] hover:bg-[#F4F4F5] transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title={t('moveDownAction')} data-testid={`info-ba-down-${idx}`}>
+          <button
+            onClick={() => onMove(+1)}
+            disabled={idx === total - 1}
+            className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#52525B] hover:bg-[#F4F4F5] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            title={t("moveDownAction")}
+            data-testid={`info-ba-down-${idx}`}
+          >
             <ArrowDown size={16} />
           </button>
-          <button onClick={onRemove} className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#DC2626] hover:bg-[#FEE2E2] transition-colors" title={t('deleteAction')} data-testid={`info-ba-delete-${idx}`}>
+          <button
+            onClick={onRemove}
+            className="inline-flex items-center justify-center w-8 h-8 rounded-md text-[#DC2626] hover:bg-[#FEE2E2] transition-colors"
+            title={t("deleteAction")}
+            data-testid={`info-ba-delete-${idx}`}
+          >
             <Trash size={16} />
           </button>
         </div>
@@ -2400,56 +2837,56 @@ function BeforeAfterItemCard({ idx, total, item, onChange, onMove, onRemove, onU
         <BeforeAfterImagePicker
           label='"Before" photo (at auction)'
           url={item.before_image_url}
-          onUpload={(f) => onUpload('before', f)}
-          onClear={() => onChange({ before_image_url: '' })}
+          onUpload={(f) => onUpload("before", f)}
+          onClear={() => onChange({ before_image_url: "" })}
           testid={`info-ba-before-${idx}`}
         />
         <BeforeAfterImagePicker
           label='"After" photo (finished car)'
           url={item.after_image_url}
-          onUpload={(f) => onUpload('after', f)}
-          onClear={() => onChange({ after_image_url: '' })}
+          onUpload={(f) => onUpload("after", f)}
+          onClear={() => onChange({ after_image_url: "" })}
           testid={`info-ba-after-${idx}`}
         />
 
         <div className="space-y-4">
-          <Field label={t('adm_model_title')}>
+          <Field label={t("adm_model_title")}>
             <input
               type="text"
-              value={item.model || ''}
+              value={item.model || ""}
               onChange={(e) => onChange({ model: e.target.value })}
               className={inputCls}
-              placeholder={t('adm_bmw_328')}
+              placeholder={t("adm_bmw_328")}
               data-testid={`info-ba-model-${idx}`}
             />
           </Field>
-          <Field label={t('orderDate')} hint={t('adm_free_text_eg_12122025')}>
+          <Field label={t("orderDate")} hint={t("adm_free_text_eg_12122025")}>
             <input
               type="text"
-              value={item.order_date || ''}
+              value={item.order_date || ""}
               onChange={(e) => onChange({ order_date: e.target.value })}
               className={inputCls}
               placeholder="12.12.2025"
               data-testid={`info-ba-order-date-${idx}`}
             />
           </Field>
-          <Field label={t('dateOfFinishedCar')}>
+          <Field label={t("dateOfFinishedCar")}>
             <input
               type="text"
-              value={item.finished_date || ''}
+              value={item.finished_date || ""}
               onChange={(e) => onChange({ finished_date: e.target.value })}
               className={inputCls}
               placeholder="12.04.2026"
               data-testid={`info-ba-finished-date-${idx}`}
             />
           </Field>
-          <Field label={t('turnkeyPriceBulgaria')}>
+          <Field label={t("turnkeyPriceBulgaria")}>
             <input
               type="text"
-              value={item.price || ''}
+              value={item.price || ""}
               onChange={(e) => onChange({ price: e.target.value })}
               className={inputCls}
-              placeholder={t('adm_6500_euro')}
+              placeholder={t("adm_6500_euro")}
               data-testid={`info-ba-price-${idx}`}
             />
           </Field>

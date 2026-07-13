@@ -1,11 +1,11 @@
 /**
  * History Reports Admin Dashboard
- * 
+ *
  * /admin/history-reports
- * 
+ *
  * Блоки:
  * - Total purchased reports
- * - Total cached reuses  
+ * - Total cached reuses
  * - Cost total / cost saved
  * - Reports → leads %
  * - Reports → deals %
@@ -14,13 +14,13 @@
  * - Unlock approval queue
  */
 
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { useLang } from '../../i18n';
-import { 
-  FileText, 
-  CurrencyCircleDollar, 
-  ChartLine, 
+import React, { useState, useEffect } from "react";
+import axios from "axios";
+import { useLang } from "../../i18n";
+import {
+  FileText,
+  CurrencyCircleDollar,
+  ChartLine,
   Warning,
   Check,
   X,
@@ -30,22 +30,32 @@ import {
   ArrowRight,
   TrendUp,
   Database,
-  ShieldCheck
-} from '@phosphor-icons/react';
-import { toast } from 'sonner';
+  ShieldCheck,
+} from "@phosphor-icons/react";
+import { toast } from "sonner";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 // Stats Card
-const StatCard = ({ icon: Icon, title, value, subtitle, color = 'zinc', trend }) => (
+const StatCard = ({
+  icon: Icon,
+  title,
+  value,
+  subtitle,
+  color = "zinc",
+  trend,
+}) => (
   <div className="bg-white rounded-2xl border border-zinc-200 p-6 hover:shadow-md transition-shadow">
     <div className="flex items-start justify-between">
       <div className={`p-3 rounded-xl bg-${color}-100`}>
         <Icon size={24} className={`text-${color}-600`} weight="fill" />
       </div>
       {trend && (
-        <span className={`text-sm font-medium ${trend > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-          {trend > 0 ? '+' : ''}{trend}%
+        <span
+          className={`text-sm font-medium ${trend > 0 ? "text-emerald-600" : "text-red-600"}`}
+        >
+          {trend > 0 ? "+" : ""}
+          {trend}%
         </span>
       )}
     </div>
@@ -66,35 +76,44 @@ const ApprovalItem = ({ report, onApprove, onDeny, loading }) => (
           <span className="font-mono text-sm font-semibold text-zinc-900">
             {report.vin}
           </span>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-medium
-            ${report.callVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-            {report.callVerified ? 'Call confirmed' : 'Awaiting call'}
+          <span
+            className={`px-2 py-0.5 rounded-full text-xs font-medium
+            ${report.callVerified ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+          >
+            {report.callVerified ? "Call confirmed" : "Awaiting call"}
           </span>
         </div>
-        
+
         <div className="flex items-center gap-4 text-sm text-zinc-500">
           <span className="flex items-center gap-1">
             <User size={14} />
-            {report.customerName || 'Client'}
+            {report.customerName || "Client"}
           </span>
           <span className="flex items-center gap-1">
             <Clock size={14} />
-            {new Date(report.createdAt).toLocaleDateString('uk')}
+            {new Date(report.createdAt).toLocaleDateString("uk")}
           </span>
           {report.callDuration && (
             <span className="flex items-center gap-1">
               <Phone size={14} />
-              {Math.floor(report.callDuration / 60)}:{String(report.callDuration % 60).padStart(2, '0')}
+              {Math.floor(report.callDuration / 60)}:
+              {String(report.callDuration % 60).padStart(2, "0")}
             </span>
           )}
         </div>
 
         {report.leadIntent && (
           <div className="mt-2">
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium
-              ${report.leadIntent === 'hot' ? 'bg-red-100 text-red-700' : 
-                report.leadIntent === 'warm' ? 'bg-amber-100 text-amber-700' : 
-                'bg-blue-100 text-blue-700'}`}>
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium
+              ${
+                report.leadIntent === "hot"
+                  ? "bg-red-100 text-red-700"
+                  : report.leadIntent === "warm"
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-blue-100 text-blue-700"
+              }`}
+            >
               {report.leadIntent.toUpperCase()}
             </span>
           </div>
@@ -135,15 +154,21 @@ const ManagerROICard = ({ manager }) => {
           <User size={20} className="text-zinc-600" />
         </div>
         <div>
-          <p className="font-medium text-zinc-900">{manager.name || manager._id}</p>
+          <p className="font-medium text-zinc-900">
+            {manager.name || manager._id}
+          </p>
           <p className="text-sm text-zinc-500">
-            {manager.count} {t('r9_reports_plural')} · ${manager.cost} {t('r9_spent')}
+            {manager.count} {t("r9_reports_plural")} · ${manager.cost}{" "}
+            {t("r9_spent")}
           </p>
         </div>
       </div>
       <div className="text-right">
-        <p className={`text-lg font-bold ${manager.roi >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-          {manager.roi >= 0 ? '+' : ''}{manager.roi}%
+        <p
+          className={`text-lg font-bold ${manager.roi >= 0 ? "text-emerald-600" : "text-red-600"}`}
+        >
+          {manager.roi >= 0 ? "+" : ""}
+          {manager.roi}%
         </p>
         <p className="text-xs text-zinc-500">ROI</p>
       </div>
@@ -160,10 +185,13 @@ const AbuseAlert = ({ alert }) => {
       <div>
         <p className="font-medium text-red-900">{alert.managerId}</p>
         <p className="text-sm text-red-700">
-          {alert.reportsCount} {t('r9_reports_plural')} / {alert.dealsFromReports} {t('r9_deals_plural')} = {(alert.conversionRate * 100).toFixed(1)}% {t('r9_conversion')}
+          {alert.reportsCount} {t("r9_reports_plural")} /{" "}
+          {alert.dealsFromReports} {t("r9_deals_plural")} ={" "}
+          {(alert.conversionRate * 100).toFixed(1)}% {t("r9_conversion")}
         </p>
         <p className="text-xs text-red-600 mt-1">
-          ${t('r9_spent_label')}: ${alert.totalCost} · ${t('r9_flag_label')}: {alert.flag}
+          ${t("r9_spent_label")}: ${alert.totalCost} · ${t("r9_flag_label")}:{" "}
+          {alert.flag}
         </p>
       </div>
     </div>
@@ -195,15 +223,22 @@ export default function HistoryReportsAdmin() {
       const pd = pendingRes.data;
       const pendingList = Array.isArray(pd)
         ? pd
-        : (Array.isArray(pd?.reports) ? pd.reports : (Array.isArray(pd?.data) ? pd.data : []));
+        : Array.isArray(pd?.reports)
+          ? pd.reports
+          : Array.isArray(pd?.data)
+            ? pd.data
+            : [];
       setPendingReports(pendingList);
-      
+
       // Extract manager stats with ROI calculation
       if (analyticsRes.data.byManager) {
-        const stats = analyticsRes.data.byManager.map(m => ({
+        const stats = analyticsRes.data.byManager.map((m) => ({
           ...m,
           name: m._id,
-          roi: m.cost > 0 ? Math.round(((m.profit || 0) - m.cost) / m.cost * 100) : 0,
+          roi:
+            m.cost > 0
+              ? Math.round((((m.profit || 0) - m.cost) / m.cost) * 100)
+              : 0,
         }));
         setManagerStats(stats);
       }
@@ -212,7 +247,9 @@ export default function HistoryReportsAdmin() {
       const abuseChecks = [];
       for (const manager of analyticsRes.data.byManager || []) {
         try {
-          const abuseRes = await axios.get(`${API_URL}/api/admin/history-reports/abuse-check/${manager._id}`);
+          const abuseRes = await axios.get(
+            `${API_URL}/api/admin/history-reports/abuse-check/${manager._id}`,
+          );
           if (abuseRes.data.isAbusive) {
             abuseChecks.push(abuseRes.data);
           }
@@ -222,8 +259,8 @@ export default function HistoryReportsAdmin() {
       }
       setAbuseAlerts(abuseChecks);
     } catch (err) {
-      console.error('Failed to load history reports data:', err);
-      toast.error(t('adm_data_loading_error'));
+      console.error("Failed to load history reports data:", err);
+      toast.error(t("adm_data_loading_error"));
     } finally {
       setLoading(false);
     }
@@ -232,11 +269,13 @@ export default function HistoryReportsAdmin() {
   const handleApprove = async (reportId) => {
     setActionLoading(true);
     try {
-      await axios.put(`${API_URL}/api/admin/history-reports/approve/${reportId}`);
-      toast.success(t('adm_report_confirmed_and_purchased'));
+      await axios.put(
+        `${API_URL}/api/admin/history-reports/approve/${reportId}`,
+      );
+      toast.success(t("adm_report_confirmed_and_purchased"));
       loadData();
     } catch (err) {
-      toast.error(err.response?.data?.message || t('adm2_cf728859c6'));
+      toast.error(err.response?.data?.message || t("adm2_cf728859c6"));
     } finally {
       setActionLoading(false);
     }
@@ -246,12 +285,12 @@ export default function HistoryReportsAdmin() {
     setActionLoading(true);
     try {
       await axios.put(`${API_URL}/api/admin/history-reports/deny/${reportId}`, {
-        reason: t('adm2_8791b0e151')
+        reason: t("adm2_8791b0e151"),
       });
-      toast.success(t('adm_report_rejected'));
+      toast.success(t("adm_report_rejected"));
       loadData();
     } catch (err) {
-      toast.error(err.response?.data?.message || t('adm2_d6e0a9315d'));
+      toast.error(err.response?.data?.message || t("adm2_d6e0a9315d"));
     } finally {
       setActionLoading(false);
     }
@@ -270,14 +309,16 @@ export default function HistoryReportsAdmin() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">{t('historyReports')}</h1>
-          <p className="text-zinc-500">{t('analytics')}</p>
+          <h1 className="text-2xl font-bold text-zinc-900">
+            {t("historyReports")}
+          </h1>
+          <p className="text-zinc-500">{t("analytics")}</p>
         </div>
         <button
           onClick={loadData}
           className="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 transition-colors text-sm font-medium"
         >
-          {t('refresh')}
+          {t("refresh")}
         </button>
       </div>
 
@@ -285,30 +326,30 @@ export default function HistoryReportsAdmin() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={FileText}
-          title={t('adm_total_reports')}
+          title={t("adm_total_reports")}
           value={analytics?.totalReports || 0}
-          subtitle={`${t('r9_for_period')} ${analytics?.periodDays || 30} ${t('r9_days_plural')}`}
+          subtitle={`${t("r9_for_period")} ${analytics?.periodDays || 30} ${t("r9_days_plural")}`}
           color="zinc"
         />
         <StatCard
           icon={Database}
-          title={t('adm_from_cache')}
+          title={t("adm_from_cache")}
           value={analytics?.cachedReports || 0}
           subtitle={`${((analytics?.cacheHitRate || 0) * 100).toFixed(0)}% cache hit rate`}
           color="blue"
         />
         <StatCard
           icon={CurrencyCircleDollar}
-          title={t('adm_spent')}
+          title={t("adm_spent")}
           value={`$${analytics?.totalCost || 0}`}
-          subtitle={`${t('r9_saved_label')}: $${analytics?.costSaved || 0}`}
+          subtitle={`${t("r9_saved_label")}: $${analytics?.costSaved || 0}`}
           color="emerald"
         />
         <StatCard
           icon={ChartLine}
-          title={t('approvalRate')}
+          title={t("approvalRate")}
           value={`${((analytics?.approvalRate || 0) * 100).toFixed(0)}%`}
-          subtitle={t('adm_confirmed_reports')}
+          subtitle={t("adm_confirmed_reports")}
           color="violet"
         />
       </div>
@@ -319,21 +360,21 @@ export default function HistoryReportsAdmin() {
         <div className="lg:col-span-2 bg-white rounded-2xl border border-zinc-200 p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-zinc-900">
-              {t('adm_confirmation_queue')}
+              {t("adm_confirmation_queue")}
             </h2>
             <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-sm font-medium">
-              {pendingReports.length} {t('r9_pending')}
+              {pendingReports.length} {t("r9_pending")}
             </span>
           </div>
 
           {pendingReports.length === 0 ? (
             <div className="text-center py-12 text-zinc-500">
               <ShieldCheck size={48} className="mx-auto mb-3 text-zinc-300" />
-              <p>{t('adm_no_reports_awaiting_confirmation')}</p>
+              <p>{t("adm_no_reports_awaiting_confirmation")}</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {pendingReports.map(report => (
+              {pendingReports.map((report) => (
                 <ApprovalItem
                   key={report.id}
                   report={report}
@@ -353,7 +394,7 @@ export default function HistoryReportsAdmin() {
             <div className="bg-white rounded-2xl border border-red-200 p-6">
               <h2 className="text-lg font-semibold text-red-900 mb-4 flex items-center gap-2">
                 <Warning size={20} />
-                {t('adm_suspicious_activity')}
+                {t("adm_suspicious_activity")}
               </h2>
               <div className="space-y-3">
                 {abuseAlerts.map((alert, idx) => (
@@ -367,10 +408,12 @@ export default function HistoryReportsAdmin() {
           <div className="bg-white rounded-2xl border border-zinc-200 p-6">
             <h2 className="text-lg font-semibold text-zinc-900 mb-4 flex items-center gap-2">
               <TrendUp size={20} />
-              {t('adm_roi_by_managers')}
+              {t("adm_roi_by_managers")}
             </h2>
             {managerStats.length === 0 ? (
-              <p className="text-zinc-500 text-center py-8">{t('adm_no_data_2')}</p>
+              <p className="text-zinc-500 text-center py-8">
+                {t("adm_no_data_2")}
+              </p>
             ) : (
               <div className="space-y-3">
                 {managerStats.slice(0, 5).map((manager, idx) => (

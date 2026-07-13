@@ -27,23 +27,27 @@
  * `EVENT_NAMES` const to avoid typos.
  */
 
-const API_BASE = (typeof process !== "undefined" && process.env && process.env.REACT_APP_BACKEND_URL) || "";
+const API_BASE =
+  (typeof process !== "undefined" &&
+    process.env &&
+    "https://backend-production-ae6d.up.railway.app") ||
+  "";
 const ENDPOINT = `${API_BASE}/api/events/track`;
 
 export const EVENT_NAMES = Object.freeze({
-  CATALOG_FILTER_CHANGED:    "catalog_filter_changed",
-  CATALOG_FILTER_RESET:      "catalog_filter_reset",
-  CATALOG_SEARCH_ABANDONED:  "catalog_search_abandoned",
-  CATALOG_SEARCH_SUBMITTED:  "catalog_search_submitted",
-  CATALOG_SHOW_MORE:         "catalog_show_more",
-  CATALOG_SORT_CHANGED:      "catalog_sort_changed",
-  DETAIL_VIEW:               "detail_view",
-  DETAIL_BOUNCE:             "detail_bounce",
-  VIN_CHECK_SUBMITTED:       "vin_check_submitted",
-  VIN_CHECK_NO_RESULT:       "vin_check_no_result",
-  CALCULATOR_USED:           "calculator_used",
-  CONTACT_US_CLICKED:        "contact_us_clicked",
-  CONSULTATION_REQUESTED:    "consultation_requested",
+  CATALOG_FILTER_CHANGED: "catalog_filter_changed",
+  CATALOG_FILTER_RESET: "catalog_filter_reset",
+  CATALOG_SEARCH_ABANDONED: "catalog_search_abandoned",
+  CATALOG_SEARCH_SUBMITTED: "catalog_search_submitted",
+  CATALOG_SHOW_MORE: "catalog_show_more",
+  CATALOG_SORT_CHANGED: "catalog_sort_changed",
+  DETAIL_VIEW: "detail_view",
+  DETAIL_BOUNCE: "detail_bounce",
+  VIN_CHECK_SUBMITTED: "vin_check_submitted",
+  VIN_CHECK_NO_RESULT: "vin_check_no_result",
+  CALCULATOR_USED: "calculator_used",
+  CONTACT_US_CLICKED: "contact_us_clicked",
+  CONSULTATION_REQUESTED: "consultation_requested",
 });
 
 /**
@@ -53,12 +57,14 @@ export const EVENT_NAMES = Object.freeze({
  */
 export function trackEvent(event, props) {
   if (!event || typeof event !== "string") return;
-  if (!API_BASE) return;     // SSR / no-backend builds: silent no-op
+  if (!API_BASE) return; // SSR / no-backend builds: silent no-op
   if (typeof navigator === "undefined" || typeof window === "undefined") return;
   // Honor DNT — if user opted out, we don't ship anything.
   try {
     if (navigator.doNotTrack === "1" || window.doNotTrack === "1") return;
-  } catch (_) { /* ignore */ }
+  } catch (_) {
+    /* ignore */
+  }
 
   const body = JSON.stringify({ event, props: props || {} });
   try {
@@ -67,7 +73,9 @@ export function trackEvent(event, props) {
       const ok = navigator.sendBeacon(ENDPOINT, blob);
       if (ok) return;
     }
-  } catch (_) { /* fall through */ }
+  } catch (_) {
+    /* fall through */
+  }
   // Fallback: fire-and-forget fetch with keepalive so it survives nav.
   try {
     fetch(ENDPOINT, {
@@ -75,8 +83,12 @@ export function trackEvent(event, props) {
       headers: { "Content-Type": "application/json" },
       body,
       keepalive: true,
-    }).catch(() => { /* swallow */ });
-  } catch (_) { /* ignore */ }
+    }).catch(() => {
+      /* swallow */
+    });
+  } catch (_) {
+    /* ignore */
+  }
 }
 
 /** React-hook-style alias for ergonomics. Returns the stable function. */

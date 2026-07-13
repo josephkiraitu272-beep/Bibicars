@@ -9,9 +9,9 @@
  * On success: stores session token in localStorage (same keys as the main
  * login flow) and redirects to /cabinet home.
  */
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Lock,
   Eye,
@@ -20,58 +20,58 @@ import {
   SpinnerGap,
   ArrowLeft,
   WarningCircle,
-} from '@phosphor-icons/react';
-import { toast } from 'sonner';
-import { useLang } from '../../i18n';
+} from "@phosphor-icons/react";
+import { toast } from "sonner";
+import { useLang } from "../../i18n";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 // ── Bilingual strings (EN/BG only) ──────────────────────────────────
 const STR = {
   en: {
-    backToLogin: 'Back to sign in',
-    validating: 'Checking link\u2026',
-    invalidTitle: 'Link is not valid',
+    backToLogin: "Back to sign in",
+    validating: "Checking link\u2026",
+    invalidTitle: "Link is not valid",
     invalidBody:
-      'This link is incorrect, expired, or has already been used. Please request a new one.',
-    requestNew: 'Request a new link',
-    title: 'Set a new password',
-    accountLabel: 'Account:',
-    genericIntro: 'Choose a new password for your account.',
-    newPassword: 'New password',
-    repeatPassword: 'Repeat password',
-    mismatch: 'Passwords do not match',
-    minLengthError: 'Password must be at least 6 characters',
-    submit: 'Save password',
-    submitting: 'Saving\u2026',
-    genericError: 'Could not update password',
-    successTitle: 'Password updated',
-    successSub: 'Redirecting to your cabinet\u2026',
-    loggedIn: 'Password changed \u2014 you are signed in',
+      "This link is incorrect, expired, or has already been used. Please request a new one.",
+    requestNew: "Request a new link",
+    title: "Set a new password",
+    accountLabel: "Account:",
+    genericIntro: "Choose a new password for your account.",
+    newPassword: "New password",
+    repeatPassword: "Repeat password",
+    mismatch: "Passwords do not match",
+    minLengthError: "Password must be at least 6 characters",
+    submit: "Save password",
+    submitting: "Saving\u2026",
+    genericError: "Could not update password",
+    successTitle: "Password updated",
+    successSub: "Redirecting to your cabinet\u2026",
+    loggedIn: "Password changed \u2014 you are signed in",
   },
   bg: {
-    backToLogin: 'Към входа',
-    validating: 'Проверка на линка…',
-    invalidTitle: 'Невалиден линк',
+    backToLogin: "Към входа",
+    validating: "Проверка на линка…",
+    invalidTitle: "Невалиден линк",
     invalidBody:
-      'Този линк е неправилен, изтекъл или вече е използван. Моля, поискайте нов.',
-    requestNew: 'Поискай нов линк',
-    title: 'Нова парола',
-    accountLabel: 'Акаунт:',
-    genericIntro: 'Изберете нова парола за акаунта си.',
-    newPassword: 'Нова парола',
-    repeatPassword: 'Повторете паролата',
-    mismatch: 'Паролите не съвпадат',
-    minLengthError: 'Паролата трябва да съдържа поне 6 символа',
-    submit: 'Запази паролата',
-    submitting: 'Запазване…',
-    genericError: 'Паролата не беше променена',
-    successTitle: 'Паролата е променена',
-    successSub: 'Пренасочване към кабинета…',
-    loggedIn: 'Паролата е променена — вече сте влезли',
+      "Този линк е неправилен, изтекъл или вече е използван. Моля, поискайте нов.",
+    requestNew: "Поискай нов линк",
+    title: "Нова парола",
+    accountLabel: "Акаунт:",
+    genericIntro: "Изберете нова парола за акаунта си.",
+    newPassword: "Нова парола",
+    repeatPassword: "Повторете паролата",
+    mismatch: "Паролите не съвпадат",
+    minLengthError: "Паролата трябва да съдържа поне 6 символа",
+    submit: "Запази паролата",
+    submitting: "Запазване…",
+    genericError: "Паролата не беше променена",
+    successTitle: "Паролата е променена",
+    successSub: "Пренасочване към кабинета…",
+    loggedIn: "Паролата е променена — вече сте влезли",
   },
 };
-const pick = (lang) => (lang === 'bg' ? STR.bg : STR.en);
+const pick = (lang) => (lang === "bg" ? STR.bg : STR.en);
 
 export default function ResetPasswordPage() {
   const { lang } = useLang();
@@ -79,11 +79,11 @@ export default function ResetPasswordPage() {
 
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const token = params.get('token') || '';
+  const token = params.get("token") || "";
 
   const [valid, setValid] = useState(null); // null=loading, false=invalid, {email}=ok
-  const [pwd, setPwd] = useState('');
-  const [pwd2, setPwd2] = useState('');
+  const [pwd, setPwd] = useState("");
+  const [pwd2, setPwd2] = useState("");
   const [show, setShow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -99,7 +99,7 @@ export default function ResetPasswordPage() {
       try {
         const res = await axios.get(
           `${API_URL}/api/customer-auth/validate-reset-token`,
-          { params: { token } }
+          { params: { token } },
         );
         if (!cancelled) setValid(res.data || { valid: true });
       } catch (e) {
@@ -125,16 +125,16 @@ export default function ResetPasswordPage() {
     try {
       const res = await axios.post(
         `${API_URL}/api/customer-auth/reset-password`,
-        { token, password: pwd }
+        { token, password: pwd },
       );
       const data = res.data || {};
       if (data.sessionToken) {
-        localStorage.setItem('customer_token', data.sessionToken);
-        localStorage.setItem('customer', JSON.stringify(data.user || {}));
+        localStorage.setItem("customer_token", data.sessionToken);
+        localStorage.setItem("customer", JSON.stringify(data.user || {}));
       }
       setDone(true);
       toast.success(t.loggedIn);
-      setTimeout(() => navigate('/cabinet', { replace: true }), 1500);
+      setTimeout(() => navigate("/cabinet", { replace: true }), 1500);
     } catch (err) {
       toast.error(err.response?.data?.detail || t.genericError);
     } finally {
@@ -147,7 +147,10 @@ export default function ResetPasswordPage() {
     return (
       <div className="min-h-screen bg-[#0B0B0C] text-white flex items-center justify-center">
         <div className="text-center">
-          <SpinnerGap size={32} className="animate-spin text-[#FEAE00] mx-auto mb-3" />
+          <SpinnerGap
+            size={32}
+            className="animate-spin text-[#FEAE00] mx-auto mb-3"
+          />
           <div className="text-white/60 text-sm">{t.validating}</div>
         </div>
       </div>
@@ -202,7 +205,7 @@ export default function ResetPasswordPage() {
           <p className="text-white/60 text-sm mb-6">
             {valid.email ? (
               <>
-                {t.accountLabel}{' '}
+                {t.accountLabel}{" "}
                 <span className="text-[#FEAE00]">{valid.email}</span>
               </>
             ) : (
@@ -226,7 +229,11 @@ export default function ResetPasswordPage() {
               <div className="text-white/60 text-sm mt-1">{t.successSub}</div>
             </div>
           ) : (
-            <form onSubmit={submit} className="space-y-4" data-testid="reset-form">
+            <form
+              onSubmit={submit}
+              className="space-y-4"
+              data-testid="reset-form"
+            >
               <div>
                 <label className="block text-[11px] font-bold text-[#FEAE00] uppercase tracking-[0.12em] mb-2">
                   {t.newPassword}
@@ -237,7 +244,7 @@ export default function ResetPasswordPage() {
                     className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#FEAE00]/80"
                   />
                   <input
-                    type={show ? 'text' : 'password'}
+                    type={show ? "text" : "password"}
                     value={pwd}
                     onChange={(e) => setPwd(e.target.value)}
                     minLength={6}
@@ -268,7 +275,7 @@ export default function ResetPasswordPage() {
                     className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#FEAE00]/80"
                   />
                   <input
-                    type={show ? 'text' : 'password'}
+                    type={show ? "text" : "password"}
                     value={pwd2}
                     onChange={(e) => setPwd2(e.target.value)}
                     minLength={6}
@@ -292,7 +299,8 @@ export default function ResetPasswordPage() {
               >
                 {submitting ? (
                   <>
-                    <SpinnerGap size={18} className="animate-spin" /> {t.submitting}
+                    <SpinnerGap size={18} className="animate-spin" />{" "}
+                    {t.submitting}
                   </>
                 ) : (
                   t.submit

@@ -1,12 +1,17 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import axios from "axios";
 import styles from "./frame-component18.module.css";
-import { CAR_BRANDS, MODELS_BY_BRAND, GENERIC_MODELS, YEARS } from "../../data/cars";
+import {
+  CAR_BRANDS,
+  MODELS_BY_BRAND,
+  GENERIC_MODELS,
+  YEARS,
+} from "../../data/cars";
 import { useLang } from "../../i18n";
 import { renderKpiWithRolling } from "../../components/RollingNumber";
 import SplitText from "../../components/SplitText";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || "";
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 // Original hardcoded copy + image — kept verbatim as the visual fallback
 // so the site looks IDENTICAL to the Figma design until the admin
@@ -38,7 +43,15 @@ const resolveImageUrl = (raw) => {
   return raw; // relative `/figma/...` etc — served by the SPA itself
 };
 
-const Dropdown = ({ label, value, options, onSelect, isOpen, onToggle, searchable = true }) => {
+const Dropdown = ({
+  label,
+  value,
+  options,
+  onSelect,
+  isOpen,
+  onToggle,
+  searchable = true,
+}) => {
   const [query, setQuery] = useState("");
   const inputRef = useRef(null);
 
@@ -54,13 +67,15 @@ const Dropdown = ({ label, value, options, onSelect, isOpen, onToggle, searchabl
      • an array of strings (legacy)                          → no count, always available
      • an array of `{ name, count, available }` objects     → real DB-backed
      We normalise to the object shape so the render code stays simple. */
-  const normalisedOptions = useMemo(() => (
-    options.map((o) =>
-      typeof o === "string"
-        ? { name: o, count: null, available: true, isAnyOption: true }
-        : o
-    )
-  ), [options]);
+  const normalisedOptions = useMemo(
+    () =>
+      options.map((o) =>
+        typeof o === "string"
+          ? { name: o, count: null, available: true, isAnyOption: true }
+          : o,
+      ),
+    [options],
+  );
 
   const filtered = useMemo(() => {
     if (!query.trim()) return normalisedOptions;
@@ -124,13 +139,23 @@ const Dropdown = ({ label, value, options, onSelect, isOpen, onToggle, searchabl
                       styles.dropdownItem,
                       value === opt.name ? styles.dropdownItemActive : "",
                       isDimmed ? styles.dropdownItemUnavailable : "",
-                    ].filter(Boolean).join(" ")}
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
                     onClick={() => onSelect(opt.name)}
-                    title={isDimmed ? (isBg ? "Няма налични автомобили" : "No cars currently available") : undefined}
+                    title={
+                      isDimmed
+                        ? isBg
+                          ? "Няма налични автомобили"
+                          : "No cars currently available"
+                        : undefined
+                    }
                   >
                     {opt.name}
                     {opt.count != null && opt.count > 0 && (
-                      <span className={styles.dropdownItemCount}>({opt.count})</span>
+                      <span className={styles.dropdownItemCount}>
+                        ({opt.count})
+                      </span>
                     )}
                   </button>
                 );
@@ -175,7 +200,9 @@ const FrameComponent18 = ({ className = "" }) => {
         /* keep defaults */
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Load real brand availability from the catalog backend (same endpoint
@@ -194,7 +221,9 @@ const FrameComponent18 = ({ className = "" }) => {
         /* keep null → fallback to static list */
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Load models for the currently picked brand. Empty brand → no models.
@@ -217,14 +246,21 @@ const FrameComponent18 = ({ className = "" }) => {
         setModelsData(null);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [brand]);
 
   // Pick a field with graceful fallback: current lang → other lang → original
   const pick = (key) => {
     const cur = hero[`${key}${isBg ? "_bg" : "_en"}`];
     const alt = hero[`${key}${isBg ? "_en" : "_bg"}`];
-    return (cur && cur.trim()) || (alt && alt.trim()) || ORIGINAL_HERO[`${key}_en`] || "";
+    return (
+      (cur && cur.trim()) ||
+      (alt && alt.trim()) ||
+      ORIGINAL_HERO[`${key}_en`] ||
+      ""
+    );
   };
 
   const eyebrow = pick("eyebrow");
@@ -242,7 +278,9 @@ const FrameComponent18 = ({ className = "" }) => {
         setOpenMenu(null);
       }
     };
-    const onEsc = (e) => { if (e.key === "Escape") setOpenMenu(null); };
+    const onEsc = (e) => {
+      if (e.key === "Escape") setOpenMenu(null);
+    };
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("keydown", onEsc);
     return () => {
@@ -255,31 +293,62 @@ const FrameComponent18 = ({ className = "" }) => {
 
   // ── Brand options: real DB-backed when available, static fallback otherwise.
   const brandOptions = useMemo(() => {
-    const anyBrand = { name: isBg ? "Всички марки" : "Any Brand", isAnyOption: true, available: true, count: null };
+    const anyBrand = {
+      name: isBg ? "Всички марки" : "Any Brand",
+      isAnyOption: true,
+      available: true,
+      count: null,
+    };
     if (brandsData && brandsData.length) {
       return [anyBrand, ...brandsData];
     }
-    return [anyBrand, ...CAR_BRANDS.map((n) => ({ name: n, available: true, count: null }))];
+    return [
+      anyBrand,
+      ...CAR_BRANDS.map((n) => ({ name: n, available: true, count: null })),
+    ];
   }, [brandsData, isBg]);
 
   // ── Model options: real DB-backed when a brand is picked; otherwise show
   //    the static generic models list, all marked as available.
   const modelOptions = useMemo(() => {
-    const anyModel = { name: isBg ? "Всички модели" : "Any Model", isAnyOption: true, available: true, count: null };
+    const anyModel = {
+      name: isBg ? "Всички модели" : "Any Model",
+      isAnyOption: true,
+      available: true,
+      count: null,
+    };
     if (modelsData && modelsData.length) {
       return [anyModel, ...modelsData];
     }
     if (brand && MODELS_BY_BRAND[brand]) {
-      return [anyModel, ...MODELS_BY_BRAND[brand].map((n) => ({ name: n, available: true, count: null }))];
+      return [
+        anyModel,
+        ...MODELS_BY_BRAND[brand].map((n) => ({
+          name: n,
+          available: true,
+          count: null,
+        })),
+      ];
     }
-    return [anyModel, ...GENERIC_MODELS.map((n) => ({ name: n, available: true, count: null }))];
+    return [
+      anyModel,
+      ...GENERIC_MODELS.map((n) => ({ name: n, available: true, count: null })),
+    ];
   }, [modelsData, brand, isBg]);
 
   // ── Year options: the catalog has no per-year availability endpoint, so
   //    we keep the static list (last 30 years) and treat all as available.
   const yearOptions = useMemo(() => {
-    const anyYear = { name: isBg ? "Всяка година" : "Any Year", isAnyOption: true, available: true, count: null };
-    return [anyYear, ...YEARS.map((y) => ({ name: String(y), available: true, count: null }))];
+    const anyYear = {
+      name: isBg ? "Всяка година" : "Any Year",
+      isAnyOption: true,
+      available: true,
+      count: null,
+    };
+    return [
+      anyYear,
+      ...YEARS.map((y) => ({ name: String(y), available: true, count: null })),
+    ];
   }, [isBg]);
 
   // FIND A CAR — redirect to /catalog with filters applied using the same
@@ -308,7 +377,10 @@ const FrameComponent18 = ({ className = "" }) => {
             alt=""
             src={heroImage}
             onError={(e) => {
-              if (e.currentTarget.src !== window.location.origin + ORIGINAL_HERO.image_url) {
+              if (
+                e.currentTarget.src !==
+                window.location.origin + ORIGINAL_HERO.image_url
+              ) {
                 e.currentTarget.src = ORIGINAL_HERO.image_url;
               }
             }}
@@ -356,13 +428,17 @@ const FrameComponent18 = ({ className = "" }) => {
             </div>
             <div className={styles.clientStats}>
               <h3 className={styles.statItem}>
-                <span className={styles.lineInner}>{renderKpiWithRolling(k1)}</span>
+                <span className={styles.lineInner}>
+                  {renderKpiWithRolling(k1)}
+                </span>
               </h3>
               <h3 className={styles.statItem}>
                 <span className={styles.lineInner}>{k2}</span>
               </h3>
               <h3 className={styles.statItem}>
-                <span className={styles.lineInner}>{renderKpiWithRolling(k3)}</span>
+                <span className={styles.lineInner}>
+                  {renderKpiWithRolling(k3)}
+                </span>
               </h3>
             </div>
           </div>

@@ -21,10 +21,10 @@
  * `/admin/tracking`, переключение — через эти tabs. Старые URL остаются
  * рабочими через redirect (см. App.js).
  */
-import React, { useCallback, useEffect, useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
-import axios from 'axios';
-import { useLang } from '../../i18n';
+import React, { useCallback, useEffect, useState } from "react";
+import { NavLink, Outlet } from "react-router-dom";
+import axios from "axios";
+import { useLang } from "../../i18n";
 import {
   Anchor,
   Warning,
@@ -33,12 +33,13 @@ import {
   Truck,
   CircleNotch,
   CheckCircle,
-} from '@phosphor-icons/react';
+} from "@phosphor-icons/react";
 
-const API = process.env.REACT_APP_BACKEND_URL || '';
+const API = "https://backend-production-ae6d.up.railway.app";
 
 function authHeaders() {
-  const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+  const token =
+    localStorage.getItem("auth_token") || localStorage.getItem("token");
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
@@ -46,40 +47,40 @@ function authHeaders() {
 function buildTabs(t) {
   return [
     {
-      to: '/admin/tracking/vesselfinder',
-      label: t('tabVesselFinder'),
-      sub: t('tabVesselFinderSub'),
+      to: "/admin/tracking/vesselfinder",
+      label: t("tabVesselFinder"),
+      sub: t("tabVesselFinderSub"),
       icon: Anchor,
-      testid: 'tab-vesselfinder',
+      testid: "tab-vesselfinder",
     },
     {
-      to: '/admin/tracking/shipments',
-      label: t('tabShipmentJournal'),
-      sub: t('tabShipmentJournalSub'),
+      to: "/admin/tracking/shipments",
+      label: t("tabShipmentJournal"),
+      sub: t("tabShipmentJournalSub"),
       icon: Compass,
-      testid: 'tab-shipment-journey',
+      testid: "tab-shipment-journey",
     },
     {
-      to: '/admin/tracking/exceptions/shipments',
-      label: t('tabShipmentExceptions'),
-      sub: t('tabShipmentExceptionsSub'),
+      to: "/admin/tracking/exceptions/shipments",
+      label: t("tabShipmentExceptions"),
+      sub: t("tabShipmentExceptionsSub"),
       icon: Truck,
-      testid: 'tab-shipment-exceptions',
+      testid: "tab-shipment-exceptions",
     },
     {
-      to: '/admin/tracking/exceptions/automation',
-      label: t('tabAutomationExceptions'),
-      sub: t('tabAutomationExceptionsSub'),
+      to: "/admin/tracking/exceptions/automation",
+      label: t("tabAutomationExceptions"),
+      sub: t("tabAutomationExceptionsSub"),
       icon: Warning,
-      testid: 'tab-automation-exceptions',
-      badgeKey: 'automationExceptions',
+      testid: "tab-automation-exceptions",
+      badgeKey: "automationExceptions",
     },
     {
-      to: '/admin/tracking/ext-clients',
-      label: t('tabExtClients'),
-      sub: t('tabExtClientsSub'),
+      to: "/admin/tracking/ext-clients",
+      label: t("tabExtClients"),
+      sub: t("tabExtClientsSub"),
       icon: Shield,
-      testid: 'tab-ext-clients',
+      testid: "tab-ext-clients",
     },
   ];
 }
@@ -91,12 +92,12 @@ function buildTabs(t) {
  * Emoji-префиксы из переводов вырезаются автоматически (legacy баги в i18n).
  */
 const stripEmoji = (s) =>
-  String(s ?? '')
-    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}]/gu, '')
-    .replace(/[⚠️⚠🔒🟢🔴🟡🟠]/g, '')
+  String(s ?? "")
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}]/gu, "")
+    .replace(/[⚠️⚠🔒🟢🔴🟡🟠]/g, "")
     .trim();
 
-function KpiItem({ label, value, dotColor = '#A1A1AA', testid }) {
+function KpiItem({ label, value, dotColor = "#A1A1AA", testid }) {
   const cleanValue = stripEmoji(value);
   return (
     <div
@@ -113,18 +114,18 @@ function KpiItem({ label, value, dotColor = '#A1A1AA', testid }) {
         </span>
       </div>
       <span className="text-[13px] sm:text-sm md:text-base font-semibold text-[#18181B] leading-snug break-words [overflow-wrap:anywhere]">
-        {cleanValue || '—'}
+        {cleanValue || "—"}
       </span>
     </div>
   );
 }
 
 const DOTS = {
-  ok: '#16A34A',
-  warn: '#F59E0B',
-  danger: '#DC2626',
-  neutral: '#A1A1AA',
-  info: '#2563EB',
+  ok: "#16A34A",
+  warn: "#F59E0B",
+  danger: "#DC2626",
+  neutral: "#A1A1AA",
+  info: "#2563EB",
 };
 
 export default function TrackingLayout() {
@@ -136,8 +137,12 @@ export default function TrackingLayout() {
   const fetchHealth = useCallback(async () => {
     try {
       const [sR, cR] = await Promise.all([
-        axios.get(`${API}/api/admin/identity/tracking-status`, { headers: authHeaders() }),
-        axios.get(`${API}/api/admin/identity/exceptions/count`, { headers: authHeaders() }),
+        axios.get(`${API}/api/admin/identity/tracking-status`, {
+          headers: authHeaders(),
+        }),
+        axios.get(`${API}/api/admin/identity/exceptions/count`, {
+          headers: authHeaders(),
+        }),
       ]);
       setStatus(sR.data);
       setAutomationCount(cR.data?.pending || 0);
@@ -158,8 +163,17 @@ export default function TrackingLayout() {
   const trackingDot = status?.trackingEnabled ? DOTS.ok : DOTS.danger;
   const nonceDot = status?.enforceNonce ? DOTS.ok : DOTS.warn;
   const lastHb = status?.extensionLastHeartbeatAt;
-  const hbAge = lastHb ? Math.round((Date.now() - new Date(lastHb).getTime()) / 1000) : null;
-  const hbDot = hbAge == null ? DOTS.neutral : hbAge < 180 ? DOTS.ok : hbAge < 600 ? DOTS.warn : DOTS.danger;
+  const hbAge = lastHb
+    ? Math.round((Date.now() - new Date(lastHb).getTime()) / 1000)
+    : null;
+  const hbDot =
+    hbAge == null
+      ? DOTS.neutral
+      : hbAge < 180
+        ? DOTS.ok
+        : hbAge < 600
+          ? DOTS.warn
+          : DOTS.danger;
   const pendingDot = automationCount > 0 ? DOTS.warn : DOTS.ok;
 
   return (
@@ -173,12 +187,15 @@ export default function TrackingLayout() {
           <h1
             data-testid="tracking-title"
             className="text-2xl font-bold text-[#18181B] leading-tight"
-            style={{ fontFamily: 'Mazzard, Mazzard H, Mazzard M, system-ui, sans-serif' }}
+            style={{
+              fontFamily:
+                "Mazzard, Mazzard H, Mazzard M, system-ui, sans-serif",
+            }}
           >
-            {t('trackingHubTitle')}
+            {t("trackingHubTitle")}
           </h1>
           <p className="text-[12px] text-[#71717A] mt-0.5 max-w-2xl leading-relaxed">
-            {t('trackingHubSubtitle')}
+            {t("trackingHubSubtitle")}
           </p>
         </div>
       </div>
@@ -191,60 +208,72 @@ export default function TrackingLayout() {
         {loading && (
           <div className="col-span-full bg-white border border-[#E4E4E7] rounded-2xl px-4 py-3.5 flex items-center gap-2 text-sm text-[#71717A]">
             <CircleNotch size={14} className="animate-spin" />
-            {t('trackingHubLoadingHealth')}
+            {t("trackingHubLoadingHealth")}
           </div>
         )}
         {!loading && status && (
           <>
             <KpiItem
-              label={t('trackingLabel')}
+              label={t("trackingLabel")}
               dotColor={trackingDot}
               testid="pill-tracking"
-              value={status.trackingEnabled ? t('trackingHubKillSwitchOn') : t('trackingHubKillSwitchOff')}
+              value={
+                status.trackingEnabled
+                  ? t("trackingHubKillSwitchOn")
+                  : t("trackingHubKillSwitchOff")
+              }
             />
             <KpiItem
               label="Enforce nonce"
               dotColor={nonceDot}
               testid="pill-nonce"
-              value={status.enforceNonce ? t('trackingHubNonceStrict') : t('trackingHubNonceSoft')}
+              value={
+                status.enforceNonce
+                  ? t("trackingHubNonceStrict")
+                  : t("trackingHubNonceSoft")
+              }
             />
             <KpiItem
-              label={t('hmacWindow')}
+              label={t("hmacWindow")}
               dotColor={DOTS.info}
               testid="pill-hmac-window"
               value={`±${status.hmacWindowSec}s`}
             />
             <KpiItem
-              label={t('extHeartbeat')}
+              label={t("extHeartbeat")}
               dotColor={hbDot}
               testid="pill-heartbeat"
               value={
                 hbAge == null
-                  ? t('trackingHubNoSignal')
+                  ? t("trackingHubNoSignal")
                   : hbAge < 180
-                  ? `${hbAge} ${t('trackingHubSecondsAgo')}`
-                  : hbAge < 600
-                  ? `${Math.round(hbAge / 60)} ${t('trackingHubMinAbbr')}`
-                  : `${Math.round(hbAge / 60)} ${t('trackingHubMinAbbr')} ${t('trackingHubStaleSuffix')}`
+                    ? `${hbAge} ${t("trackingHubSecondsAgo")}`
+                    : hbAge < 600
+                      ? `${Math.round(hbAge / 60)} ${t("trackingHubMinAbbr")}`
+                      : `${Math.round(hbAge / 60)} ${t("trackingHubMinAbbr")} ${t("trackingHubStaleSuffix")}`
               }
             />
             <KpiItem
-              label={t('resolverTick')}
+              label={t("resolverTick")}
               dotColor={DOTS.info}
               testid="pill-resolver"
               value={`${status.resolverIntervalSec}s`}
             />
             <KpiItem
-              label={t('transferTick')}
+              label={t("transferTick")}
               dotColor={DOTS.info}
               testid="pill-transfer"
               value={`${status.transferDetectIntervalSec}s`}
             />
             <KpiItem
-              label={t('pendingExceptions')}
+              label={t("pendingExceptions")}
               dotColor={pendingDot}
               testid="pill-pending-exceptions"
-              value={automationCount === 0 ? `0 ${t('trackingHubClean')}` : `${automationCount} ${t('trackingHubWaiting')}`}
+              value={
+                automationCount === 0
+                  ? `0 ${t("trackingHubClean")}`
+                  : `${automationCount} ${t("trackingHubWaiting")}`
+              }
             />
           </>
         )}
@@ -253,14 +282,15 @@ export default function TrackingLayout() {
       {/* ── Sub-nav tabs — unified black-outline standard ── */}
       <div
         className="inline-flex p-1 bg-[#FAFAFA] border border-[#E4E4E7] rounded-xl gap-1 max-w-full overflow-x-auto"
-        style={{ scrollbarWidth: 'none' }}
+        style={{ scrollbarWidth: "none" }}
         role="tablist"
         aria-label="Tracking sections"
         data-testid="tracking-tabs"
       >
         {TABS.map((tab) => {
           const Icon = tab.icon;
-          const showBadge = tab.badgeKey === 'automationExceptions' && automationCount > 0;
+          const showBadge =
+            tab.badgeKey === "automationExceptions" && automationCount > 0;
           return (
             <NavLink
               key={tab.to}
@@ -270,24 +300,26 @@ export default function TrackingLayout() {
               role="tab"
               className={({ isActive }) =>
                 [
-                  'inline-flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-[12.5px] sm:text-[13px] whitespace-nowrap shrink-0 transition-colors focus:outline-none focus-visible:ring-4 focus-visible:ring-black/10',
+                  "inline-flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-[12.5px] sm:text-[13px] whitespace-nowrap shrink-0 transition-colors focus:outline-none focus-visible:ring-4 focus-visible:ring-black/10",
                   isActive
-                    ? 'bg-white text-[#18181B] font-semibold shadow-[0_0_0_1.5px_#18181B]'
-                    : 'bg-transparent text-[#52525B] hover:text-[#18181B] font-medium',
-                ].join(' ')
+                    ? "bg-white text-[#18181B] font-semibold shadow-[0_0_0_1.5px_#18181B]"
+                    : "bg-transparent text-[#52525B] hover:text-[#18181B] font-medium",
+                ].join(" ")
               }
             >
               {({ isActive }) => (
                 <>
-                  <Icon size={14} weight={isActive ? 'fill' : 'regular'} />
+                  <Icon size={14} weight={isActive ? "fill" : "regular"} />
                   <span>{tab.label}</span>
                   {showBadge && (
                     <span
                       data-testid={`${tab.testid}-badge`}
                       className={[
-                        'ml-0.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[10px] font-semibold',
-                        isActive ? 'bg-[#18181B] text-white' : 'bg-[#F59E0B] text-white',
-                      ].join(' ')}
+                        "ml-0.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[10px] font-semibold",
+                        isActive
+                          ? "bg-[#18181B] text-white"
+                          : "bg-[#F59E0B] text-white",
+                      ].join(" ")}
                     >
                       {automationCount}
                     </span>
@@ -312,12 +344,21 @@ export function TrackingIndex() {
   const { t } = useLang();
   return (
     <div className="bg-white border border-[#E4E4E7] rounded-2xl py-12 px-6 text-center">
-      <CheckCircle size={40} weight="duotone" className="text-[#18181B] mx-auto mb-3" />
-      <div className="text-[15px] font-semibold text-[#18181B]" style={{ fontFamily: 'Mazzard, Mazzard H, Mazzard M, system-ui, sans-serif' }}>
-        {t('trackingHubChooseSection')}
+      <CheckCircle
+        size={40}
+        weight="duotone"
+        className="text-[#18181B] mx-auto mb-3"
+      />
+      <div
+        className="text-[15px] font-semibold text-[#18181B]"
+        style={{
+          fontFamily: "Mazzard, Mazzard H, Mazzard M, system-ui, sans-serif",
+        }}
+      >
+        {t("trackingHubChooseSection")}
       </div>
       <div className="text-[13px] text-[#71717A] mt-2 max-w-[440px] mx-auto">
-        {t('trackingHubChooseHint')}
+        {t("trackingHubChooseHint")}
       </div>
     </div>
   );

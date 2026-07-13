@@ -30,6 +30,59 @@ refactoring (started 2026-05-17, see plan.md / CONTRIBUTING.md).
 See ``backend/CONTRIBUTING.md`` for the extraction playbook and ownership rules.
 ================================================================================
 """
+from vesselfinder_scraper import (
+    route_to_bbox as _vf_route_to_bbox,
+    extract_vessels_from_payload,
+    find_matching_vessel as _vf_find_match,
+)
+# local alias, separate from other secrets imports
+import secrets as _secrets_share
+from multisource_resolver import (
+    enqueue_extension_job as _ms_enqueue,
+    take_pending_jobs as _ms_take_jobs,
+    push_extension_result as _ms_push,
+    wait_for_extension_results as _ms_wait,
+    extension_lookup as _ms_extension_lookup,
+    extension_lookup_gated as _ms_extension_lookup_gated,
+    auctionauto_lookup as _ms_auctionauto,
+    auctionauto_lookup_gated as _ms_auctionauto_gated,
+    get_health_snapshot as _ms_health,
+    EXTENSION_SOURCES as _EXT_SOURCES,
+    register_client as _ms_register_client,
+    client_heartbeat as _ms_client_heartbeat,
+    get_clients as _ms_get_clients,
+    has_online_client_for as _ms_has_online,
+    cache_observation as _ms_cache_obs,
+    lookup_observation as _ms_lookup_obs,
+    degraded_sources as _ms_degraded,
+)
+import os as os_module
+from fastapi.responses import FileResponse
+from settings_service import SettingsService, public_subset as _auth_public_subset
+from app.utils.shipments import (
+    JOURNEY_STAGE_TYPES,
+    JOURNEY_STAGE_STATUSES,
+)
+import pathlib
+from fastapi.staticfiles import StaticFiles
+from app.core.audit_runtime import (
+    set_audit as _c5c_set_audit,
+    get_audit as _c5c_get_audit,
+)
+from app.core.aggregator_runtime import (
+    set_aggregator as _c5b_set_aggregator,
+    get_aggregator as _c5b_get_aggregator,
+)
+from playwright.async_api import async_playwright
+from jose import JWTError, jwt
+import socketio
+import httpx
+from bson import ObjectId
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Body, WebSocket, WebSocketDisconnect, Request, Response, Depends, Header, UploadFile, File, Form, Query
 import os
 import re
 import asyncio
@@ -50,15 +103,6 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 load_dotenv(override=False)
 
-from fastapi import FastAPI, HTTPException, Body, WebSocket, WebSocketDisconnect, Request, Response, Depends, Header, UploadFile, File, Form, Query
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from motor.motor_asyncio import AsyncIOMotorClient
-from bson import ObjectId
-import httpx
-import socketio
-from jose import JWTError, jwt
 
 # ═══════════════════════════════════════════════════════════════════
 # DEPRECATED PARSERS (preserved but disabled)
@@ -69,7 +113,8 @@ try:
     BIDCARS_AVAILABLE = True
 except ImportError:
     BIDCARS_AVAILABLE = False
-    logging.warning("bidcars_parser not available - bid.cars endpoints will return errors")
+    logging.warning(
+        "bidcars_parser not available - bid.cars endpoints will return errors")
 
 # ═══════════════════════════════════════════════════════════════════
 # PRIMARY PARSER: BITMOTORS
@@ -80,7 +125,8 @@ try:
     from bitmotors_scraper import BitmotorsScraper, BitmotorsFullSync, live_search as bm_live_search
     BITMOTORS_AVAILABLE = True
     print("[DEBUG] ✓✓✓ BitmotorsScraper + FullSync + live_search loaded successfully ✓✓✓")
-    logging.info("✓ BitmotorsScraper + FullSync + live_search loaded successfully")
+    logging.info(
+        "✓ BitmotorsScraper + FullSync + live_search loaded successfully")
 except Exception as e:
     BITMOTORS_AVAILABLE = False
     print(f"[DEBUG] ✗✗✗ BitmotorsScraper import failed: {e}")
@@ -101,7 +147,8 @@ try:
     )
     VIN_SERVICE_AVAILABLE = True
     print("[DEBUG] ✓ vin_service (SEARCH→PAGE fallback + circuit breakers + statvin) loaded")
-    logging.info("✓ vin_service (SEARCH→PAGE fallback + circuit breakers + statvin) loaded")
+    logging.info(
+        "✓ vin_service (SEARCH→PAGE fallback + circuit breakers + statvin) loaded")
 except Exception as _e:
     VIN_SERVICE_AVAILABLE = False
     print(f"[DEBUG] ✗ vin_service import failed: {_e}")
@@ -186,47 +233,51 @@ except Exception as _e:
 #   CRM → POST /api/carfast/parse → Backend fetches with cookies → returns data
 # ═══════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class CarfastCookie:
     name: str
     value: str
     domain: str
     expires: Optional[float] = None
-    
+
+
 @dataclass
 class CarfastSession:
     session_id: str
     cookies: List[CarfastCookie] = field(default_factory=list)
     user_agent: str = ""
-    imported_at: float = field(default_factory=lambda: datetime.now(timezone.utc).timestamp())
-    last_used: float = field(default_factory=lambda: datetime.now(timezone.utc).timestamp())
+    imported_at: float = field(
+        default_factory=lambda: datetime.now(timezone.utc).timestamp())
+    last_used: float = field(
+        default_factory=lambda: datetime.now(timezone.utc).timestamp())
     success_count: int = 0
     fail_count: int = 0
     blocked: bool = False
-    
+
     # Session TTL in minutes
     SESSION_TTL_MINUTES = 30
-    
+
     def get_cookie_header(self) -> str:
         """Build Cookie header string"""
         return "; ".join([f"{c.name}={c.value}" for c in self.cookies])
-    
+
     def has_cf_clearance(self) -> bool:
         """Check if cf_clearance cookie exists"""
         return any(c.name == "cf_clearance" for c in self.cookies)
-    
+
     def has_cf_bm(self) -> bool:
         """Check if __cf_bm cookie exists"""
         return any(c.name == "__cf_bm" for c in self.cookies)
-    
+
     def get_age_minutes(self) -> float:
         """Get session age in minutes"""
         return (datetime.now(timezone.utc).timestamp() - self.imported_at) / 60
-    
+
     def is_expired(self) -> bool:
         """Check if cookies are expired (30 min default)"""
         return self.get_age_minutes() > self.SESSION_TTL_MINUTES
-    
+
     def get_status(self) -> Dict:
         """Get detailed session status"""
         return {
@@ -243,18 +294,19 @@ class CarfastSession:
             "hasUserAgent": bool(self.user_agent),
         }
 
+
 class CarfastCookieStore:
     """In-memory cookie store with MongoDB backup"""
-    
+
     def __init__(self):
         self.sessions: Dict[str, CarfastSession] = {}
         self._default_session_id = "default"
-    
+
     def import_cookies(self, session_id: str, cookies: List[Dict], user_agent: str = "") -> CarfastSession:
         """Import cookies from extension"""
         parsed_cookies = []
         important_cookies = []
-        
+
         for c in cookies:
             cookie = CarfastCookie(
                 name=c.get("name", ""),
@@ -263,39 +315,43 @@ class CarfastCookieStore:
                 expires=c.get("expirationDate")
             )
             parsed_cookies.append(cookie)
-            
+
             # Track important cookies
             if cookie.name in ["cf_clearance", "__cf_bm"]:
-                important_cookies.append(f"{cookie.name}={cookie.value[:15]}...")
-        
+                important_cookies.append(
+                    f"{cookie.name}={cookie.value[:15]}...")
+
         session = CarfastSession(
             session_id=session_id,
             cookies=parsed_cookies,
             user_agent=user_agent
         )
         self.sessions[session_id] = session
-        
+
         # Also store as default if it has cf_clearance
         if session.has_cf_clearance():
             self.sessions[self._default_session_id] = session
-        
+
         # Detailed logging
         logger.info(f"[CARFAST] ══════════════════════════════════════")
         logger.info(f"[CARFAST] Session imported: {session_id[:12]}...")
         logger.info(f"[CARFAST] Cookies: {len(parsed_cookies)} total")
-        logger.info(f"[CARFAST] cf_clearance: {'✓' if session.has_cf_clearance() else '✗'}")
-        logger.info(f"[CARFAST] __cf_bm: {'✓' if session.has_cf_bm() else '✗'}")
-        logger.info(f"[CARFAST] User-Agent: {user_agent[:50]}..." if user_agent else "[CARFAST] User-Agent: NOT PROVIDED!")
+        logger.info(
+            f"[CARFAST] cf_clearance: {'✓' if session.has_cf_clearance() else '✗'}")
+        logger.info(
+            f"[CARFAST] __cf_bm: {'✓' if session.has_cf_bm() else '✗'}")
+        logger.info(
+            f"[CARFAST] User-Agent: {user_agent[:50]}..." if user_agent else "[CARFAST] User-Agent: NOT PROVIDED!")
         logger.info(f"[CARFAST] ══════════════════════════════════════")
-        
+
         return session
-    
+
     def get_session(self, session_id: str = None) -> Optional[CarfastSession]:
         """Get session by ID or default"""
         if session_id and session_id in self.sessions:
             return self.sessions[session_id]
         return self.sessions.get(self._default_session_id)
-    
+
     def get_best_session(self) -> Optional[CarfastSession]:
         """Get best available session (not blocked, not expired, has cf_clearance)"""
         valid_sessions = [
@@ -306,31 +362,36 @@ class CarfastCookieStore:
             return None
         # Sort by success rate
         return max(valid_sessions, key=lambda s: s.success_count - s.fail_count)
-    
+
     def mark_success(self, session_id: str):
         """Mark session as successful"""
         if session_id in self.sessions:
             self.sessions[session_id].success_count += 1
-            self.sessions[session_id].last_used = datetime.now(timezone.utc).timestamp()
-            logger.info(f"[CARFAST] Session {session_id[:8]}... SUCCESS (total: {self.sessions[session_id].success_count})")
-    
+            self.sessions[session_id].last_used = datetime.now(
+                timezone.utc).timestamp()
+            logger.info(
+                f"[CARFAST] Session {session_id[:8]}... SUCCESS (total: {self.sessions[session_id].success_count})")
+
     def mark_failure(self, session_id: str):
         """Mark session as failed"""
         if session_id in self.sessions:
             self.sessions[session_id].fail_count += 1
             s = self.sessions[session_id]
-            logger.warning(f"[CARFAST] Session {session_id[:8]}... FAILED (total: {s.fail_count})")
-            
+            logger.warning(
+                f"[CARFAST] Session {session_id[:8]}... FAILED (total: {s.fail_count})")
+
             # Auto-block after 5 consecutive failures
             if s.fail_count > 5 and s.success_count < 2:
                 s.blocked = True
-                logger.error(f"[CARFAST] Session {session_id[:8]}... BLOCKED due to excessive failures")
-    
+                logger.error(
+                    f"[CARFAST] Session {session_id[:8]}... BLOCKED due to excessive failures")
+
     def get_status(self) -> Dict:
         """Get overall status"""
         sessions = list(self.sessions.values())
-        valid = [s for s in sessions if not s.blocked and not s.is_expired() and s.has_cf_clearance()]
-        
+        valid = [s for s in sessions if not s.blocked and not s.is_expired()
+                 and s.has_cf_clearance()]
+
         return {
             "hasSession": len(valid) > 0,
             "totalSessions": len(sessions),
@@ -338,7 +399,7 @@ class CarfastCookieStore:
             "cookieCount": sum(len(s.cookies) for s in valid),
             "hasCfClearance": any(s.has_cf_clearance() for s in sessions),
         }
-    
+
     def clear_expired(self):
         """Remove expired sessions"""
         expired = [sid for sid, s in self.sessions.items() if s.is_expired()]
@@ -347,29 +408,30 @@ class CarfastCookieStore:
         if expired:
             logger.info(f"[CARFAST] Cleared {len(expired)} expired sessions")
 
+
 # Global cookie store
 carfast_cookie_store = CarfastCookieStore()
 
 # ═══════════════════════════════════════════════════════════════════
 # PLAYWRIGHT PARSER - Undetected Browser
 # ═══════════════════════════════════════════════════════════════════
-from playwright.async_api import async_playwright
+
 
 class PlaywrightCarfastParser:
     """Parse Carfast using undetected browser"""
-    
+
     CARFAST_BASE = "https://carfast.express"
-    
+
     def __init__(self):
         self.browser = None
         self.context = None
         self.playwright = None
-    
+
     async def ensure_browser(self):
         """Ensure browser is running"""
         import os
         os.environ['PLAYWRIGHT_BROWSERS_PATH'] = '/pw-browsers'
-        
+
         if not self.browser:
             self.playwright = await async_playwright().start()
             # Use Firefox - less detectable than Chromium
@@ -384,60 +446,63 @@ class PlaywrightCarfastParser:
             )
             logger.info("[CARFAST-PW] Firefox browser started")
         return self.context
-    
+
     async def parse_url(self, url: str) -> Dict[str, Any]:
         """Parse URL using Playwright browser"""
         logger.info(f"[CARFAST-PW] Parsing: {url}")
-        
+
         try:
             context = await self.ensure_browser()
             page = await context.new_page()
-            
+
             # Go to page
             response = await page.goto(url, wait_until='domcontentloaded', timeout=60000)
-            
+
             # Wait for page to settle
             await page.wait_for_timeout(5000)
-            
+
             # Check for Cloudflare challenge
             content = await page.content()
-            
-            cloudflare_indicators = ["Just a moment", "Checking your browser", "cf-browser-verification"]
+
+            cloudflare_indicators = [
+                "Just a moment", "Checking your browser", "cf-browser-verification"]
             retry = 0
             while any(ind in content for ind in cloudflare_indicators) and retry < 10:
-                logger.info(f"[CARFAST-PW] Cloudflare challenge, waiting... ({retry+1}/10)")
+                logger.info(
+                    f"[CARFAST-PW] Cloudflare challenge, waiting... ({retry+1}/10)")
                 await page.wait_for_timeout(3000)
                 content = await page.content()
                 retry += 1
-            
+
             # Check status
             if response and response.status == 403:
                 await page.close()
                 return {"success": False, "error": "403 Forbidden", "status": 403}
-            
+
             # Extract data
             data = await self._extract_data(page, url)
             html_len = len(content)
-            
+
             await page.close()
-            
-            logger.info(f"[CARFAST-PW] SUCCESS - {len(data)} fields, {html_len} chars")
-            
+
+            logger.info(
+                f"[CARFAST-PW] SUCCESS - {len(data)} fields, {html_len} chars")
+
             return {
                 "success": True,
                 "data": data,
                 "html_length": html_len,
                 "method": "playwright_firefox"
             }
-            
+
         except Exception as e:
             logger.error(f"[CARFAST-PW] Error: {e}")
             return {"success": False, "error": str(e)}
-    
+
     async def _extract_data(self, page, url: str) -> Dict[str, Any]:
         """Extract vehicle data from page"""
         data = {"url": url}
-        
+
         try:
             # Try to get VIN
             vin_el = await page.query_selector('[data-vin], .vin-code, .vehicle-vin')
@@ -450,36 +515,36 @@ class PlaywrightCarfastParser:
                 vin_match = re.search(r'[A-HJ-NPR-Z0-9]{17}', content)
                 if vin_match:
                     data["vin"] = vin_match.group(0)
-            
+
             # Try to get title/name
             title_el = await page.query_selector('h1, .vehicle-title, .lot-title')
             if title_el:
                 data["title"] = (await title_el.text_content()).strip()
-            
+
             # Try to get price
             price_el = await page.query_selector('.price, .current-bid, .buy-now-price')
             if price_el:
                 price_text = await price_el.text_content()
                 data["price"] = price_text.strip()
-            
+
             # Try to get lot number
             lot_el = await page.query_selector('.lot-number, .lot-id')
             if lot_el:
                 data["lot_number"] = (await lot_el.text_content()).strip()
-            
+
             # Try to get odometer
             odo_el = await page.query_selector('.odometer, .mileage')
             if odo_el:
                 data["odometer"] = (await odo_el.text_content()).strip()
-            
+
             # Get page title as fallback
             data["page_title"] = await page.title()
-            
+
         except Exception as e:
             logger.warning(f"[CARFAST-PW] Extract error: {e}")
-        
+
         return data
-    
+
     async def close(self):
         """Close browser"""
         if self.browser:
@@ -487,63 +552,69 @@ class PlaywrightCarfastParser:
             self.browser = None
             self.context = None
 
+
 # Global Playwright parser
 playwright_parser = PlaywrightCarfastParser()
 
+
 class CarfastParser:
     """Backend parser using stored cookies with retry and validation"""
-    
+
     CARFAST_BASE = "https://carfast.express"
     MAX_RETRIES = 2
     RETRY_DELAY = 2  # seconds
-    
+
     # Required cookies for Cloudflare bypass
     REQUIRED_COOKIES = ["cf_clearance"]
     RECOMMENDED_COOKIES = ["cf_clearance", "__cf_bm"]
-    
+
     def __init__(self, cookie_store: CarfastCookieStore):
         self.cookie_store = cookie_store
-    
+
     def validate_cookies(self, session: CarfastSession) -> Dict[str, Any]:
         """Validate session has required cookies"""
         cookie_names = [c.name for c in session.cookies]
-        
+
         # Check required cookies
-        missing_required = [c for c in self.REQUIRED_COOKIES if c not in cookie_names]
+        missing_required = [
+            c for c in self.REQUIRED_COOKIES if c not in cookie_names]
         if missing_required:
             return {
                 "valid": False,
                 "error": f"Missing required cookies: {missing_required}",
                 "missing": missing_required
             }
-        
+
         # Check recommended cookies
-        missing_recommended = [c for c in self.RECOMMENDED_COOKIES if c not in cookie_names]
-        
+        missing_recommended = [
+            c for c in self.RECOMMENDED_COOKIES if c not in cookie_names]
+
         return {
             "valid": True,
             "cookies": cookie_names,
             "missing_recommended": missing_recommended,
             "warning": f"Missing recommended: {missing_recommended}" if missing_recommended else None
         }
-    
+
     async def parse_url(self, url: str, session_id: str = None, retry_count: int = 0) -> Dict[str, Any]:
         """Parse Carfast URL using stored cookies with auto-retry"""
-        session = self.cookie_store.get_session(session_id) or self.cookie_store.get_best_session()
-        
+        session = self.cookie_store.get_session(
+            session_id) or self.cookie_store.get_best_session()
+
         # Session validation
         if not session:
             return {"success": False, "error": "No valid session. Open carfast.express in browser first.", "needsRefresh": True, "code": "NO_SESSION"}
-        
+
         if session.is_expired():
-            age = (datetime.now(timezone.utc).timestamp() - session.imported_at) / 60
+            age = (datetime.now(timezone.utc).timestamp() -
+                   session.imported_at) / 60
             return {"success": False, "error": f"Session expired ({age:.0f} min old, max 30 min)", "needsRefresh": True, "code": "SESSION_EXPIRED"}
-        
+
         # Cookie validation
         validation = self.validate_cookies(session)
         if not validation["valid"]:
             return {"success": False, "error": validation["error"], "needsRefresh": True, "code": "MISSING_COOKIES"}
-        
+
         # Build headers - CRITICAL: Use exact same User-Agent as browser
         headers = {
             "Cookie": session.get_cookie_header(),
@@ -563,18 +634,20 @@ class CarfastParser:
             "Upgrade-Insecure-Requests": "1",
             "Referer": self.CARFAST_BASE,
         }
-        
+
         # Log cookies being used (partially masked)
         cookie_header = session.get_cookie_header()
-        cf_value = next((c.value[:10] + "..." for c in session.cookies if c.name == "cf_clearance"), "N/A")
-        logger.info(f"[CARFAST] Parsing {url} with cf_clearance={cf_value}, retry={retry_count}")
-        
+        cf_value = next(
+            (c.value[:10] + "..." for c in session.cookies if c.name == "cf_clearance"), "N/A")
+        logger.info(
+            f"[CARFAST] Parsing {url} with cf_clearance={cf_value}, retry={retry_count}")
+
         try:
             async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
                 response = await client.get(url, headers=headers)
-                
+
                 html = response.text
-                
+
                 # Check for Cloudflare block patterns
                 is_cloudflare_block = any([
                     response.status_code == 403,
@@ -584,34 +657,35 @@ class CarfastParser:
                     "challenge-platform" in html,
                     "_cf_chl" in html,
                 ])
-                
+
                 if is_cloudflare_block:
                     self.cookie_store.mark_failure(session.session_id)
-                    
+
                     # Auto-retry once
                     if retry_count < self.MAX_RETRIES:
-                        logger.warning(f"[CARFAST] Cloudflare block, retrying in {self.RETRY_DELAY}s...")
+                        logger.warning(
+                            f"[CARFAST] Cloudflare block, retrying in {self.RETRY_DELAY}s...")
                         await asyncio.sleep(self.RETRY_DELAY)
                         return await self.parse_url(url, session_id, retry_count + 1)
-                    
+
                     return {
-                        "success": False, 
+                        "success": False,
                         "error": "Cloudflare block - cookies may be invalid or expired",
                         "needsRefresh": True,
                         "status": response.status_code,
                         "code": "CLOUDFLARE_BLOCK",
                         "retries": retry_count
                     }
-                
+
                 if response.status_code != 200:
                     return {"success": False, "error": f"HTTP {response.status_code}", "status": response.status_code, "code": "HTTP_ERROR"}
-                
+
                 # Success - parse HTML
                 self.cookie_store.mark_success(session.session_id)
-                
+
                 # Extract data from HTML
                 data = self._extract_data(html, url)
-                
+
                 return {
                     "success": True,
                     "data": data,
@@ -620,7 +694,7 @@ class CarfastParser:
                     "retries": retry_count,
                     "validation": validation
                 }
-                
+
         except httpx.TimeoutException:
             # Auto-retry on timeout
             if retry_count < self.MAX_RETRIES:
@@ -631,34 +705,37 @@ class CarfastParser:
         except Exception as e:
             logger.error(f"[CARFAST] Parse error: {e}")
             return {"success": False, "error": str(e), "code": "ERROR"}
-    
+
     def _extract_data(self, html: str, url: str) -> Dict[str, Any]:
         """Extract vehicle data from HTML"""
-        
+
         data = {"url": url}
-        
+
         # Try to find VIN
         vin_match = re.search(r'[A-HJ-NPR-Z0-9]{17}', html)
         if vin_match:
             data["vin"] = vin_match.group(0)
-        
+
         # Try to find lot number
         lot_match = re.search(r'lot[:\s#]*(\d+)', html, re.I)
         if lot_match:
             data["lot_number"] = lot_match.group(1)
-        
+
         # Try to find price
         price_match = re.search(r'\$\s*([\d,]+)', html)
         if price_match:
             data["price"] = price_match.group(1).replace(",", "")
-        
+
         # Try to find odometer
-        odo_match = re.search(r'(\d{1,3}[,\s]?\d{3})\s*(mi|km|miles)', html, re.I)
+        odo_match = re.search(
+            r'(\d{1,3}[,\s]?\d{3})\s*(mi|km|miles)', html, re.I)
         if odo_match:
-            data["odometer"] = odo_match.group(1).replace(",", "").replace(" ", "")
-        
+            data["odometer"] = odo_match.group(
+                1).replace(",", "").replace(" ", "")
+
         # Try to extract JSON data if available
-        json_match = re.search(r'<script[^>]*type="application/json"[^>]*>([^<]+)</script>', html)
+        json_match = re.search(
+            r'<script[^>]*type="application/json"[^>]*>([^<]+)</script>', html)
         if json_match:
             try:
                 json_data = json.loads(json_match.group(1))
@@ -666,19 +743,21 @@ class CarfastParser:
                     data["raw_json"] = json_data
             except:
                 pass
-        
+
         # Try __NUXT__ data
-        nuxt_match = re.search(r'window\.__NUXT__\s*=\s*(.+?)</script>', html, re.S)
+        nuxt_match = re.search(
+            r'window\.__NUXT__\s*=\s*(.+?)</script>', html, re.S)
         if nuxt_match:
             try:
                 # This is usually JS not JSON, but we can try
                 data["has_nuxt"] = True
             except:
                 pass
-        
+
         return data
 
-# Global parser instance  
+
+# Global parser instance
 carfast_parser = CarfastParser(carfast_cookie_store)
 
 logging.basicConfig(level=logging.INFO)
@@ -772,6 +851,8 @@ ALL_FIELDS = list(FIELD_CONFIDENCE.keys())
 # ═══════════════════════════════════════════════════════════════════
 # GLOBAL CONFIG (V3.2 Control)
 # ═══════════════════════════════════════════════════════════════════
+
+
 @dataclass
 class ParserConfig:
     enabled: bool = True
@@ -782,12 +863,14 @@ class ParserConfig:
     blacklist_threshold_fails: int = 10
     blacklist_threshold_success: int = 2
 
+
 parser_config = ParserConfig()
 # Ops scaling knob: allow disabling the scraper/parser layer per-process via
 # the PARSER_ENABLED env var (default ON). When scaling the API horizontally,
 # set PARSER_ENABLED=false on the EXTRA replicas so only ONE instance runs the
 # scraping/cron workload (prevents duplicate scraping & rate-limit pressure).
-parser_config.enabled = os.environ.get("PARSER_ENABLED", "true").strip().lower() in ("1", "true", "yes", "on")
+parser_config.enabled = os.environ.get(
+    "PARSER_ENABLED", "true").strip().lower() in ("1", "true", "yes", "on")
 
 # When PARSER_ENABLED=false we ALSO skip starting the autonomous external
 # sitemap/scraper sync loops (WestMotors / Lemon / catalog promotion /
@@ -799,6 +882,8 @@ EXTERNAL_SYNC_ENABLED = parser_config.enabled
 # ═══════════════════════════════════════════════════════════════════
 # UNIFIED PARSER REGISTRY
 # ═══════════════════════════════════════════════════════════════════
+
+
 @dataclass
 class ParserEntry:
     source: str
@@ -813,7 +898,8 @@ class ParserEntry:
     readiness_detail: str = ""
     api_key: str = ""
     endpoints: List[str] = field(default_factory=list)
-    
+
+
 PARSER_REGISTRY: Dict[str, ParserEntry] = {
     "bitmotors": ParserEntry(
         source="bitmotors",
@@ -823,7 +909,8 @@ PARSER_REGISTRY: Dict[str, ParserEntry] = {
         status="active",
         readiness="ready" if BITMOTORS_AVAILABLE else "broken",
         readiness_detail="Autonomous scraper for bidmotors.bg. Scrapes catalogue every 30 min." if BITMOTORS_AVAILABLE else "Missing bitmotors_scraper module.",
-        endpoints=["/api/ingestion/admin/parsers/bitmotors/run", "/api/ingestion/admin/parsers/bitmotors/stop", "/api/ingestion/admin/parsers/bitmotors/run-once", "/api/ingestion/admin/parsers/bitmotors/stats"],
+        endpoints=["/api/ingestion/admin/parsers/bitmotors/run", "/api/ingestion/admin/parsers/bitmotors/stop",
+                   "/api/ingestion/admin/parsers/bitmotors/run-once", "/api/ingestion/admin/parsers/bitmotors/stats"],
     ),
     "bidcars": ParserEntry(
         source="bidcars",
@@ -842,7 +929,8 @@ PARSER_REGISTRY: Dict[str, ParserEntry] = {
             if BIDCARS_AVAILABLE
             else "Missing playwright_stealth module."
         ),
-        endpoints=["/api/bidcars/parse", "/api/bidcars/search", "/api/bidcars/vehicles"],
+        endpoints=["/api/bidcars/parse",
+                   "/api/bidcars/search", "/api/bidcars/vehicles"],
     ),
     "autoastat": ParserEntry(
         source="autoastat",
@@ -958,10 +1046,13 @@ PARSER_REGISTRY: Dict[str, ParserEntry] = {
 # ═══════════════════════════════════════════════════════════════════
 # SESSION SERVICE (V3.1 with Scoring)
 # ═══════════════════════════════════════════════════════════════════
+
+
 @dataclass
 class Session:
     session_id: str
-    last_seen: float = field(default_factory=lambda: datetime.now(timezone.utc).timestamp())
+    last_seen: float = field(
+        default_factory=lambda: datetime.now(timezone.utc).timestamp())
     success_count: int = 0
     fail_count: int = 0
     avg_latency: float = 0.0
@@ -970,94 +1061,97 @@ class Session:
     blocked: bool = False    # V3.1: Blacklist flag
     priority: int = 1        # V3.2: Manual priority (1-10)
 
+
 class SessionService:
     """Tracks all browser sessions with scoring"""
-    
+
     def __init__(self):
         self.sessions: Dict[str, Session] = {}
         self._rate_limits: Dict[str, float] = {}
-    
+
     def touch(self, session_id: str, latency: float = 0, success: bool = True):
         """Update session on each request"""
         if session_id not in self.sessions:
             self.sessions[session_id] = Session(session_id=session_id)
-        
+
         s = self.sessions[session_id]
         s.last_seen = datetime.now(timezone.utc).timestamp()
-        
+
         if success:
             s.success_count += 1
             s.vin_count += 1
         else:
             s.fail_count += 1
-        
+
         if latency > 0:
             s.avg_latency = (s.avg_latency + latency) / 2
-        
+
         # Auto-blacklist check
         self._check_blacklist(s)
-        
+
         return s
-    
+
     def update_fields(self, session_id: str, count: int):
         """V3.1: Track data completeness per session"""
         s = self.sessions.get(session_id)
         if not s:
             return
-        
+
         if s.avg_fields == 0:
             s.avg_fields = count / len(ALL_FIELDS)
         else:
             s.avg_fields = (s.avg_fields + count / len(ALL_FIELDS)) / 2
-    
+
     def get_score(self, session_id: str) -> float:
         """
         V3.1: Calculate session score
-        
+
         Formula:
           score = (successRate * 0.5) + (dataCompleteness * 0.3) + (latencyScore * 0.2)
         """
         s = self.sessions.get(session_id)
         if not s:
             return 0.0
-        
+
         if s.blocked:
             return 0.0
-        
+
         # Success rate (0-1)
         total = s.success_count + s.fail_count
         success_rate = s.success_count / total if total > 0 else 0.5
-        
+
         # Data completeness (0-1)
         completeness = s.avg_fields
-        
+
         # Latency score (lower is better, 0-1)
         # 0ms = 1.0, 3000ms+ = 0.0
-        latency_score = max(0, 1 - s.avg_latency / 3000) if s.avg_latency else 0.5
-        
+        latency_score = max(0, 1 - s.avg_latency /
+                            3000) if s.avg_latency else 0.5
+
         # Priority multiplier
         priority_mult = s.priority / 5  # 1-10 → 0.2-2.0
-        
+
         score = (
             success_rate * 0.5 +
             completeness * 0.3 +
             latency_score * 0.2
         ) * priority_mult
-        
+
         return min(1.0, max(0.0, score))
-    
+
     def _check_blacklist(self, s: Session):
         """V3.1: Auto-blacklist bad sessions"""
         if s.fail_count > parser_config.blacklist_threshold_fails:
             if s.success_count < parser_config.blacklist_threshold_success:
                 s.blocked = True
-                logger.warning(f"[SESSION] Blocked session {s.session_id[:8]}... (too many failures)")
-    
+                logger.warning(
+                    f"[SESSION] Blocked session {s.session_id[:8]}... (too many failures)")
+
     def is_rate_limited(self, session_id: str) -> bool:
         """Check rate limit"""
         now = datetime.now(timezone.utc).timestamp() * 1000
         last = self._rate_limits.get(session_id, 0)
-        
+
         # Adjust rate limit by score
         score = self.get_score(session_id)
         effective_limit = parser_config.rate_limit_ms
@@ -1065,43 +1159,43 @@ class SessionService:
             effective_limit = parser_config.rate_limit_ms * 0.5  # Faster for good sessions
         elif score < 0.4:
             effective_limit = parser_config.rate_limit_ms * 2  # Slower for bad sessions
-        
+
         if now - last < effective_limit:
             return True
-        
+
         self._rate_limits[session_id] = now
         return False
-    
+
     def disable(self, session_id: str):
         """Manually disable session"""
         if session_id in self.sessions:
             self.sessions[session_id].blocked = True
-    
+
     def enable(self, session_id: str):
         """Re-enable session"""
         if session_id in self.sessions:
             self.sessions[session_id].blocked = False
-    
+
     def set_priority(self, session_id: str, priority: int):
         """Set manual priority (1-10)"""
         if session_id in self.sessions:
             self.sessions[session_id].priority = max(1, min(10, priority))
-    
+
     def get(self, session_id: str) -> Optional[Session]:
         return self.sessions.get(session_id)
-    
+
     def get_all(self) -> List[Session]:
         return list(self.sessions.values())
-    
+
     def get_active(self, timeout_minutes: int = 5) -> List[Session]:
         now = datetime.now(timezone.utc).timestamp()
         cutoff = now - (timeout_minutes * 60)
         return [s for s in self.sessions.values() if s.last_seen > cutoff and not s.blocked]
-    
+
     def get_stats(self) -> Dict:
         active = self.get_active()
         blocked = [s for s in self.sessions.values() if s.blocked]
-        
+
         return {
             "total_sessions": len(self.sessions),
             "active_sessions": len(active),
@@ -1113,6 +1207,8 @@ class SessionService:
 # ═══════════════════════════════════════════════════════════════════
 # INGESTION QUEUE (V3)
 # ═══════════════════════════════════════════════════════════════════
+
+
 @dataclass
 class IngestionJob:
     vin: str
@@ -1122,6 +1218,7 @@ class IngestionJob:
     timestamp: float
     session_score: float = 0.0
 
+
 class IngestionQueue:
     def __init__(self):
         self.queue: asyncio.Queue = None
@@ -1129,22 +1226,22 @@ class IngestionQueue:
         self.processed_count = 0
         self.error_count = 0
         self._handler = None
-    
+
     async def init(self):
         self.queue = asyncio.Queue()
-    
+
     def set_handler(self, handler):
         self._handler = handler
-    
+
     async def push(self, job: IngestionJob):
         if self.queue:
             await self.queue.put(job)
-    
+
     async def start(self):
         if self.processing:
             return
         self.processing = True
-        
+
         while self.processing:
             try:
                 job = await asyncio.wait_for(self.queue.get(), timeout=0.1)
@@ -1155,7 +1252,7 @@ class IngestionQueue:
             except Exception as e:
                 logger.error(f"[QUEUE] Error: {e}")
                 self.error_count += 1
-    
+
     async def _handle(self, job: IngestionJob):
         try:
             if self._handler:
@@ -1164,7 +1261,7 @@ class IngestionQueue:
         except Exception as e:
             logger.error(f"[QUEUE] Handler error: {e}")
             self.error_count += 1
-    
+
     def get_stats(self) -> Dict:
         return {
             "queue_size": self.queue.qsize() if self.queue else 0,
@@ -1176,12 +1273,15 @@ class IngestionQueue:
 # ═══════════════════════════════════════════════════════════════════
 # AGGREGATOR SERVICE (V3.2 with Field Intelligence)
 # ═══════════════════════════════════════════════════════════════════
+
+
 @dataclass
 class FieldSource:
     field: str
     value: Any
     session_id: str
     score: float
+
 
 @dataclass
 class VinRecord:
@@ -1191,24 +1291,27 @@ class VinRecord:
     field_sources: List[FieldSource] = field(default_factory=list)  # V3.2
     quality: str = "D"
     fields_filled: int = 0
-    created_at: float = field(default_factory=lambda: datetime.now(timezone.utc).timestamp())
-    updated_at: float = field(default_factory=lambda: datetime.now(timezone.utc).timestamp())
+    created_at: float = field(
+        default_factory=lambda: datetime.now(timezone.utc).timestamp())
+    updated_at: float = field(
+        default_factory=lambda: datetime.now(timezone.utc).timestamp())
+
 
 class AggregatorService:
     """V3.2: Field-Level Intelligence Merge"""
-    
+
     def __init__(self, session_service: SessionService):
         self.store: Dict[str, VinRecord] = {}
         self.session_service = session_service
-    
+
     def ingest(self, job: IngestionJob) -> VinRecord:
         vin = job.vin.upper()
-        
+
         if vin not in self.store:
             self.store[vin] = VinRecord(vin=vin)
-        
+
         record = self.store[vin]
-        
+
         # Add source with score
         record.sources.append({
             "session_id": job.session_id,
@@ -1217,60 +1320,62 @@ class AggregatorService:
             "ts": job.timestamp,
             "score": job.session_score,
         })
-        
+
         # V3.2: Field-level intelligent merge
         record.merged, record.field_sources = self._smart_merge(record.sources)
         record.fields_filled = self._count_fields(record.merged)
         record.quality = self._calculate_quality(record.fields_filled)
         record.updated_at = datetime.now(timezone.utc).timestamp()
-        
+
         return record
-    
+
     def _smart_merge(self, sources: List[Dict]) -> tuple[Dict, List[FieldSource]]:
         """
         V3.2: Field-Level Intelligence
-        
+
         For each field, select the best source based on:
           field_score = session_score * field_confidence
         """
         result = {}
         field_sources = []
-        
+
         # Sort sources by session score (highest first), use 0.5 as default
         sorted_sources = sorted(
             sources,
-            key=lambda s: s.get('score', 0.5) if s.get('score', 0) > 0 else 0.5,
+            key=lambda s: s.get('score', 0.5) if s.get(
+                'score', 0) > 0 else 0.5,
             reverse=True
         )
-        
+
         for field_name in ALL_FIELDS:
             if field_name == 'images':
                 continue  # Handle images separately
-            
+
             best_value = None
             best_score = -1  # Start at -1 so any value wins
             best_session = None
-            
+
             for source in sorted_sources:
                 data = source.get('data', {})
-                
+
                 # Try both snake_case and camelCase
-                value = data.get(field_name) or data.get(self._to_camel(field_name))
-                
+                value = data.get(field_name) or data.get(
+                    self._to_camel(field_name))
+
                 if not value:
                     continue
-                
+
                 # Use 0.5 as default score for new sessions
                 raw_score = source.get('score', 0)
                 session_score = raw_score if raw_score > 0 else 0.5
                 field_confidence = FIELD_CONFIDENCE.get(field_name, 0.5)
                 combined_score = session_score * field_confidence
-                
+
                 if combined_score > best_score:
                     best_score = combined_score
                     best_value = value
                     best_session = source.get('session_id')
-            
+
             if best_value:
                 result[field_name] = best_value
                 field_sources.append(FieldSource(
@@ -1279,7 +1384,7 @@ class AggregatorService:
                     session_id=best_session,
                     score=round(best_score, 3)
                 ))
-        
+
         # V3.2: Deduplicate and merge images from all sources
         all_images = set()
         for source in sources:
@@ -1287,7 +1392,7 @@ class AggregatorService:
             for img in images:
                 if img and isinstance(img, str):
                     all_images.add(img)
-        
+
         if all_images:
             result['images'] = list(all_images)[:20]
             field_sources.append(FieldSource(
@@ -1296,32 +1401,36 @@ class AggregatorService:
                 session_id='merged',
                 score=1.0
             ))
-        
+
         return result, field_sources
-    
+
     def _to_camel(self, snake_str: str) -> str:
         components = snake_str.split('_')
         return components[0] + ''.join(x.title() for x in components[1:])
-    
+
     def _count_fields(self, data: Dict) -> int:
         return sum(1 for f in ALL_FIELDS if data.get(f))
-    
+
     def _calculate_quality(self, fields: int) -> str:
-        if fields >= 10: return 'A+'
-        if fields >= 8: return 'A'
-        if fields >= 6: return 'B'
-        if fields >= 4: return 'C'
+        if fields >= 10:
+            return 'A+'
+        if fields >= 8:
+            return 'A'
+        if fields >= 6:
+            return 'B'
+        if fields >= 4:
+            return 'C'
         return 'D'
-    
+
     def get(self, vin: str) -> Optional[VinRecord]:
         return self.store.get(vin.upper())
-    
+
     def get_stats(self) -> Dict:
         records = list(self.store.values())
         quality_dist = defaultdict(int)
         for r in records:
             quality_dist[r.quality] += 1
-        
+
         return {
             "total_vins": len(records),
             "total_sources": sum(len(r.sources) for r in records),
@@ -1332,24 +1441,27 @@ class AggregatorService:
 # ═══════════════════════════════════════════════════════════════════
 # WEBSOCKET MANAGER (V3.2 Real-time)
 # ═══════════════════════════════════════════════════════════════════
+
+
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
-    
+
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-    
+
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-    
+
     async def broadcast(self, message: dict):
         for connection in self.active_connections:
             try:
                 await connection.send_json(message)
             except:
                 pass
+
 
 ws_manager = ConnectionManager()
 
@@ -1370,10 +1482,6 @@ aggregator = AggregatorService(session_service)
 # global is retained for server.py-internal callers (closure-name
 # references at lines ~1260, ~3696, ~3822, ~3851, ~11791) and for
 # any in-process introspection via `server.aggregator`.
-from app.core.aggregator_runtime import (
-    set_aggregator as _c5b_set_aggregator,
-    get_aggregator as _c5b_get_aggregator,
-)
 _c5b_set_aggregator(aggregator)
 assert _c5b_get_aggregator() is aggregator, (
     "[C-5b] aggregator runtime accessor split-brain: "
@@ -1390,9 +1498,11 @@ lemon_sync_instance: Optional['LemonSync'] = None
 # ═══════════════════════════════════════════════════════════════════
 # QUEUE HANDLER
 # ═══════════════════════════════════════════════════════════════════
+
+
 async def queue_handler(job: IngestionJob):
     record = aggregator.ingest(job)
-    
+
     # Broadcast to WebSocket clients
     await ws_manager.broadcast({
         "type": "vin_ingested",
@@ -1402,7 +1512,7 @@ async def queue_handler(job: IngestionJob):
         "session_id": job.session_id[:8] + "...",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
-    
+
     # Save to MongoDB
     if db is not None:
         # Prepare field sources for storage
@@ -1410,7 +1520,7 @@ async def queue_handler(job: IngestionJob):
             {"field": fs.field, "session_id": fs.session_id, "score": fs.score}
             for fs in record.field_sources
         ]
-        
+
         await db.vin_data.update_one(
             {'vin': record.vin},
             {
@@ -1474,6 +1584,8 @@ async def queue_handler(job: IngestionJob):
 # `@on_event` decorator ran).  Python resolves the bare names at
 # `lifespan()` invocation time — i.e. at uvicorn boot, by which point
 # the whole module has been imported and all hook symbols exist.
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ── startup phase ─────────────────────────────────────────────────
@@ -1659,7 +1771,8 @@ async def _phase4_c3_request_context(request, call_next):
         logger.debug(
             "[http] request begin %s %s",
             request.method, request.url.path,
-            extra={"http_method": request.method, "http_path": request.url.path},
+            extra={"http_method": request.method,
+                   "http_path": request.url.path},
         )
         response = await call_next(request)
     # Best-effort response headers — never raise on header set.
@@ -1711,7 +1824,8 @@ async def _phase4_c4_metrics(request, call_next):
     finally:
         # Resolve route template if FastAPI matched one; else fall
         # back to the literal path (truncated).
-        route_obj = request.scope.get("route") if hasattr(request, "scope") else None
+        route_obj = request.scope.get("route") if hasattr(
+            request, "scope") else None
         route_label: str
         if route_obj is not None and hasattr(route_obj, "path"):
             route_label = route_obj.path
@@ -1720,7 +1834,8 @@ async def _phase4_c4_metrics(request, call_next):
             route_label = path[:64] if len(path) > 64 else path
         try:
             _m.http_requests_total.labels(
-                method=request.method, route=route_label, status_code=str(status_code)
+                method=request.method, route=route_label, status_code=str(
+                    status_code)
             ).inc()
             _m.http_request_duration_seconds.labels(
                 method=request.method, route=route_label
@@ -1818,7 +1933,8 @@ fastapi_app.openapi = _safe_openapi
 # SOCKET.IO SETUP FOR REAL-TIME RINGOSTAT EVENTS
 # ═══════════════════════════════════════════════════════════════════
 # Secret key for JWT (should match frontend auth)
-JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key-change-in-production')
+JWT_SECRET = os.environ.get(
+    'JWT_SECRET', 'your-secret-key-change-in-production')
 JWT_ALGORITHM = "HS256"
 
 # Create Socket.IO server
@@ -1877,6 +1993,8 @@ except ImportError:
     )
 
 # JWT authentication for WebSocket
+
+
 def verify_token(token: str) -> Dict[str, Any]:
     """Verify JWT token and return payload.
 
@@ -1900,16 +2018,17 @@ def verify_token(token: str) -> Dict[str, Any]:
         logger.error(f"JWT verification unexpected error: {e}")
         return None
 
+
 @sio.event
 async def connect(sid, environ, auth):
     """Handle WebSocket connection with JWT auth"""
     logger.info(f"[WS] Connection attempt from {sid}")
-    
+
     # Extract token from auth dict or query string
     token = None
     if auth and isinstance(auth, dict):
         token = auth.get('token')
-    
+
     if not token:
         # Try to get from query string
         query_string = environ.get('QUERY_STRING', '')
@@ -1917,42 +2036,43 @@ async def connect(sid, environ, auth):
             if param.startswith('token='):
                 token = param.split('=', 1)[1]
                 break
-    
+
     if not token:
         logger.warning(f"[WS] No token provided for {sid}")
         raise ConnectionRefusedError('Authentication required')
-    
+
     # Verify token
     payload = verify_token(token)
     if not payload:
         logger.warning(f"[WS] Invalid token for {sid}")
         raise ConnectionRefusedError('Invalid token')
-    
+
     user_id = payload.get('user_id') or payload.get('sub')
     role = payload.get('role', 'customer')
-    
+
     if not user_id:
         logger.warning(f"[WS] No user_id in token for {sid}")
         raise ConnectionRefusedError('Invalid token payload')
-    
+
     # Save session data
     await sio.save_session(sid, {
         'user_id': user_id,
         'role': role,
         'email': payload.get('email', '')
     })
-    
+
     # Join user-specific room
     await sio.enter_room(sid, f"user:{user_id}")
-    
+
     # Join role-specific room (for manager broadcasts). Legacy `master_admin`
     # stays here so in-flight sessions from before the rename keep getting
     # their role-scoped socket events.
     if role in ['admin', 'manager', 'master_admin', 'team_lead']:
         await sio.enter_room(sid, f"role:{role}")
-    
+
     logger.info(f"[WS] Connected: {sid} | user:{user_id} | role:{role}")
     await sio.emit('connected', {'status': 'ok', 'user_id': user_id}, room=sid)
+
 
 @sio.event
 async def disconnect(sid):
@@ -1962,9 +2082,12 @@ async def disconnect(sid):
     logger.info(f"[WS] Disconnected: {sid} | user:{user_id}")
 
 # Helper function to emit events
+
+
 async def emit_to_user(user_id: str, event: str, data: dict):
     """Emit event to specific user"""
     await sio.emit(event, data, room=f"user:{user_id}")
+
 
 async def emit_to_role(role: str, event: str, data: dict):
     """Emit event to all users with specific role"""
@@ -1983,7 +2106,8 @@ logger.info("✓ Socket.IO server initialized")
 # New: poll BidMotors LIVE for every pending VIN once an hour. If found,
 #      notify the user (socket + persisted timeline event).
 # ═══════════════════════════════════════════════════════════════════
-WATCHLIST_POLL_INTERVAL_SEC = int(os.environ.get("WATCHLIST_POLL_INTERVAL_SEC", "3600"))
+WATCHLIST_POLL_INTERVAL_SEC = int(
+    os.environ.get("WATCHLIST_POLL_INTERVAL_SEC", "3600"))
 WATCHLIST_POLL_BATCH = int(os.environ.get("WATCHLIST_POLL_BATCH", "20"))
 WATCHLIST_POLL_DELAY = float(os.environ.get("WATCHLIST_POLL_DELAY", "2.0"))
 
@@ -1997,7 +2121,8 @@ async def _watchlist_live_poll_loop():
       3. On hit → emits socket events + marks notified.
     """
     await asyncio.sleep(60)  # cold-boot grace
-    logger.info(f"[watchlist-poll] loop online (interval={WATCHLIST_POLL_INTERVAL_SEC}s)")
+    logger.info(
+        f"[watchlist-poll] loop online (interval={WATCHLIST_POLL_INTERVAL_SEC}s)")
     while True:
         try:
             if db is None:
@@ -2012,7 +2137,8 @@ async def _watchlist_live_poll_loop():
                 await asyncio.sleep(WATCHLIST_POLL_INTERVAL_SEC)
                 continue
 
-            logger.info(f"[watchlist-poll] checking {len(pending)} pending VINs")
+            logger.info(
+                f"[watchlist-poll] checking {len(pending)} pending VINs")
             for w in pending:
                 vin = (w.get("vin") or "").upper()
                 if not vin or not BITMOTORS_AVAILABLE:
@@ -2029,7 +2155,7 @@ async def _watchlist_live_poll_loop():
                     payload = {
                         "vin": vin,
                         "title": detail.get("title")
-                            or (f"{detail.get('year','')} {detail.get('make','')} {detail.get('model','')}".strip() or None),
+                        or (f"{detail.get('year', '')} {detail.get('make', '')} {detail.get('model', '')}".strip() or None),
                         "image": (detail.get("images") or [None])[0] or detail.get("image"),
                         "auction_name": detail.get("auction_name"),
                         "lot_number": detail.get("lot_number"),
@@ -2075,7 +2201,8 @@ async def _watchlist_live_poll_loop():
                     except Exception:
                         pass
                 except Exception as _e:
-                    logger.debug(f"[watchlist-poll] vin={vin} check failed: {_e}")
+                    logger.debug(
+                        f"[watchlist-poll] vin={vin} check failed: {_e}")
                 # polite pause between VINs
                 await asyncio.sleep(WATCHLIST_POLL_DELAY)
 
@@ -2129,7 +2256,8 @@ async def _run_payment_reminders_once(settings: Optional[Dict[str, Any]] = None)
                 continue
             try:
                 customer = await db.customers.find_one({"id": inv.get("customerId")}, {"_id": 0}) or {}
-                manager = {"id": inv.get("managerId"), "email": inv.get("managerEmail")}
+                manager = {"id": inv.get("managerId"),
+                           "email": inv.get("managerEmail")}
                 await _notif.emit(_notif.EVENT_PAYMENT_REMINDER, {
                     "invoice": inv, "customer": customer, "manager": manager,
                 })
@@ -2140,7 +2268,8 @@ async def _run_payment_reminders_once(settings: Optional[Dict[str, Any]] = None)
                 )
                 sent += 1
             except Exception:
-                logger.exception("[reminder] emit failed for %s", inv.get("id"))
+                logger.exception(
+                    "[reminder] emit failed for %s", inv.get("id"))
     except Exception:
         logger.exception("[reminder] _run_payment_reminders_once failed")
     return {"processed": processed, "reminders": sent}
@@ -2179,13 +2308,13 @@ async def _payment_reminder_loop():
 # decorator-based wiring.
 async def _main_startup():
     global db_client, db, bitmotors_parser_instance, bitmotors_full_sync_instance, bitmotors_incremental_instance, westmotors_sync_instance, westmotors_parser_instance, lemon_sync_instance
-    
+
     print("="*80)
     print("🔥🔥🔥 STARTUP EXECUTED 🔥🔥🔥")
     print("="*80)
     print("[STARTUP] Initializing...")
     logger.info("[STARTUP] BIBI V3.2 Starting...")
-    
+
     # MongoDB
     db_client = AsyncIOMotorClient(MONGO_URL, maxPoolSize=20, minPoolSize=2)
     db = db_client[DB_NAME]
@@ -2199,8 +2328,10 @@ async def _main_startup():
     try:
         _jwt_src = await bootstrap_jwt_secret(db)
         import security as _security_mod
-        print(f"[STARTUP] ✓ JWT_SECRET resolved (source={_security_mod.JWT_SECRET_SOURCE})")
-        logger.info(f"[STARTUP] ✓ JWT_SECRET resolved (source={_security_mod.JWT_SECRET_SOURCE})")
+        print(
+            f"[STARTUP] ✓ JWT_SECRET resolved (source={_security_mod.JWT_SECRET_SOURCE})")
+        logger.info(
+            f"[STARTUP] ✓ JWT_SECRET resolved (source={_security_mod.JWT_SECRET_SOURCE})")
     except Exception as _e:
         logger.error(f"[STARTUP] JWT secret bootstrap error: {_e}")
 
@@ -2272,7 +2403,8 @@ async def _main_startup():
             "from canonical server.db_client at setter site"
         )
         print("[STARTUP] ✓ db_runtime accessor published (Phase 5.4 / C-4e)")
-        logger.info("[STARTUP] ✓ db_runtime accessor published (Phase 5.4 / C-4e)")
+        logger.info(
+            "[STARTUP] ✓ db_runtime accessor published (Phase 5.4 / C-4e)")
     except ImportError:
         # Defensive: if app.core.db_runtime is unavailable (partial
         # install / test harness), preserve legacy behaviour — the
@@ -2353,11 +2485,13 @@ async def _main_startup():
                 restart_backoff_sec=60.0,
                 max_restarts=3,
             )
-            logger.info("[notif] payment_reminder worker registered (worker_registry)")
+            logger.info(
+                "[notif] payment_reminder worker registered (worker_registry)")
         except Exception as _e:
             # Defensive fallback to legacy path — preserves existing behaviour
             # exactly if registry import fails for any reason.
-            logger.exception("[notif] payment_reminder worker_registry register failed, falling back to legacy: %s", _e)
+            logger.exception(
+                "[notif] payment_reminder worker_registry register failed, falling back to legacy: %s", _e)
             asyncio.create_task(_payment_reminder_loop())
     except Exception:
         logger.exception("[notif] failed to initialise NotificationService")
@@ -2366,6 +2500,7 @@ async def _main_startup():
     try:
         from app.core.worker_registry import worker_registry as _wr_leadrem
         from app.services.lead_notifications import scan_unprocessed_leads as _scan_leads
+
         async def _lead_reminder_loop():
             while True:
                 try:
@@ -2404,34 +2539,39 @@ async def _main_startup():
         )
         logger.info("[esc_wakeup] worker registered (worker_registry)")
     except Exception as _e:
-        logger.exception("[esc_wakeup] worker registration failed (fallback to legacy create_task): %s", _e)
+        logger.exception(
+            "[esc_wakeup] worker registration failed (fallback to legacy create_task): %s", _e)
         try:
             from app.workers import escalations_wakeup_worker as _esc_wakeup_fb
             _esc_wakeup_fb.init(db=db, sio=sio)
             asyncio.create_task(_esc_wakeup_fb.loop())
             logger.info("[esc_wakeup] worker started via legacy create_task")
         except Exception:
-            logger.exception("[esc_wakeup] BOTH paths failed — worker NOT running")
+            logger.exception(
+                "[esc_wakeup] BOTH paths failed — worker NOT running")
 
     # ── Provider Pressure engine (score / tier / matching / notify) ──
     try:
         import provider_stats as _ps
         import notifications as _notif_mod_ps
         _ps.init(db, _notif_mod_ps.bus)
-        logger.info("[provider_stats] engine wired to event bus (order_started, order_finished)")
+        logger.info(
+            "[provider_stats] engine wired to event bus (order_started, order_finished)")
         # Back-fill existing providers on boot (non-blocking)
+
         async def _ps_backfill():
             try:
                 await asyncio.sleep(5)
                 if _ps.service is not None:
                     r = await _ps.service.recompute_all()
-                    logger.info("[provider_stats] boot back-fill: %d providers", r.get("count", 0))
+                    logger.info(
+                        "[provider_stats] boot back-fill: %d providers", r.get("count", 0))
             except Exception:
                 logger.exception("[provider_stats] boot back-fill failed")
         asyncio.create_task(_ps_backfill())
     except Exception:
         logger.exception("[provider_stats] failed to wire")
-    
+
     # ═══════════════════════════════════════════════════════════════════
     # LIVE-FIRST architecture (no auto-accumulation)
     # ─────────────────────────────────────────────────────────────────
@@ -2487,12 +2627,14 @@ async def _main_startup():
         except Exception:
             pass
         print("[STARTUP] ✓ BidMotors live-only mode (no accumulation)")
-        logger.info("✓ BidMotors live-only mode — no autonomous scraping; live_search() per query")
+        logger.info(
+            "✓ BidMotors live-only mode — no autonomous scraping; live_search() per query")
         # Mark all previously accumulated rows as stale fallback (idempotent)
         try:
             await db.vin_data.update_many(
                 {"stale": {"$ne": True}},
-                {"$set": {"stale": True, "archived": True, "stale_marked_at": datetime.now(timezone.utc)}},
+                {"$set": {"stale": True, "archived": True,
+                          "stale_marked_at": datetime.now(timezone.utc)}},
             )
         except Exception as _e:
             logger.debug(f"[STARTUP] stale-mark skipped: {_e}")
@@ -2519,7 +2661,8 @@ async def _main_startup():
         except Exception as _e:
             # Defensive fallback to legacy path — preserves existing
             # behaviour exactly if registry import fails for any reason.
-            logger.exception("[STARTUP] watchlist worker_registry register failed, falling back to legacy: %s", _e)
+            logger.exception(
+                "[STARTUP] watchlist worker_registry register failed, falling back to legacy: %s", _e)
             try:
                 asyncio.create_task(_watchlist_live_poll_loop())
                 print("[STARTUP] ✓ Watchlist live-poll worker started (interval 1h)")
@@ -2573,7 +2716,7 @@ async def _main_startup():
                         payload = {
                             "vin": vin,
                             "title": v.get("title")
-                                or (f"{v.get('year','')} {v.get('make','')} {v.get('model','')}".strip() or None),
+                            or (f"{v.get('year', '')} {v.get('make', '')} {v.get('model', '')}".strip() or None),
                             "image": (v.get("images") or [None])[0],
                             "auction_name": v.get("auction_name"),
                             "lot_number": v.get("lot_number"),
@@ -2595,12 +2738,14 @@ async def _main_startup():
                                 # Global public room (anonymous watchers)
                                 await sio.emit(
                                     "public:car_found",
-                                    {**payload, "watcher_email": w.get("email")},
+                                    {**payload,
+                                        "watcher_email": w.get("email")},
                                     room="public",
                                 )
                                 sent += 1
                             except Exception as _e:
-                                logger.debug(f"[watchlist] emit failed for {w.get('_id')}: {_e}")
+                                logger.debug(
+                                    f"[watchlist] emit failed for {w.get('_id')}: {_e}")
                         # Mark notified
                         await db.search_watchlist.update_many(
                             {"vin": vin, "notified": False},
@@ -2624,10 +2769,12 @@ async def _main_startup():
                             pass
                         return sent
                     except Exception as e:
-                        logger.warning(f"[watchlist] on_new_vehicle error: {e}")
+                        logger.warning(
+                            f"[watchlist] on_new_vehicle error: {e}")
                         return 0
 
-                bitmotors_incremental_instance = BitmotorsIncrementalSync(db, on_new_vehicle=_on_new_vehicle)
+                bitmotors_incremental_instance = BitmotorsIncrementalSync(
+                    db, on_new_vehicle=_on_new_vehicle)
                 await bitmotors_incremental_instance.load_settings()
                 bitmotors_incremental_instance.start()
                 print(
@@ -2652,7 +2799,8 @@ async def _main_startup():
                 except Exception as _ie:
                     logger.debug(f"[STARTUP] Phase-II indexes skipped: {_ie}")
             except Exception as _e:
-                logger.warning(f"[STARTUP] BitmotorsIncrementalSync init failed: {_e}")
+                logger.warning(
+                    f"[STARTUP] BitmotorsIncrementalSync init failed: {_e}")
 
     # Phase IV — WestMotors sitemap-driven INDEX fallback
     if WESTMOTORS_AVAILABLE and db is not None and EXTERNAL_SYNC_ENABLED:
@@ -2672,7 +2820,8 @@ async def _main_startup():
                 await db.westmotors_sync_runs.create_index([("started_at", -1)])
             except Exception as _ie:
                 logger.debug(f"[STARTUP] WestMotors indexes skipped: {_ie}")
-            print("[STARTUP] ✓✓✓ WestMotorsSync started (full+incremental schedulers) ✓✓✓")
+            print(
+                "[STARTUP] ✓✓✓ WestMotorsSync started (full+incremental schedulers) ✓✓✓")
             logger.info("✓✓✓ WestMotorsSync started ✓✓✓")
         except Exception as _e:
             logger.warning(f"[STARTUP] WestMotorsSync init failed: {_e}")
@@ -2696,10 +2845,12 @@ async def _main_startup():
             except Exception as _ie:
                 logger.debug(f"[STARTUP] WM parser indexes skipped: {_ie}")
             westmotors_parser_instance.start()
-            print("[STARTUP] ✓✓✓ WestMotorsParserWorker started (lazy JSON-LD parse) ✓✓✓")
+            print(
+                "[STARTUP] ✓✓✓ WestMotorsParserWorker started (lazy JSON-LD parse) ✓✓✓")
             logger.info("✓✓✓ WestMotorsParserWorker started ✓✓✓")
         except Exception as _e:
-            logger.warning(f"[STARTUP] WestMotorsParserWorker init failed: {_e}")
+            logger.warning(
+                f"[STARTUP] WestMotorsParserWorker init failed: {_e}")
 
     # Phase IV-2 — Lemon-Cars INDEX (lazy parser + sitemap discovery + VIN+LOT)
     if LEMON_AVAILABLE and db is not None and EXTERNAL_SYNC_ENABLED:
@@ -2724,7 +2875,8 @@ async def _main_startup():
                 await db.lemon_sync_runs.create_index([("started_at", -1)])
             except Exception as _ie:
                 logger.debug(f"[STARTUP] Lemon indexes skipped: {_ie}")
-            print("[STARTUP] ✓✓✓ LemonSync started (discovery + lazy parser worker) ✓✓✓")
+            print(
+                "[STARTUP] ✓✓✓ LemonSync started (discovery + lazy parser worker) ✓✓✓")
             logger.info("✓✓✓ LemonSync started ✓✓✓")
         except Exception as _e:
             logger.warning(f"[STARTUP] LemonSync init failed: {_e}")
@@ -2753,7 +2905,8 @@ async def _main_startup():
                 logger.debug(f"[STARTUP] promotion indexes skipped: {_ie}")
             print("[STARTUP] ✓✓✓ CatalogPromotionWorker started ✓✓✓")
         except Exception as _e:
-            logger.warning(f"[STARTUP] CatalogPromotionWorker init failed: {_e}")
+            logger.warning(
+                f"[STARTUP] CatalogPromotionWorker init failed: {_e}")
 
     # ── Phase A1 — vin_data canonical indexes (idempotent) ──────────
     # Source-of-truth indexes for the public catalogue. Mirrors the
@@ -2783,9 +2936,11 @@ async def _main_startup():
             # Engagement collections — used by sort=popular $lookup
             await _safe_idx(db.compare, [("vin", 1)], "vin_1")
             await _safe_idx(db.shares, [("vin", 1)], "vin_1")
-            logger.info("[STARTUP] ✓ vin_data canonical indexes ensured (Phase A1)")
+            logger.info(
+                "[STARTUP] ✓ vin_data canonical indexes ensured (Phase A1)")
         except Exception as _e:
-            logger.warning(f"[STARTUP] vin_data canonical indexes failed: {_e}")
+            logger.warning(
+                f"[STARTUP] vin_data canonical indexes failed: {_e}")
 
     # ── Phase A2 — Background enrichment worker ─────────────────────────
     # Quietly fills missing engine/drivetrain/current_bid/fuel/transmission
@@ -2817,16 +2972,19 @@ async def _main_startup():
                     restart_backoff_sec=120.0,
                     max_restarts=5,
                 )
-                logger.info("[STARTUP] ✓ enrichment_worker registered (Phase A2)")
+                logger.info(
+                    "[STARTUP] ✓ enrichment_worker registered (Phase A2)")
             except Exception as _wre:
                 # Defensive fallback: run unsupervised — same behaviour,
                 # just no restart-on-crash semantics.
-                logger.warning(f"[STARTUP] worker_registry register failed, fallback: {_wre}")
+                logger.warning(
+                    f"[STARTUP] worker_registry register failed, fallback: {_wre}")
                 asyncio.create_task(enrichment_worker_loop(db, _enrich_client))
-                logger.info("[STARTUP] ✓ enrichment_worker started (fallback path)")
+                logger.info(
+                    "[STARTUP] ✓ enrichment_worker started (fallback path)")
         except Exception as _e:
             logger.warning(f"[STARTUP] enrichment_worker init failed: {_e}")
-    
+
     # ── Phase 3.4 / C-1 — Worker registry parallel mirror ──
     # Ringostat CRON is the first worker migrated to the centralised
     # WorkerRegistry (app/core/worker_registry.py).  Its supervised task
@@ -2843,11 +3001,13 @@ async def _main_startup():
             critical=False,
             restart_backoff_sec=30.0,
         )
-        logger.info("[STARTUP] ✓ Ringostat CRON registered with worker_registry")
+        logger.info(
+            "[STARTUP] ✓ Ringostat CRON registered with worker_registry")
     except Exception as _e:
         # Defensive: fall back to legacy direct task if registry fails to
         # load for any reason — preserves the existing behaviour exactly.
-        logger.exception("[STARTUP] worker_registry register failed, falling back to legacy: %s", _e)
+        logger.exception(
+            "[STARTUP] worker_registry register failed, falling back to legacy: %s", _e)
         asyncio.create_task(ringostat_cron_loop())
         print("[STARTUP] ✓ Ringostat CRON started (legacy path)")
     else:
@@ -2870,7 +3030,8 @@ async def _main_startup():
         print("[STARTUP] ✓ Shipping Tracking Worker started")
         logger.info("✓ Shipping tracking worker started (30min interval)")
     except Exception as _e:
-        logger.exception("[STARTUP] tracking worker_registry register failed, falling back to legacy: %s", _e)
+        logger.exception(
+            "[STARTUP] tracking worker_registry register failed, falling back to legacy: %s", _e)
         asyncio.create_task(tracking_worker_loop())
         print("[STARTUP] ✓ Shipping Tracking Worker started")
         logger.info("✓ Shipping tracking worker started (30min interval)")
@@ -2965,9 +3126,11 @@ async def _main_startup():
         from blog_seeder import seed_blog_if_empty
         result = await seed_blog_if_empty(db)
         if result.get("created"):
-            logger.info(f"[STARTUP] ✓ blog seeded {result['created']} articles")
+            logger.info(
+                f"[STARTUP] ✓ blog seeded {result['created']} articles")
         else:
-            logger.info(f"[STARTUP] blog seeder skipped: {result.get('reason') or result.get('error')}")
+            logger.info(
+                f"[STARTUP] blog seeder skipped: {result.get('reason') or result.get('error')}")
     except Exception as e:
         logger.warning(f"[STARTUP] blog seeding (non-fatal): {e}")
 
@@ -3009,11 +3172,13 @@ async def _main_startup():
                         f"errors={res.get('errors')}"
                     )
                 except Exception as exc:
-                    logger.warning(f"[STARTUP] cold-start seed failed (non-fatal): {exc}")
+                    logger.warning(
+                        f"[STARTUP] cold-start seed failed (non-fatal): {exc}")
 
             asyncio.create_task(_cold_start_seed())
         else:
-            logger.info(f"[STARTUP] vin_data already populated ({vin_count} docs) — skipping auto-seed")
+            logger.info(
+                f"[STARTUP] vin_data already populated ({vin_count} docs) — skipping auto-seed")
     except Exception as e:
         logger.warning(f"[STARTUP] cold-start seed check (non-fatal): {e}")
 
@@ -3029,11 +3194,13 @@ async def _main_startup():
             logger.info(
                 f"[STARTUP] ✓ deals.id backfill: {bf_res.modified_count} docs updated"
             )
-            print(f"[STARTUP] ✓ deals.id backfill: {bf_res.modified_count} docs updated")
+            print(
+                f"[STARTUP] ✓ deals.id backfill: {bf_res.modified_count} docs updated")
         else:
             logger.info("[STARTUP] deals.id backfill: nothing to migrate")
     except Exception as _bfe:
-        logger.warning(f"[STARTUP] deals.id backfill failed (non-fatal): {_bfe}")
+        logger.warning(
+            f"[STARTUP] deals.id backfill failed (non-fatal): {_bfe}")
 
     print("[STARTUP] Ready!")
     print("="*80)
@@ -3043,7 +3210,8 @@ async def _main_startup():
     try:
         from app.core.observability import init_observability
         init_observability(fastapi_app)
-        logger.info("[STARTUP] ✓ Observability layer ready (errors / slow-query / parser-fail / events)")
+        logger.info(
+            "[STARTUP] ✓ Observability layer ready (errors / slow-query / parser-fail / events)")
     except Exception as _obs_e:   # noqa: BLE001
         logger.warning(f"[STARTUP] observability init skipped: {_obs_e}")
 
@@ -3051,7 +3219,8 @@ async def _main_startup():
     register_nonce_verifier(_verify_ext_nonce)
     register_hmac_fail_audit(_audit_hmac_failure)
     register_client_secret_lookup(_lookup_ext_client_secret)
-    logger.info("[STARTUP] ✓ Security hooks registered (nonce + hmac_fail audit + ext_client lookup)")
+    logger.info(
+        "[STARTUP] ✓ Security hooks registered (nonce + hmac_fail audit + ext_client lookup)")
 
     # ── Automation layer worker (identity resolver, Phase A+B+C) ──
     # Phase 3.4 / C-5 — migrated to worker_registry supervision.
@@ -3072,7 +3241,8 @@ async def _main_startup():
         )
         logger.info("[STARTUP] ✓ Identity resolver worker started")
     except Exception as e:
-        logger.exception("[STARTUP] resolver worker_registry register failed, falling back to legacy: %s", e)
+        logger.exception(
+            "[STARTUP] resolver worker_registry register failed, falling back to legacy: %s", e)
         try:
             asyncio.create_task(resolver_worker_loop())
             logger.info("[STARTUP] ✓ Identity resolver worker started")
@@ -3098,7 +3268,8 @@ async def _main_startup():
         )
         logger.info("[STARTUP] ✓ Transfer detector worker started")
     except Exception as e:
-        logger.exception("[STARTUP] transfer_detector worker_registry register failed, falling back to legacy: %s", e)
+        logger.exception(
+            "[STARTUP] transfer_detector worker_registry register failed, falling back to legacy: %s", e)
         try:
             asyncio.create_task(transfer_detector_loop())
             logger.info("[STARTUP] ✓ Transfer detector worker started")
@@ -3132,7 +3303,8 @@ async def _main_startup():
         )
         logger.info("[STARTUP] ✓ Ops Guardian started (alerts + auto-heal)")
     except Exception as e:
-        logger.exception("[STARTUP] ops_guardian worker_registry register failed, falling back to legacy: %s", e)
+        logger.exception(
+            "[STARTUP] ops_guardian worker_registry register failed, falling back to legacy: %s", e)
         try:
             from ops_guardian import ops_guardian_loop  # type: ignore
 
@@ -3140,7 +3312,8 @@ async def _main_startup():
                 return await control_overview()
 
             asyncio.create_task(ops_guardian_loop(db, _overview_fetcher_fb))
-            logger.info("[STARTUP] ✓ Ops Guardian started (alerts + auto-heal)")
+            logger.info(
+                "[STARTUP] ✓ Ops Guardian started (alerts + auto-heal)")
         except Exception as e2:
             logger.warning(f"[STARTUP] ops guardian init failed: {e2}")
 
@@ -3169,13 +3342,16 @@ async def _main_startup():
             restart_backoff_sec=30.0,
             max_restarts=10,
         )
-        logger.info("[STARTUP] ✓ Lead SLA worker registered (30 min remind / 2h escalate)")
+        logger.info(
+            "[STARTUP] ✓ Lead SLA worker registered (30 min remind / 2h escalate)")
     except Exception as e:
-        logger.exception("[STARTUP] lead_sla worker_registry register failed, falling back to legacy: %s", e)
+        logger.exception(
+            "[STARTUP] lead_sla worker_registry register failed, falling back to legacy: %s", e)
         try:
             from app.workers.lead_sla_worker import lead_sla_loop  # type: ignore
             asyncio.create_task(lead_sla_loop(db))
-            logger.info("[STARTUP] ✓ Lead SLA worker started (legacy fallback)")
+            logger.info(
+                "[STARTUP] ✓ Lead SLA worker started (legacy fallback)")
         except Exception as e2:
             logger.warning(f"[STARTUP] lead_sla worker init failed: {e2}")
 
@@ -3234,7 +3410,8 @@ async def _main_startup():
         # by (type, language). Existing defaults are kept untouched.
         for t in BG_TEMPLATES:
             exists = await db.document_templates.find_one(
-                {"type": t["type"], "language": t["language"], "is_default": True},
+                {"type": t["type"], "language": t["language"],
+                    "is_default": True},
                 {"_id": 0, "id": 1},
             )
             if exists:
@@ -3263,7 +3440,8 @@ async def _main_startup():
             }},
             upsert=True,
         )
-        logger.info("[STARTUP] ✓ BG contract templates + ПМ АВТО ГРУП branding seeded")
+        logger.info(
+            "[STARTUP] ✓ BG contract templates + ПМ АВТО ГРУП branding seeded")
     except Exception as e:
         logger.warning(f"[STARTUP] BG contract templates seed failed: {e}")
 
@@ -3296,8 +3474,6 @@ async def _main_startup():
     except Exception as e:
         logger.warning(f"[STARTUP] Resend integration seed failed: {e}")
 
-
-
     # ─── Analytics tracking — events + marketing_campaigns indexes ───────
     try:
         from app.routers.analytics_tracking import ensure_analytics_indexes as _an_ensure
@@ -3310,7 +3486,8 @@ async def _main_startup():
     try:
         if _wave6_on_startup is not None:
             await _wave6_on_startup(db)
-            logger.info("[STARTUP] ✓ Wave 6 deal_timeline indexes + legal_policy seeded")
+            logger.info(
+                "[STARTUP] ✓ Wave 6 deal_timeline indexes + legal_policy seeded")
     except Exception as e:
         logger.warning(f"[STARTUP] wave6 init failed: {e}")
 
@@ -3318,7 +3495,8 @@ async def _main_startup():
     try:
         if _wave7_on_startup is not None:
             await _wave7_on_startup(db)
-            logger.info("[STARTUP] ✓ Wave 7 reassignment indexes + customer.managerId backfill done")
+            logger.info(
+                "[STARTUP] ✓ Wave 7 reassignment indexes + customer.managerId backfill done")
     except Exception as e:
         logger.warning(f"[STARTUP] wave7 init failed: {e}")
 
@@ -3376,7 +3554,8 @@ async def _main_startup():
                     await _ensure_sys_folders(_cid, created_by="system:backfill")
                     _backfill_seeded += 1
         if _backfill_seeded:
-            logger.info("[STARTUP] ✓ Folder taxonomy backfill: seeded canonical folders for %d existing customers", _backfill_seeded)
+            logger.info(
+                "[STARTUP] ✓ Folder taxonomy backfill: seeded canonical folders for %d existing customers", _backfill_seeded)
     except Exception as e:
         logger.warning(f"[STARTUP] folder taxonomy migration failed: {e}")
 
@@ -3386,11 +3565,15 @@ async def _main_startup():
     # the STRIPE_* env vars in /app/backend/.env so the integration keeps
     # working after a DB wipe. Admin overrides via PATCH still take effect.
     try:
-        _stripe_env_secret = (os.environ.get("STRIPE_SECRET_KEY") or "").strip()
-        _stripe_env_pub    = (os.environ.get("STRIPE_PUBLISHABLE_KEY") or "").strip()
-        _stripe_env_rk     = (os.environ.get("STRIPE_RESTRICTED_KEY") or "").strip()
-        _stripe_env_whsec  = (os.environ.get("STRIPE_WEBHOOK_SECRET") or "").strip()
-        _stripe_env_mode   = (os.environ.get("STRIPE_MODE") or "sandbox").strip()
+        _stripe_env_secret = (os.environ.get(
+            "STRIPE_SECRET_KEY") or "").strip()
+        _stripe_env_pub = (os.environ.get(
+            "STRIPE_PUBLISHABLE_KEY") or "").strip()
+        _stripe_env_rk = (os.environ.get(
+            "STRIPE_RESTRICTED_KEY") or "").strip()
+        _stripe_env_whsec = (os.environ.get(
+            "STRIPE_WEBHOOK_SECRET") or "").strip()
+        _stripe_env_mode = (os.environ.get("STRIPE_MODE") or "sandbox").strip()
         if _stripe_env_secret:
             _existing = await db.integration_configs.find_one({"provider": "stripe"}, {"_id": 0}) or {}
             _cred_existing = (_existing.get("credentials") or {})
@@ -3427,11 +3610,14 @@ async def _main_startup():
                     _seed_doc["mode"], _stripe_env_secret[-4:], _stripe_env_pub[-4:],
                 )
             else:
-                logger.debug("[STARTUP] Stripe config already populated in DB — env fallback skipped")
+                logger.debug(
+                    "[STARTUP] Stripe config already populated in DB — env fallback skipped")
         else:
-            logger.debug("[STARTUP] STRIPE_SECRET_KEY env not set — env fallback skipped")
+            logger.debug(
+                "[STARTUP] STRIPE_SECRET_KEY env not set — env fallback skipped")
     except Exception as e:
-        logger.warning(f"[STARTUP] Stripe env hydration failed (non-fatal): {e}")
+        logger.warning(
+            f"[STARTUP] Stripe env hydration failed (non-fatal): {e}")
 
     # ─── Gmail / SMTP email env-fallback hydration (idempotent) ─────────
     # Same model as Stripe: SMTP credentials (Gmail App Password) live in
@@ -3443,11 +3629,14 @@ async def _main_startup():
     # the admin can flip it without code changes.
     try:
         _gm_login = (os.environ.get("GMAIL_SMTP_LOGIN") or "").strip()
-        _gm_pwd   = (os.environ.get("GMAIL_SMTP_PASSWORD") or "").strip()
-        _gm_host  = (os.environ.get("GMAIL_SMTP_HOST") or "smtp.gmail.com").strip()
-        _gm_port  = (os.environ.get("GMAIL_SMTP_PORT") or "587").strip()
-        _gm_from  = (os.environ.get("GMAIL_SMTP_FROM") or (f"BIBI Cars <{_gm_login}>" if _gm_login else "")).strip()
-        _email_primary = (os.environ.get("EMAIL_PRIMARY_PROVIDER") or "smtp").strip().lower()
+        _gm_pwd = (os.environ.get("GMAIL_SMTP_PASSWORD") or "").strip()
+        _gm_host = (os.environ.get("GMAIL_SMTP_HOST")
+                    or "smtp.gmail.com").strip()
+        _gm_port = (os.environ.get("GMAIL_SMTP_PORT") or "587").strip()
+        _gm_from = (os.environ.get("GMAIL_SMTP_FROM") or (
+            f"BIBI Cars <{_gm_login}>" if _gm_login else "")).strip()
+        _email_primary = (os.environ.get(
+            "EMAIL_PRIMARY_PROVIDER") or "smtp").strip().lower()
         if _gm_login and _gm_pwd:
             _existing_email = await db.integration_configs.find_one({"provider": "email"}, {"_id": 0}) or {}
             _email_creds = (_existing_email.get("credentials") or {})
@@ -3481,12 +3670,14 @@ async def _main_startup():
                     _gm_host, _gm_port, _gm_login, _seed_email["settings"]["primary"],
                 )
             else:
-                logger.debug("[STARTUP] Email/SMTP config already populated in DB — env fallback skipped")
+                logger.debug(
+                    "[STARTUP] Email/SMTP config already populated in DB — env fallback skipped")
         else:
-            logger.debug("[STARTUP] GMAIL_SMTP_LOGIN/PASSWORD env not set — email env fallback skipped")
+            logger.debug(
+                "[STARTUP] GMAIL_SMTP_LOGIN/PASSWORD env not set — email env fallback skipped")
     except Exception as e:
-        logger.warning(f"[STARTUP] Gmail/SMTP env hydration failed (non-fatal): {e}")
-
+        logger.warning(
+            f"[STARTUP] Gmail/SMTP env hydration failed (non-fatal): {e}")
 
     # ─── Launch-Candidate: Ringostat env-fallback hydration (idempotent) ─
     # Same model as Stripe: defaults live in app.config.ringostat_defaults
@@ -3520,9 +3711,11 @@ async def _main_startup():
                 _rd_doc.get("project_id"), (_rd_doc.get("api_key") or "")[-4:],
             )
         else:
-            logger.debug("[STARTUP] Ringostat config already populated in DB — env fallback skipped")
+            logger.debug(
+                "[STARTUP] Ringostat config already populated in DB — env fallback skipped")
     except Exception as e:
-        logger.warning(f"[STARTUP] Ringostat env hydration failed (non-fatal): {e}")
+        logger.warning(
+            f"[STARTUP] Ringostat env hydration failed (non-fatal): {e}")
 
     # ─── Launch-Candidate: Lead `id` backfill (idempotent) ──────────────
     # Historical Ringostat auto-create path set `_id` but forgot to set
@@ -3543,7 +3736,8 @@ async def _main_startup():
             await db.leads.update_one({"_id": _lid}, {"$set": {"id": str(_lid)}})
             _backfilled_leads += 1
         if _backfilled_leads:
-            logger.info("[STARTUP] ✓ Lead `id` backfill: synced %d legacy leads", _backfilled_leads)
+            logger.info(
+                "[STARTUP] ✓ Lead `id` backfill: synced %d legacy leads", _backfilled_leads)
     except Exception as e:
         logger.warning(f"[STARTUP] Lead id backfill failed (non-fatal): {e}")
 
@@ -3559,7 +3753,8 @@ async def _main_startup():
     try:
         if _wave11_on_startup is not None:
             await _wave11_on_startup(db)
-            logger.info("[STARTUP] ✓ Wave 11 Deal360 deal_documents indexes ensured")
+            logger.info(
+                "[STARTUP] ✓ Wave 11 Deal360 deal_documents indexes ensured")
     except Exception as e:
         logger.warning(f"[STARTUP] wave11 init failed: {e}")
 
@@ -3581,10 +3776,12 @@ async def _main_startup():
         from app.repositories import IntegrationConfigsRepository
         svc_settings = get_settings_service()
         current_auth = await svc_settings.get_auth()
-        current_cid = ((current_auth.get("google") or {}).get("clientId") or "").strip()
+        current_cid = ((current_auth.get("google") or {}
+                        ).get("clientId") or "").strip()
         if not current_cid:
             legacy_doc = await IntegrationConfigsRepository(db).find_by_provider("google_oauth")
-            legacy_cid = ((legacy_doc.get("credentials") or {}).get("clientId") or "").strip()
+            legacy_cid = ((legacy_doc.get("credentials") or {}
+                           ).get("clientId") or "").strip()
             if legacy_cid:
                 merged_google = dict(current_auth.get("google") or {})
                 merged_google["clientId"] = legacy_cid
@@ -3595,11 +3792,14 @@ async def _main_startup():
                     legacy_cid[-8:] if len(legacy_cid) > 8 else legacy_cid,
                 )
             else:
-                logger.debug("[STARTUP] C-3A backfill: no legacy clientId to migrate")
+                logger.debug(
+                    "[STARTUP] C-3A backfill: no legacy clientId to migrate")
         else:
-            logger.debug("[STARTUP] C-3A backfill: app_settings already has clientId — skip")
+            logger.debug(
+                "[STARTUP] C-3A backfill: app_settings already has clientId — skip")
     except Exception as e:
-        logger.warning(f"[STARTUP] C-3A google backfill failed (non-fatal): {e}")
+        logger.warning(
+            f"[STARTUP] C-3A google backfill failed (non-fatal): {e}")
 
     # ─── Phase 3.4 / C-1 — Worker registry start_all ────────────────────
     # Idempotent: only starts workers that were registered via
@@ -3615,7 +3815,8 @@ async def _main_startup():
             "[STARTUP] ✓ worker_registry.start_all complete — %d workers: %s",
             len(registered), registered,
         )
-        print(f"[STARTUP] ✓ worker_registry started {len(registered)} worker(s): {registered}")
+        print(
+            f"[STARTUP] ✓ worker_registry started {len(registered)} worker(s): {registered}")
     except Exception as e:
         logger.exception("[STARTUP] worker_registry.start_all failed: %s", e)
 
@@ -3720,7 +3921,8 @@ async def _seed_staff_from_env():
     seeds = []
     for role, default in DEFAULTS.items():
         env_email_key, env_pwd_key = env_map[role]
-        email = (os.environ.get(env_email_key) or default["email"]).strip().lower()
+        email = (os.environ.get(env_email_key)
+                 or default["email"]).strip().lower()
         pwd = os.environ.get(env_pwd_key) or default["password"]
         seeds.append((role, default["label"], email, pwd))
 
@@ -3756,9 +3958,11 @@ async def _seed_staff_from_env():
             # 2. Force password sync — ALWAYS make stored hash verify against
             #    the current desired password. This is what keeps auth from
             #    "breaking after redeploy".
-            stored = existing.get("password_hash") or existing.get("password") or ""
+            stored = existing.get(
+                "password_hash") or existing.get("password") or ""
             try:
-                ok = isinstance(stored, str) and bool(stored) and verify_password(pwd, stored)
+                ok = isinstance(stored, str) and bool(
+                    stored) and verify_password(pwd, stored)
             except Exception:
                 ok = False
             if not ok:
@@ -3805,7 +4009,7 @@ async def ringostat_cron_loop():
             await ringostat_export_calls_cron()
         except Exception as e:
             logger.error(f"[CRON] Error in ringostat export: {e}")
-        
+
         # Run every 5 minutes
         await asyncio.sleep(300)
 
@@ -3865,7 +4069,8 @@ if _rate_limiter is not None:
         from slowapi.errors import RateLimitExceeded  # type: ignore
         from slowapi import _rate_limit_exceeded_handler  # type: ignore
         fastapi_app.state.limiter = _rate_limiter
-        fastapi_app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+        fastapi_app.add_exception_handler(
+            RateLimitExceeded, _rate_limit_exceeded_handler)
     except Exception as _e:
         logger.warning(f"[security] rate-limit init failed: {_e}")
 
@@ -3873,7 +4078,8 @@ _cors_origins = parse_cors_origins()
 _cors_origin_regex = parse_cors_origin_regex()
 if not _cors_origins and not _cors_origin_regex:
     # Still allow anon localhost in absolute dev fallback, but log it loudly.
-    logger.warning("[security] CORS_ORIGINS env empty — falling back to localhost only")
+    logger.warning(
+        "[security] CORS_ORIGINS env empty — falling back to localhost only")
     _cors_origins = ["http://localhost:3000", "http://localhost:8001"]
 
 # Phase IV-5 — DynamicCORSMiddleware reads the allow-list from
@@ -3885,14 +4091,19 @@ fastapi_app.add_middleware(
     DynamicCORSMiddleware,
     env_allow_origins=_cors_origins,
     env_allow_origin_regex=_cors_origin_regex,
-    allow_credentials=False,  # JWT in Authorization header; no cookies.
+    allow_credentials=True,  # JWT in Authorization header; no cookies.
     allow_methods=["*"],
-    allow_headers=["*", "X-Ext-Timestamp", "X-Ext-Signature", "X-Ext-Client", "X-Ext-Nonce"],
-    expose_headers=["X-RateLimit-Remaining", "X-RateLimit-Limit", "Retry-After"],
+    allow_headers=["*", "X-Ext-Timestamp",
+                   "X-Ext-Signature", "X-Ext-Client", "X-Ext-Nonce"],
+    expose_headers=["X-RateLimit-Remaining",
+                    "X-RateLimit-Limit", "Retry-After"],
 )
-logger.info(f"[security] CORS allowed origins (env baseline): {_cors_origins} regex={_cors_origin_regex!r}")
-logger.info("[security] CORS allowlist will hot-reload from DB `system_settings` every 30s")
-logger.info(f"[security] AUTH_MODE={AUTH_MODE}  PAYLOAD_DEBUG_STORE={PAYLOAD_DEBUG_STORE}  BACKEND_VF_SCRAPING={BACKEND_VF_SCRAPING}")
+logger.info(
+    f"[security] CORS allowed origins (env baseline): {_cors_origins} regex={_cors_origin_regex!r}")
+logger.info(
+    "[security] CORS allowlist will hot-reload from DB `system_settings` every 30s")
+logger.info(
+    f"[security] AUTH_MODE={AUTH_MODE}  PAYLOAD_DEBUG_STORE={PAYLOAD_DEBUG_STORE}  BACKEND_VF_SCRAPING={BACKEND_VF_SCRAPING}")
 
 
 # ── Legacy endpoint kill-switch ──────────────────────────────────────────
@@ -4015,10 +4226,6 @@ async def audit(
 # (resolver_worker, transfer_detector worker loops) continue to
 # reference the bare `audit` name via module-global lookup; that
 # is out of C-5c scope and stays untouched.
-from app.core.audit_runtime import (
-    set_audit as _c5c_set_audit,
-    get_audit as _c5c_get_audit,
-)
 _c5c_set_audit(audit)
 assert _c5c_get_audit() is audit, (
     "[C-5c] audit runtime accessor split-brain: get_audit() "
@@ -4073,7 +4280,8 @@ async def _audit_hmac_failure(*, reason: str, client: Optional[str], method: str
 
 # ── Per-client HMAC secret lookup (Phase E ext_clients registry) ────
 # Small in-process TTL cache to avoid a DB round-trip per request.
-_ext_client_secret_cache: Dict[str, tuple] = {}   # clientId -> (secret, expires_epoch)
+# clientId -> (secret, expires_epoch)
+_ext_client_secret_cache: Dict[str, tuple] = {}
 _EXT_CLIENT_CACHE_TTL = 60  # seconds
 
 
@@ -4108,14 +4316,14 @@ async def _lookup_ext_client_secret(client_id: str) -> Optional[str]:
 
 
 # Static files — user uploads (avatars, etc)
-from fastapi.staticfiles import StaticFiles
-import pathlib
 _STATIC_DIR = pathlib.Path(__file__).parent / "static"
 (_STATIC_DIR / "avatars").mkdir(parents=True, exist_ok=True)
 (_STATIC_DIR / "contracts").mkdir(parents=True, exist_ok=True)
-fastapi_app.mount("/api/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+fastapi_app.mount(
+    "/api/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 # Public-facing static for signed PDFs (used by legal_workflow)
-fastapi_app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="public_static")
+fastapi_app.mount(
+    "/static", StaticFiles(directory=str(_STATIC_DIR)), name="public_static")
 
 # ─────────────────────────────────────────────────────────────────────────
 #  P0.1–P0.4:  legal & pipeline workflow router
@@ -4690,7 +4898,6 @@ except Exception as _e:
     logger.exception("[contracts] failed to mount router: %s", _e)
 
 
-
 # ─────────────────────────────────────────────────────────────────────────
 #  Wave 2B / Batch 7 / Commit 13:  CONTENT cluster (site_info + blog)
 #  (см. app/routers/content.py — Content domain extraction.  Two co-mounted
@@ -4831,7 +5038,8 @@ try:
     logger.info("[admin_workflow_templates] router mounted: %d routes",
                 sum(1 for _ in _admin_wft_mod.router.routes))
 except Exception as _e:
-    logger.exception("[admin_workflow_templates] failed to mount router: %s", _e)
+    logger.exception(
+        "[admin_workflow_templates] failed to mount router: %s", _e)
 
 # ─────────────────────────────────────────────────────────────────────────
 #  Wave 2B / Batch 11 / Commit 17:  Read-only aggregators bundle
@@ -5082,6 +5290,8 @@ except Exception as _e:
 # ═══════════════════════════════════════════════════════════════════
 # MODELS
 # ═══════════════════════════════════════════════════════════════════
+
+
 class BrowserPayload(BaseModel):
     vin: Optional[str] = None
     data: Optional[Dict[str, Any]] = None
@@ -5090,17 +5300,21 @@ class BrowserPayload(BaseModel):
     url: str
     ts: int
 
+
 class ConfigUpdate(BaseModel):
     enabled: Optional[bool] = None
     rate_limit_ms: Optional[int] = None
     min_score: Optional[float] = None
     debug: Optional[bool] = None
 
+
 class SessionAction(BaseModel):
     sessionId: str
     priority: Optional[int] = None
 
+
 VIN_REGEX = re.compile(r'^[A-HJ-NPR-Z0-9]{17}$')
+
 
 def is_valid_vin(vin: str) -> bool:
     return bool(vin and VIN_REGEX.match(vin.upper()))
@@ -5108,54 +5322,56 @@ def is_valid_vin(vin: str) -> bool:
 # ═══════════════════════════════════════════════════════════════════
 # VIN INGESTION API
 # ═══════════════════════════════════════════════════════════════════
+
+
 @fastapi_app.post("/api/vin-unified/browser")
 async def ingest_from_browser(payload: BrowserPayload):
     """V3.2 Ingestion with Session Scoring & Field Intelligence"""
-    
+
     # Check if parser enabled
     if not parser_config.enabled:
         return {"success": False, "error": "Parser disabled"}
-    
+
     start_time = datetime.now(timezone.utc).timestamp()
-    
+
     # Extract VIN
     vin = payload.vin
     if not vin and payload.data:
         vin = payload.data.get('vin')
-    
+
     if not vin or not is_valid_vin(vin):
         return {"success": False, "error": "Invalid VIN"}
-    
+
     vin = vin.upper()
     session_id = payload.sessionId or "anonymous"
-    
+
     # Check if session is blocked
     session = session_service.get(session_id)
     if session and session.blocked:
         return {"success": False, "error": "Session blocked"}
-    
+
     # Get session score
     session_score = session_service.get_score(session_id)
-    
+
     # V3.1: Filter low-score sessions
     if session_score > 0 and session_score < parser_config.min_score:
         return {"success": False, "error": "Low session score", "score": session_score}
-    
+
     # Rate limit check (adjusted by score)
     if session_service.is_rate_limited(session_id):
         return {"success": False, "error": "Rate limited", "retry_after": parser_config.rate_limit_ms}
-    
+
     # Prepare data
     data = payload.data or {}
     if payload.fallback:
         for k, v in payload.fallback.items():
             if v and not data.get(k):
                 data[k] = v
-    
+
     # Track field count for session
     fields_count = sum(1 for k, v in data.items() if v)
     session_service.update_fields(session_id, fields_count)
-    
+
     # Create job with session score
     job = IngestionJob(
         vin=vin,
@@ -5163,19 +5379,20 @@ async def ingest_from_browser(payload: BrowserPayload):
         data=data,
         url=payload.url,
         timestamp=payload.ts / 1000 if payload.ts > 1e12 else payload.ts,
-        session_score=session_service.get_score(session_id),  # Recalculate after update
+        session_score=session_service.get_score(
+            session_id),  # Recalculate after update
     )
-    
+
     # Push to queue
     await ingestion_queue.push(job)
-    
+
     # Update session
     latency = (datetime.now(timezone.utc).timestamp() - start_time) * 1000
     session_service.touch(session_id, latency=latency, success=True)
-    
+
     # Get result
     record = aggregator.get(vin)
-    
+
     return {
         "success": True,
         "vin": vin,
@@ -5189,6 +5406,8 @@ async def ingest_from_browser(payload: BrowserPayload):
 # ═══════════════════════════════════════════════════════════════════
 # CONFIG API (V3.2 Control)
 # ═══════════════════════════════════════════════════════════════════
+
+
 @fastapi_app.get("/api/v3/config")
 async def get_config():
     """Get parser config (called by extension)"""
@@ -5199,6 +5418,7 @@ async def get_config():
         "debug": parser_config.debug,
         "targets": parser_config.targets,
     }
+
 
 @fastapi_app.post("/api/v3/config")
 async def update_config(update: ConfigUpdate):
@@ -5211,22 +5431,24 @@ async def update_config(update: ConfigUpdate):
         parser_config.min_score = update.min_score
     if update.debug is not None:
         parser_config.debug = update.debug
-    
+
     await ws_manager.broadcast({"type": "config_updated", "config": await get_config()})
-    
+
     return {"success": True, "config": await get_config()}
 
 # ═══════════════════════════════════════════════════════════════════
 # HEARTBEAT API (Extension → Backend)
 # ═══════════════════════════════════════════════════════════════════
+
+
 @fastapi_app.post("/api/v3/heartbeat")
 async def heartbeat(data: Dict[str, Any] = Body(...)):
     """Extension heartbeat"""
     session_id = data.get("sessionId", "anonymous")
     url = data.get("url", "")
-    
+
     session_service.touch(session_id, success=True)
-    
+
     return {
         "success": True,
         "sessionScore": round(session_service.get_score(session_id), 2),
@@ -5236,6 +5458,8 @@ async def heartbeat(data: Dict[str, Any] = Body(...)):
 # ═══════════════════════════════════════════════════════════════════
 # SESSION MANAGEMENT API
 # ═══════════════════════════════════════════════════════════════════
+
+
 @fastapi_app.get("/api/v3/sessions")
 async def list_sessions():
     """List all sessions with scores"""
@@ -5262,6 +5486,7 @@ async def list_sessions():
         ]
     }
 
+
 @fastapi_app.post("/api/v3/session/disable")
 async def disable_session(action: SessionAction):
     """Disable a session"""
@@ -5269,12 +5494,14 @@ async def disable_session(action: SessionAction):
     await ws_manager.broadcast({"type": "session_disabled", "sessionId": action.sessionId[:8]})
     return {"success": True}
 
+
 @fastapi_app.post("/api/v3/session/enable")
 async def enable_session(action: SessionAction):
     """Enable a session"""
     session_service.enable(action.sessionId)
     await ws_manager.broadcast({"type": "session_enabled", "sessionId": action.sessionId[:8]})
     return {"success": True}
+
 
 @fastapi_app.post("/api/v3/session/priority")
 async def set_session_priority(action: SessionAction):
@@ -5286,19 +5513,23 @@ async def set_session_priority(action: SessionAction):
 # ═══════════════════════════════════════════════════════════════════
 # VIN DATA API
 # ═══════════════════════════════════════════════════════════════════
+
+
 @fastapi_app.get("/api/vin-unified/list")
 async def list_vins(limit: int = 50, skip: int = 0):
-    cursor = db.vin_data.find({}, {'_id': 0, 'sources': 0}).sort('updated_at', -1).skip(skip).limit(limit)
+    cursor = db.vin_data.find({}, {'_id': 0, 'sources': 0}).sort(
+        'updated_at', -1).skip(skip).limit(limit)
     items = await cursor.to_list(length=limit)
     total = await db.vin_data.count_documents({})
     return {"success": True, "total": total, "items": items}
+
 
 @fastapi_app.get("/api/vin-unified/{vin}")
 async def get_vin(vin: str):
     """Get VIN with field sources attribution"""
     vin = vin.upper()
     data = await db.vin_data.find_one({'vin': vin}, {'_id': 0})
-    
+
     if not data:
         record = aggregator.get(vin)
         if record:
@@ -5311,18 +5542,21 @@ async def get_vin(vin: str):
                     "quality": record.quality,
                     "sources_count": len(record.sources),
                     "field_sources": [
-                        {"field": fs.field, "session": fs.session_id[:8], "score": round(fs.score, 2)}
+                        {"field": fs.field, "session": fs.session_id[:8], "score": round(
+                            fs.score, 2)}
                         for fs in record.field_sources
                     ]
                 }
             }
         return {"success": False, "found": False}
-    
+
     return {"success": True, "found": True, "data": data}
 
 # ═══════════════════════════════════════════════════════════════════
 # STATS & MONITORING
 # ═══════════════════════════════════════════════════════════════════
+
+
 @fastapi_app.get("/api/v3/stats")
 async def v3_stats():
     """Complete V3.2 system stats"""
@@ -5337,18 +5571,20 @@ async def v3_stats():
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
+
 @fastapi_app.get("/api/dashboard/stats")
 async def dashboard_stats():
     vin_count = await db.vin_data.count_documents({})
     quality_pipeline = [{'$group': {'_id': '$quality', 'count': {'$sum': 1}}}]
     quality_stats = await db.vin_data.aggregate(quality_pipeline).to_list(length=10)
-    
+
     return {
         "total_vins": vin_count,
         "quality_distribution": {q['_id']: q['count'] for q in quality_stats if q['_id']},
         "active_sessions": len(session_service.get_active()),
         "parser_enabled": parser_config.enabled,
     }
+
 
 @fastapi_app.get("/api/dashboard/master")
 async def dashboard_master(period: str = "week",
@@ -5364,6 +5600,7 @@ async def dashboard_master(period: str = "week",
     """
     from app.services.dashboard_aggregator import build_master_snapshot as _impl
     return await _impl(db, period)
+
 
 @fastapi_app.get("/api/health")
 @fastapi_app.get("/api/healthz")
@@ -5382,7 +5619,8 @@ async def health_probe():
         mongo_ok = False
     return JSONResponse(
         status_code=200 if mongo_ok else 503,
-        content={"status": "ok" if mongo_ok else "degraded", "mongo_ok": mongo_ok},
+        content={"status": "ok" if mongo_ok else "degraded",
+                 "mongo_ok": mongo_ok},
         headers={"Cache-Control": "no-store"},
     )
 
@@ -5499,7 +5737,8 @@ async def admin_observability_issues(
             "parser_failures": get_recent_parser_failures(limit),
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"observability unavailable: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"observability unavailable: {e}")
 
 
 @fastapi_app.get("/api/admin/observability/events")
@@ -5516,11 +5755,14 @@ async def admin_observability_events(
         from app.core.observability import get_event_summary
         return get_event_summary(top)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"observability unavailable: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"observability unavailable: {e}")
 
 # ═══════════════════════════════════════════════════════════════════
 # WEBSOCKET (Real-time Feed)
 # ═══════════════════════════════════════════════════════════════════
+
+
 @fastapi_app.websocket("/api/v3/stream")
 async def websocket_endpoint(websocket: WebSocket):
     await ws_manager.connect(websocket)
@@ -5534,6 +5776,8 @@ async def websocket_endpoint(websocket: WebSocket):
 # ═══════════════════════════════════════════════════════════════════
 # LEGACY ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
+
+
 @fastapi_app.get("/api/auth/me")
 async def get_me(current_user: Dict[str, Any] = Depends(require_user)):
     """Return the authenticated staff user."""
@@ -5557,7 +5801,8 @@ async def login(request: Request, response: Response, credentials: Dict[str, Any
     email = (credentials.get("email") or "").strip().lower()
     password = credentials.get("password") or ""
     if not email or not password:
-        raise HTTPException(status_code=400, detail="Email and password required")
+        raise HTTPException(
+            status_code=400, detail="Email and password required")
 
     # Basic brute-force guard (IP + email bucket, in-memory fallback if slowapi disabled)
     staff = await db.staff.find_one({"email": email})
@@ -5565,7 +5810,8 @@ async def login(request: Request, response: Response, credentials: Dict[str, Any
         # Same error for unknown email to avoid enumeration
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    stored_hash = staff.get("password_hash") or staff.get("password")  # tolerate legacy field
+    stored_hash = staff.get("password_hash") or staff.get(
+        "password")  # tolerate legacy field
     if not stored_hash or not verify_password(password, stored_hash):
         # Audit the failure (best-effort; audit log collection is optional)
         try:
@@ -5612,7 +5858,8 @@ async def login(request: Request, response: Response, credentials: Dict[str, Any
         _policy = AuthPolicyService(db)
         _challenge = await _policy.required_challenge(user_doc)
     except Exception as _e:  # noqa: BLE001
-        logger.warning(f"[auth/login] policy resolution failed, falling back to JWT-now: {_e}")
+        logger.warning(
+            f"[auth/login] policy resolution failed, falling back to JWT-now: {_e}")
         _challenge = None
 
     if _challenge == "totp":
@@ -5649,10 +5896,12 @@ async def login(request: Request, response: Response, credentials: Dict[str, Any
                 await EmailChannel(db).send(
                     to=recipient, subject=_subj, html=_html, text=_text,
                     event="staff_login_otp",
-                    context={"user_id": user_doc["id"], "role": user_doc.get("role")},
+                    context={"user_id": user_doc["id"],
+                             "role": user_doc.get("role")},
                 )
             except Exception as _mail_e:  # noqa: BLE001
-                logger.warning(f"[auth/login] email-otp mail dispatch failed (code still in admin panel): {_mail_e}")
+                logger.warning(
+                    f"[auth/login] email-otp mail dispatch failed (code still in admin panel): {_mail_e}")
             # Mask recipient — don't leak the full admin inbox to client.
             local, _, domain = (recipient or "").partition("@")
             masked = (local[:1] + "***@" + domain) if domain else "***"
@@ -5699,6 +5948,7 @@ async def login(request: Request, response: Response, credentials: Dict[str, Any
         pass
     return {"access_token": token, "token_type": "Bearer", "user": user_doc}
 
+
 def _norm_dt_key(v) -> float:
     """Tasks #8-#11 — normalise *any* created_at representation to a comparable
     epoch float so newest-first sorting is reliable regardless of how a lead
@@ -5735,7 +5985,8 @@ def _sort_leads_inplace(rows: list, sort_field: str, sort_dir: int) -> None:
     other fields fall back to a None-safe natural sort."""
     reverse = (sort_dir == -1)
     if sort_field in ("created_at", "createdAt", ""):
-        rows.sort(key=lambda d: _norm_dt_key(d.get("created_at")), reverse=reverse)
+        rows.sort(key=lambda d: _norm_dt_key(
+            d.get("created_at")), reverse=reverse)
     else:
         def _k(d):
             val = d.get(sort_field)
@@ -5743,7 +5994,8 @@ def _sort_leads_inplace(rows: list, sort_field: str, sort_dir: int) -> None:
         try:
             rows.sort(key=_k, reverse=reverse)
         except TypeError:
-            rows.sort(key=lambda d: _norm_dt_key(d.get("created_at")), reverse=reverse)
+            rows.sort(key=lambda d: _norm_dt_key(
+                d.get("created_at")), reverse=reverse)
 
 
 @fastapi_app.get("/api/leads")
@@ -5842,13 +6094,16 @@ async def list_leads(
     #   slugs. Empty string = no filter.
     if utm_source:
         import re as _re_utm
-        query["utm_source"] = {"$regex": _re_utm.escape(utm_source.strip()), "$options": "i"}
+        query["utm_source"] = {"$regex": _re_utm.escape(
+            utm_source.strip()), "$options": "i"}
     if utm_medium:
         import re as _re_utm
-        query["utm_medium"] = {"$regex": _re_utm.escape(utm_medium.strip()), "$options": "i"}
+        query["utm_medium"] = {"$regex": _re_utm.escape(
+            utm_medium.strip()), "$options": "i"}
     if utm_campaign:
         import re as _re_utm
-        query["utm_campaign"] = {"$regex": _re_utm.escape(utm_campaign.strip()), "$options": "i"}
+        query["utm_campaign"] = {"$regex": _re_utm.escape(
+            utm_campaign.strip()), "$options": "i"}
 
     # VIN presence
     if vinPresent is True:
@@ -5871,7 +6126,7 @@ async def list_leads(
 
     # created_at range (Доопр #15: dateFrom/dateTo alias to createdFrom/createdTo)
     _from = createdFrom or dateFrom
-    _to   = createdTo   or dateTo
+    _to = createdTo or dateTo
     if _from or _to:
         cr: Dict[str, Any] = {}
         if _from:
@@ -5946,12 +6201,12 @@ async def list_leads(
         hb = _quick_lead_health_bucket(it)
         it["healthBucket"] = hb
         it["priorityBucket"] = quick_priority_bucket(it, health_bucket=hb)
-        it["heatColor"]   = _lead_heat_color(it)
+        it["heatColor"] = _lead_heat_color(it)
         it["daysSinceContact"] = _days_since_lead_contact(it)
         # camelCase aliases so the frontend can render the timestamps
         # consistently regardless of which historical snake_case key the
         # document carries (some old leads only have ``updated_at``).
-        it["lastContactAt"]   = (
+        it["lastContactAt"] = (
             it.get("last_contact_at")
             or it.get("last_activity_at")
             or it.get("updated_at")
@@ -6034,7 +6289,8 @@ def _quick_lead_health_bucket(lead: Dict[str, Any]) -> str:
     )
     try:
         if isinstance(last_iso, datetime):
-            d = last_iso if last_iso.tzinfo else last_iso.replace(tzinfo=timezone.utc)
+            d = last_iso if last_iso.tzinfo else last_iso.replace(
+                tzinfo=timezone.utc)
         elif last_iso:
             s = str(last_iso).replace("Z", "+00:00")
             d = datetime.fromisoformat(s)
@@ -6068,7 +6324,8 @@ def _days_since_lead_contact(lead: Dict[str, Any]) -> Optional[float]:
     )
     try:
         if isinstance(last_iso, datetime):
-            d = last_iso if last_iso.tzinfo else last_iso.replace(tzinfo=timezone.utc)
+            d = last_iso if last_iso.tzinfo else last_iso.replace(
+                tzinfo=timezone.utc)
         elif last_iso:
             s = str(last_iso).replace("Z", "+00:00")
             d = datetime.fromisoformat(s)
@@ -6093,9 +6350,12 @@ def _lead_heat_color(lead: Dict[str, Any]) -> str:
     days = _days_since_lead_contact(lead)
     if days is None:
         return "neutral"
-    if days <= 3:   return "green"
-    if days <= 7:   return "yellow"
-    if days <= 14:  return "orange"
+    if days <= 3:
+        return "green"
+    if days <= 7:
+        return "yellow"
+    if days <= 14:
+        return "orange"
     return "red"
 
 
@@ -6186,7 +6446,8 @@ async def leads_kanban(
     if managerId:
         if managerId == "unassigned":
             query["$or"] = [
-                {"managerId": None}, {"managerId": ""}, {"managerId": {"$exists": False}},
+                {"managerId": None}, {"managerId": ""}, {
+                    "managerId": {"$exists": False}},
             ]
         else:
             query["managerId"] = managerId
@@ -6220,16 +6481,20 @@ async def leads_kanban(
 
     if budgetFrom is not None or budgetTo is not None:
         rng: Dict[str, Any] = {}
-        if budgetFrom is not None: rng["$gte"] = budgetFrom
-        if budgetTo is not None:   rng["$lte"] = budgetTo
+        if budgetFrom is not None:
+            rng["$gte"] = budgetFrom
+        if budgetTo is not None:
+            rng["$lte"] = budgetTo
         query["$and"] = query.get("$and", []) + [{
             "$or": [{"budgetEur": rng}, {"budgetUsd": rng}]
         }]
 
     if createdFrom or createdTo:
         cr: Dict[str, Any] = {}
-        if createdFrom: cr["$gte"] = createdFrom
-        if createdTo:   cr["$lte"] = createdTo
+        if createdFrom:
+            cr["$gte"] = createdFrom
+        if createdTo:
+            cr["$lte"] = createdTo
         query["created_at"] = cr
 
     if hasOpenTasks or tasksOverdue or noOpenTasks:
@@ -6248,7 +6513,8 @@ async def leads_kanban(
             if noOpenTasks and not (hasOpenTasks or tasksOverdue):
                 query["id"] = {"$nin": open_lead_ids}
         except Exception as _e:
-            logger.debug(f"[/api/leads/kanban] tasks-filter join skipped: {_e}")
+            logger.debug(
+                f"[/api/leads/kanban] tasks-filter join skipped: {_e}")
 
     cursor = db.leads.find(query, {"_id": 0}).limit(5000)
     raw = await cursor.to_list(length=5000)
@@ -6265,16 +6531,16 @@ async def leads_kanban(
     from app.services.lead_priority import quick_priority_bucket
     for it in raw:
         hb = _quick_lead_health_bucket(it)
-        it["healthBucket"]     = hb
-        it["priorityBucket"]   = quick_priority_bucket(it, health_bucket=hb)
-        it["heatColor"]        = _lead_heat_color(it)
+        it["healthBucket"] = hb
+        it["priorityBucket"] = quick_priority_bucket(it, health_bucket=hb)
+        it["heatColor"] = _lead_heat_color(it)
         it["daysSinceContact"] = _days_since_lead_contact(it)
-        it["lastContactAt"]    = (
+        it["lastContactAt"] = (
             it.get("last_contact_at")
             or it.get("last_activity_at")
             or it.get("updated_at")
         )
-        it["statusChangedAt"]  = (
+        it["statusChangedAt"] = (
             it.get("last_status_change_at")
             or it.get("status_changed_at")
             or it.get("updated_at")
@@ -6285,7 +6551,8 @@ async def leads_kanban(
         raw = [it for it in raw if it.get("priorityBucket") == wanted_p]
 
     # Group by canonical status
-    grouped: Dict[str, List[Dict[str, Any]]] = {s: [] for s in LEAD_WORKSPACE_STATUSES}
+    grouped: Dict[str, List[Dict[str, Any]]] = {
+        s: [] for s in LEAD_WORKSPACE_STATUSES}
     for it in raw:
         canon = _normalize_lead_status(it.get("status"))
         it["status"] = canon
@@ -6321,14 +6588,16 @@ async def patch_lead_status(
     """Move a lead between Kanban columns. Writes audit + timeline best-effort."""
     new_status = _normalize_lead_status(payload.get("status"))
     if new_status not in LEAD_WORKSPACE_STATUSES:
-        raise HTTPException(status_code=400, detail=f"Invalid status '{payload.get('status')}'")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid status '{payload.get('status')}'")
 
     lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
     if not _can_user_touch_lead(current_user, lead):
-        raise HTTPException(status_code=403, detail="You cannot move this lead")
+        raise HTTPException(
+            status_code=403, detail="You cannot move this lead")
 
     prev_status = _normalize_lead_status(lead.get("status"))
     if prev_status == new_status:
@@ -6691,13 +6960,15 @@ async def _load_related_cars(lead: Dict[str, Any]) -> List[Dict[str, Any]]:
     try:
         or_q = [{"leadId": lead.get("id")}, {"lead_id": lead.get("id")}]
         if lead.get("customerId"):
-            or_q += [{"customerId": lead["customerId"]}, {"customer_id": lead["customerId"]}]
+            or_q += [{"customerId": lead["customerId"]},
+                     {"customer_id": lead["customerId"]}]
         quotes = await db.quotes.find({"$or": or_q}, {"_id": 0}).sort("created_at", -1).limit(50).to_list(length=50)
         for q in quotes:
             _push("quote",
                   vin=q.get("vin"),
                   title=q.get("vehicleTitle") or q.get("title"),
-                  price=q.get("totalPrice") or q.get("total") or q.get("amount"),
+                  price=q.get("totalPrice") or q.get(
+                      "total") or q.get("amount"),
                   currency=q.get("currency") or "EUR",
                   link=q.get("vin") and f"/cars/{q['vin']}",
                   snapshot=q)
@@ -6712,7 +6983,8 @@ def _can_user_see_lead(user: Dict[str, Any], lead: Dict[str, Any]) -> bool:
     role = (user.get("role") or "").lower()
     if role in ("admin", "master_admin", "owner", "team_lead"):
         return True
-    uid = user.get("id") or user.get("managerId") or user.get("staff_id") or user.get("email")
+    uid = user.get("id") or user.get("managerId") or user.get(
+        "staff_id") or user.get("email")
     return bool(uid) and lead.get("managerId") == uid
 
 
@@ -6732,7 +7004,8 @@ def _customer_scope_filter(user: Dict[str, Any]) -> Dict[str, Any]:
     role = (user.get("role") or "").lower()
     if role in ("admin", "master_admin", "owner", "team_lead"):
         return {}
-    uid = user.get("id") or user.get("managerId") or user.get("staff_id") or user.get("email")
+    uid = user.get("id") or user.get("managerId") or user.get(
+        "staff_id") or user.get("email")
     if role == "manager" and uid:
         return {"managerId": uid}
     return {"_id": "__deny__"}
@@ -6743,7 +7016,8 @@ def _can_user_see_customer(user: Dict[str, Any], customer: Dict[str, Any]) -> bo
     role = (user.get("role") or "").lower()
     if role in ("admin", "master_admin", "owner", "team_lead"):
         return True
-    uid = user.get("id") or user.get("managerId") or user.get("staff_id") or user.get("email")
+    uid = user.get("id") or user.get("managerId") or user.get(
+        "staff_id") or user.get("email")
     return bool(uid) and customer.get("managerId") == uid
 
 
@@ -6783,10 +7057,10 @@ async def lead_360(
     # Normalise legacy status before serving
     lead["status"] = _normalize_lead_status(lead.get("status"))
 
-    open_tasks   = await _load_lead_open_tasks(lead_id)
+    open_tasks = await _load_lead_open_tasks(lead_id)
     last_call_at = await _load_lead_last_call(lead_id, lead)
     recent_calls = await _load_lead_calls(lead_id, lead, limit=10)
-    timeline     = await _build_lead_timeline(lead_id, lead, limit=30)
+    timeline = await _build_lead_timeline(lead_id, lead, limit=30)
     related_cars = await _load_related_cars(lead)
     notes_count = 0
     try:
@@ -6810,11 +7084,11 @@ async def lead_360(
     )
 
     # Wave 10B — heat color shipped alongside for the hero / kanban
-    lead["heatColor"]        = _lead_heat_color(lead)
+    lead["heatColor"] = _lead_heat_color(lead)
     lead["daysSinceContact"] = _days_since_lead_contact(lead)
-    lead["priorityBucket"]   = priority["bucket"]
+    lead["priorityBucket"] = priority["bucket"]
     # Deep-tracking timestamps as camelCase aliases for the UI
-    lead["lastContactAt"]   = (
+    lead["lastContactAt"] = (
         lead.get("last_contact_at")
         or lead.get("last_activity_at")
         or lead.get("updated_at")
@@ -6830,7 +7104,8 @@ async def lead_360(
     if lead.get("managerId"):
         try:
             mraw = await db.users.find_one(
-                {"$or": [{"id": lead["managerId"]}, {"_id": lead["managerId"]}]},
+                {"$or": [{"id": lead["managerId"]},
+                         {"_id": lead["managerId"]}]},
                 {"_id": 0, "password_hash": 0, "password": 0},
             )
             if mraw:
@@ -6891,7 +7166,8 @@ async def list_lead_notes(
         raise HTTPException(status_code=404, detail="Lead not found")
     if not _can_user_see_lead(current_user, lead):
         raise HTTPException(status_code=403, detail="Forbidden")
-    cursor = db.lead_notes.find({"leadId": lead_id}, {"_id": 0}).sort("created_at", -1).limit(200)
+    cursor = db.lead_notes.find({"leadId": lead_id}, {"_id": 0}).sort(
+        "created_at", -1).limit(200)
     items = await cursor.to_list(length=200)
     return {"success": True, "items": items, "total": len(items)}
 
@@ -7021,7 +7297,8 @@ async def upload_lead_file(
     mime = (payload.get("mime") or "application/octet-stream").strip()
     url = payload.get("data_url") or payload.get("file_url") or ""
     if not url:
-        raise HTTPException(status_code=400, detail="data_url or file_url is required")
+        raise HTTPException(
+            status_code=400, detail="data_url or file_url is required")
     if isinstance(url, str) and url.startswith("data:") and len(url) > _LEAD_FILE_MAX_BYTES:
         raise HTTPException(status_code=413, detail="File exceeds 15 MB cap")
 
@@ -7095,7 +7372,6 @@ async def delete_lead_file(
     return {"success": True, "deleted": res.deleted_count}
 
 
-
 # ─── Wave 9: GET /api/leads/{id}/related-cars ──────────────────────────────
 @fastapi_app.get("/api/leads/{lead_id}/related-cars")
 async def lead_related_cars(
@@ -7109,6 +7385,7 @@ async def lead_related_cars(
         raise HTTPException(status_code=403, detail="Forbidden")
     cars = await _load_related_cars(lead)
     return {"success": True, "items": cars, "total": len(cars)}
+
 
 @fastapi_app.get("/api/customers")
 async def list_customers(
@@ -7167,25 +7444,31 @@ async def list_customers(
         import re as _re_utm_c
         lead_q: Dict[str, Any] = {"customerId": {"$nin": [None, ""]}}
         if utm_source:
-            lead_q["utm_source"] = {"$regex": _re_utm_c.escape(utm_source.strip()), "$options": "i"}
+            lead_q["utm_source"] = {"$regex": _re_utm_c.escape(
+                utm_source.strip()), "$options": "i"}
         if utm_medium:
-            lead_q["utm_medium"] = {"$regex": _re_utm_c.escape(utm_medium.strip()), "$options": "i"}
+            lead_q["utm_medium"] = {"$regex": _re_utm_c.escape(
+                utm_medium.strip()), "$options": "i"}
         if utm_campaign:
-            lead_q["utm_campaign"] = {"$regex": _re_utm_c.escape(utm_campaign.strip()), "$options": "i"}
+            lead_q["utm_campaign"] = {"$regex": _re_utm_c.escape(
+                utm_campaign.strip()), "$options": "i"}
         matching_customer_ids = await db.leads.distinct("customerId", lead_q)
         # If query already has $or (from `q` text search), wrap with $and
         if matching_customer_ids:
             if "$or" in query:
-                query = {"$and": [query, {"id": {"$in": matching_customer_ids}}]}
+                query = {
+                    "$and": [query, {"id": {"$in": matching_customer_ids}}]}
             else:
                 query["id"] = {"$in": matching_customer_ids}
         else:
             # No matching leads → return empty result quickly.
             return {"success": True, "data": [], "items": [], "total": 0}
-    cursor = db.customers.find(query, {'_id': 0}).sort('created_at', -1).skip(skip).limit(limit)
+    cursor = db.customers.find(query, {'_id': 0}).sort(
+        'created_at', -1).skip(skip).limit(limit)
     items = await cursor.to_list(length=limit)
     total = await db.customers.count_documents(query)
     return {"success": True, "data": items, "items": items, "total": total}
+
 
 @fastapi_app.get("/api/deals")
 async def list_deals(
@@ -7215,7 +7498,8 @@ async def list_deals(
     #   2. if a doc has no `id` (legacy data), opportunistically
     #      persist `id = str(_id)` so future reads & queries match
     #   3. always emit BOTH `id` and `_id` (string-coerced) in the response
-    cursor = db.deals.find(_scope_query).sort('created_at', -1).skip(skip).limit(limit)
+    cursor = db.deals.find(_scope_query).sort(
+        'created_at', -1).skip(skip).limit(limit)
     raw = await cursor.to_list(length=limit)
     items: List[Dict[str, Any]] = []
     needs_backfill: List[Any] = []
@@ -7239,6 +7523,7 @@ async def list_deals(
             logger.warning(f"[/api/deals] inline id-backfill skipped: {_e}")
     total = await db.deals.count_documents(_scope_query)
     return {"success": True, "data": items, "items": items, "total": total}
+
 
 @fastapi_app.get("/api/tasks/eligible-assignees")
 async def list_eligible_task_assignees(current_user: Dict[str, Any] = Depends(require_user)):
@@ -7277,7 +7562,8 @@ async def list_eligible_task_assignees(current_user: Dict[str, Any] = Depends(re
 async def list_tasks(
     assigneeId: Optional[str] = None,
     status: Optional[str] = None,
-    filter: Optional[str] = None,   # Phase Final / Block 4: today|tomorrow|overdue|no_deadline|week
+    # Phase Final / Block 4: today|tomorrow|overdue|no_deadline|week
+    filter: Optional[str] = None,
     customerId: Optional[str] = None,
     leadId: Optional[str] = None,
     limit: int = 50,
@@ -7311,14 +7597,18 @@ async def list_tasks(
     if filter == "today":
         day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         day_end = day_start + timedelta(days=1)
-        query["dueDate"] = {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()}
+        query["dueDate"] = {
+            "$gte": day_start.isoformat(), "$lt": day_end.isoformat()}
     elif filter == "tomorrow":
-        day_start = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        day_start = (now + timedelta(days=1)).replace(hour=0,
+                                                      minute=0, second=0, microsecond=0)
         day_end = day_start + timedelta(days=1)
-        query["dueDate"] = {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()}
+        query["dueDate"] = {
+            "$gte": day_start.isoformat(), "$lt": day_end.isoformat()}
     elif filter == "week":
         week_end = now + timedelta(days=7)
-        query["dueDate"] = {"$gte": now.isoformat(), "$lte": week_end.isoformat()}
+        query["dueDate"] = {
+            "$gte": now.isoformat(), "$lte": week_end.isoformat()}
     elif filter == "overdue":
         query["dueDate"] = {"$lt": now.isoformat()}
         query["status"] = {"$ne": "completed"}
@@ -7365,7 +7655,8 @@ async def leads_without_tasks(
     role = (current_user.get("role") or "").lower()
     me = current_user.get("id")
 
-    lead_q: Dict[str, Any] = {"status": {"$nin": ["closed", "rejected", "converted"]}}
+    lead_q: Dict[str, Any] = {"status": {
+        "$nin": ["closed", "rejected", "converted"]}}
     if role == "manager":
         lead_q["managerId"] = me
     elif manager_id:
@@ -7379,7 +7670,8 @@ async def leads_without_tasks(
     # Find leads that DO have open tasks
     tasks_with_lead = await db.tasks.distinct(
         "leadId",
-        {"leadId": {"$in": lead_ids}, "status": {"$nin": ["completed", "cancelled"]}},
+        {"leadId": {"$in": lead_ids}, "status": {
+            "$nin": ["completed", "cancelled"]}},
     )
     busy = set(tasks_with_lead)
     orphans = [l for l in leads if l["id"] not in busy]
@@ -7409,7 +7701,8 @@ async def customers_without_tasks(
 
     tasks_with_cust = await db.tasks.distinct(
         "customerId",
-        {"customerId": {"$in": cust_ids}, "status": {"$nin": ["completed", "cancelled"]}},
+        {"customerId": {"$in": cust_ids}, "status": {
+            "$nin": ["completed", "cancelled"]}},
     )
     busy = set(tasks_with_cust)
     orphans = [c for c in customers if c["id"] not in busy]
@@ -7442,15 +7735,19 @@ async def update_task(
         allowed = data
     elif role == "team_lead":
         if task.get("createdBy") != me and task.get("assigneeId") != me:
-            raise HTTPException(status_code=403, detail="You can only update tasks you created or are assigned to")
+            raise HTTPException(
+                status_code=403, detail="You can only update tasks you created or are assigned to")
         allowed = data
     elif role == "manager":
         if task.get("assigneeId") != me:
-            raise HTTPException(status_code=403, detail="You can only update tasks assigned to you")
+            raise HTTPException(
+                status_code=403, detail="You can only update tasks assigned to you")
         # Managers may flip status, store outcome/comment, but not reassign.
-        allowed = {k: v for k, v in data.items() if k in {"status", "result", "comment", "completedAt", "startedAt"}}
+        allowed = {k: v for k, v in data.items() if k in {
+            "status", "result", "comment", "completedAt", "startedAt"}}
         if not allowed:
-            raise HTTPException(status_code=400, detail="No mutable field for your role")
+            raise HTTPException(
+                status_code=400, detail="No mutable field for your role")
     else:
         raise HTTPException(status_code=403, detail="Not allowed")
 
@@ -7466,6 +7763,7 @@ async def update_task(
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Task not found")
     return {"success": True, "matched": res.matched_count, "modified": res.modified_count}
+
 
 @fastapi_app.get("/api/invoices")
 async def list_invoices(
@@ -7484,10 +7782,11 @@ async def list_invoices(
         query['managerId'] = managerId
     if status:
         query['status'] = status
-    
+
     cursor = db.invoices.find(query, {'_id': 0}).limit(limit)
     items = await cursor.to_list(length=limit)
     return {"success": True, "data": items, "items": items}
+
 
 @fastapi_app.get("/api/shipments")
 async def list_shipments(
@@ -7507,7 +7806,8 @@ async def list_shipments(
 
         shipments = await db.shipments.find(query).sort('created_at', -1).limit(limit).to_list(limit)
 
-        logger.info(f"[SHIPMENTS] Found {len(shipments)} shipments for user={current_user.get('email')}")
+        logger.info(
+            f"[SHIPMENTS] Found {len(shipments)} shipments for user={current_user.get('email')}")
 
         return {
             "success": True,
@@ -7687,6 +7987,7 @@ async def get_settings():
     ]
     return settings
 
+
 @fastapi_app.get("/")
 async def root():
     return {"service": "BIBI V3.2", "version": "3.2.0"}
@@ -7706,6 +8007,7 @@ async def alerts_critical(limit: int = 20):
     alerts = await _rm.build_alerts(db, critical_only=True, limit=limit)
     return {"alerts": alerts}
 
+
 @fastapi_app.get("/api/alerts")
 async def alerts_list():
     from app.services import risk_metrics as _rm
@@ -7713,16 +8015,21 @@ async def alerts_list():
     return {"alerts": alerts, "unreadCount": len(alerts)}
 
 # Owner Dashboard
+
+
 @fastapi_app.get("/api/owner-dashboard")
 async def owner_dashboard(_admin: Dict[str, Any] = Depends(require_admin)):
     from app.services import risk_metrics as _rm
     return await _rm.owner_dashboard(db)
 
 # Risk
+
+
 @fastapi_app.post("/api/risk/daily-check")
 async def risk_daily_check():
     from app.services import risk_metrics as _rm
     return await _rm.daily_check(db)
+
 
 @fastapi_app.get("/api/risk/manager/{manager_id}", dependencies=[Depends(require_manager_or_admin)])
 async def risk_manager(manager_id: str):
@@ -7795,11 +8102,11 @@ async def debug_full_check():
     """Full diagnostic check"""
     shipments_count = await db.shipments.count_documents({})
     events_count = await db.shipment_events.count_documents({})
-    
+
     sample = None
     if shipments_count > 0:
         sample = await db.shipments.find_one()
-    
+
     return {
         "db_name": db.name,
         "shipments_count": shipments_count,
@@ -7814,11 +8121,11 @@ async def debug_shipments_count():
     """Check shipments in database"""
     count = await db.shipments.count_documents({})
     events_count = await db.shipment_events.count_documents({})
-    
+
     sample = None
     if count > 0:
         sample = await db.shipments.find_one()
-    
+
     return {
         "shipments": count,
         "events": events_count,
@@ -7872,8 +8179,10 @@ async def ringostat_webhook(request: Request):
             # Ringostat can also send form-urlencoded; try to recover
             from urllib.parse import parse_qs
             try:
-                parsed = parse_qs(body_bytes.decode('utf-8'), keep_blank_values=True)
-                body = {k: (v[0] if isinstance(v, list) and v else "") for k, v in parsed.items()}
+                parsed = parse_qs(body_bytes.decode(
+                    'utf-8'), keep_blank_values=True)
+                body = {k: (v[0] if isinstance(v, list) and v else "")
+                        for k, v in parsed.items()}
             except Exception:
                 body = {}
 
@@ -7906,10 +8215,12 @@ async def ringostat_webhook(request: Request):
             auth_h = request.headers.get('authorization', '')
             if not auth_h.lower().startswith('basic '):
                 logger.warning("[RINGOSTAT] Missing Basic auth header")
-                raise HTTPException(status_code=401, detail="Authorization required")
+                raise HTTPException(
+                    status_code=401, detail="Authorization required")
             import base64 as _b64
             try:
-                decoded = _b64.b64decode(auth_h.split(' ', 1)[1]).decode('utf-8')
+                decoded = _b64.b64decode(
+                    auth_h.split(' ', 1)[1]).decode('utf-8')
                 u, p = decoded.split(':', 1)
             except Exception:
                 raise HTTPException(status_code=401, detail="Bad Basic auth")
@@ -7922,7 +8233,8 @@ async def ringostat_webhook(request: Request):
                      or request.headers.get('X-Ringostat-Token')
                      or request.headers.get('X-Webhook-Token'))
             # Allow legacy HMAC sigs to still pass (back-compat)
-            sig = request.headers.get('X-Ringostat-Signature') or request.headers.get('X-Signature')
+            sig = request.headers.get(
+                'X-Ringostat-Signature') or request.headers.get('X-Signature')
             ok = False
             if token and token == webhook_token:
                 ok = True
@@ -7935,7 +8247,8 @@ async def ringostat_webhook(request: Request):
                 if sig == expected_sig:
                     ok = True
             if not ok:
-                logger.warning(f"[RINGOSTAT] Webhook token mismatch (token={token!r})")
+                logger.warning(
+                    f"[RINGOSTAT] Webhook token mismatch (token={token!r})")
                 raise HTTPException(status_code=401, detail="Unauthorized")
 
         # Log raw payload for ops
@@ -7955,17 +8268,21 @@ async def ringostat_webhook(request: Request):
             direction = 'inbound'
 
         # Caller / callee  (Ringostat semantics: caller = origin, callee = destination)
-        from_number = (body.get('from') or body.get('caller') or body.get('full_num') or '').strip()
-        to_number = (body.get('to') or body.get('callee') or body.get('destination') or '').strip()
+        from_number = (body.get('from') or body.get('caller')
+                       or body.get('full_num') or '').strip()
+        to_number = (body.get('to') or body.get('callee')
+                     or body.get('destination') or '').strip()
 
         # Event type (CALL_START / CALL_END / etc.) — Ringostat configures
         # event trigger in the admin; payload may include `status` instead.
-        event_type = (body.get('event') or body.get('event_type') or '').upper()
+        event_type = (body.get('event') or body.get(
+            'event_type') or '').upper()
         status = (body.get('status') or '').upper()
         if not event_type:
             # Infer event from status when admin didn't tag it
             if status in ('PROPER', 'ANSWERED', 'COMPLETED'):
-                event_type = 'CALL_END' if int(body.get('call_duration') or body.get('duration') or 0) > 0 else 'CALL_ANSWERED'
+                event_type = 'CALL_END' if int(body.get('call_duration') or body.get(
+                    'duration') or 0) > 0 else 'CALL_ANSWERED'
             elif status in ('NO ANSWER', 'NOANSWER', 'MISSED', 'NO_ANSWER'):
                 event_type = 'CALL_MISSED'
             else:
@@ -7973,7 +8290,8 @@ async def ringostat_webhook(request: Request):
 
         # call_id — Ringostat doesn't always send it; derive from `record`
         # (their unique recording-channel id) when possible.
-        call_id = (body.get('call_id') or body.get('id_call') or body.get('id') or '').strip()
+        call_id = (body.get('call_id') or body.get(
+            'id_call') or body.get('id') or '').strip()
         if not call_id:
             rec = body.get('record') or ''
             if rec:
@@ -7987,36 +8305,41 @@ async def ringostat_webhook(request: Request):
                        or body.get('manager')
                        or '').strip()
 
-        duration = int(body.get('duration') or body.get('call_duration') or body.get('billsec') or 0)
+        duration = int(body.get('duration') or body.get(
+            'call_duration') or body.get('billsec') or 0)
         recording_url = (body.get('recording_url')
                          or body.get('record_link')
                          or body.get('record')
                          or '')
-        
+
         # UTM data (Ringostat 2.0 sends both `utm_*` AND bare names `source`/`medium`/`campaign`)
         utm_source = body.get('utm_source') or body.get('source') or ''
         utm_campaign = body.get('utm_campaign') or body.get('campaign') or ''
         utm_medium = body.get('utm_medium') or body.get('medium') or ''
         utm_term = body.get('utm_term') or body.get('term') or ''
         utm_content = body.get('utm_content') or body.get('content') or ''
-        
+
         # Get automation rules
-        automation_rules = ringostat_config.get('automation_rules', {}) if ringostat_config else {}
+        automation_rules = ringostat_config.get(
+            'automation_rules', {}) if ringostat_config else {}
 
         # Identify customer phone: for inbound = caller (from), for outbound = callee (to)
         customer_phone = from_number if direction == 'inbound' else to_number
         # Sanity check: customer phone must look like a real number (not SIP alias)
-        clean = customer_phone.replace('+', '').replace('-', '').replace(' ', '')
+        clean = customer_phone.replace(
+            '+', '').replace('-', '').replace(' ', '')
         if not clean.isdigit() or len(clean) < 6:
             # Internal call between managers — skip CRM linkage but still log call
-            print(f"[RINGOSTAT] Internal call (customer_phone={customer_phone!r}) — skipping lead creation")
+            print(
+                f"[RINGOSTAT] Internal call (customer_phone={customer_phone!r}) — skipping lead creation")
             lead = None
         else:
             # Find or create Lead by customer phone (if auto_create_lead is enabled)
             lead = await db.leads.find_one({'phone': customer_phone})
 
             if not lead and automation_rules.get('auto_create_lead', True):
-                print(f"[RINGOSTAT] Creating new lead for phone: {customer_phone}")
+                print(
+                    f"[RINGOSTAT] Creating new lead for phone: {customer_phone}")
                 lead_data = {
                     '_id': str(uuid.uuid4()),
                     'phone': customer_phone,
@@ -8036,7 +8359,7 @@ async def ringostat_webhook(request: Request):
                 # Still log the call into ringostat_calls below — just without lead linkage
             else:
                 print(f"[RINGOSTAT] Lead found: {lead.get('_id')}")
-        
+
         # Find active deal for this lead
         deal = None
         if lead:
@@ -8054,15 +8377,18 @@ async def ringostat_webhook(request: Request):
             manager_id = ext_mapping.get(str(manager_ext))
 
             if not manager_id:
-                logger.warning(f"[RINGOSTAT] Extension {manager_ext} not mapped to any manager")
+                logger.warning(
+                    f"[RINGOSTAT] Extension {manager_ext} not mapped to any manager")
         elif not manager_ext:
-            logger.warning(f"[RINGOSTAT] No extension provided in webhook for call {call_id}")
+            logger.warning(
+                f"[RINGOSTAT] No extension provided in webhook for call {call_id}")
 
         # If no manager found, try to find from existing deal
         if not manager_id and deal:
             manager_id = deal.get('assigned_to')
             if manager_id:
-                logger.info(f"[RINGOSTAT] Using manager from existing deal: {manager_id}")
+                logger.info(
+                    f"[RINGOSTAT] Using manager from existing deal: {manager_id}")
 
         # Last resort: pick BEST available manager via Provider Pressure scoring
         # (score < 20 → excluded; >= 80 → boost ×1.2; others ranked by score)
@@ -8074,22 +8400,28 @@ async def ringostat_webhook(request: Request):
                     {'_id': 1, 'id': 1, 'email': 1, 'name': 1},
                 )
                 candidates = await candidates_cursor.to_list(length=200)
-                candidate_ids = [(c.get('id') or c.get('_id')) for c in candidates]
+                candidate_ids = [(c.get('id') or c.get('_id'))
+                                 for c in candidates]
                 best = None
                 if _ps.service is not None and candidate_ids:
                     best = await _ps.service.pick_best_provider([c for c in candidate_ids if c])
                 if best:
                     manager_id = best
-                    logger.info(f"[RINGOSTAT] Assigned via provider_stats pick_best: {manager_id}")
+                    logger.info(
+                        f"[RINGOSTAT] Assigned via provider_stats pick_best: {manager_id}")
                 elif candidates:
                     fallback_manager = candidates[0]
-                    manager_id = fallback_manager.get('id') or fallback_manager.get('_id')
-                    logger.info(f"[RINGOSTAT] Assigned to first available manager: {manager_id}")
+                    manager_id = fallback_manager.get(
+                        'id') or fallback_manager.get('_id')
+                    logger.info(
+                        f"[RINGOSTAT] Assigned to first available manager: {manager_id}")
             except Exception:
-                logger.exception("[RINGOSTAT] pick_best_provider failed; falling back to first manager")
+                logger.exception(
+                    "[RINGOSTAT] pick_best_provider failed; falling back to first manager")
                 fallback_manager = await db.staff.find_one({'role': 'manager', 'is_active': True})
                 if fallback_manager:
-                    manager_id = fallback_manager.get('id') or fallback_manager['_id']
+                    manager_id = fallback_manager.get(
+                        'id') or fallback_manager['_id']
 
         # Check if call already exists (for updates)
         existing_call = await db.ringostat_calls.find_one({'call_id': call_id})
@@ -8153,7 +8485,8 @@ async def ringostat_webhook(request: Request):
 
             await db.ringostat_calls.insert_one(call_data)
             print(f"[RINGOSTAT] Call created: {call_id}, lead: {_lead_id}")
-            print(f"[RINGOSTAT] DB name: {db.name if hasattr(db, 'name') else 'unknown'}")
+            print(
+                f"[RINGOSTAT] DB name: {db.name if hasattr(db, 'name') else 'unknown'}")
 
             # ═══════════════════════════════════════════════════════════
             # EMIT WebSocket event for CALL_START (incoming call)
@@ -8171,18 +8504,21 @@ async def ringostat_webhook(request: Request):
                     'deal_title': deal.get('title', '') if deal else None,
                     'source': utm_source or 'ringostat',
                     'direction': direction,
-                    'temperature': lead.get('score', 50),  # ← ADD TEMPERATURE/SCORE
+                    # ← ADD TEMPERATURE/SCORE
+                    'temperature': lead.get('score', 50),
                     'timestamp': now.isoformat()
                 }
 
                 # Emit to specific manager if known
                 if manager_id:
                     await emit_to_user(manager_id, 'ringostat:incoming_call', ws_payload)
-                    logger.info(f"[WS] Emitted ringostat:incoming_call to user:{manager_id}")
+                    logger.info(
+                        f"[WS] Emitted ringostat:incoming_call to user:{manager_id}")
                 else:
                     # Broadcast to all managers if manager not assigned
                     await emit_to_role('manager', 'ringostat:incoming_call', ws_payload)
-                    logger.info(f"[WS] Broadcast ringostat:incoming_call to role:manager")
+                    logger.info(
+                        f"[WS] Broadcast ringostat:incoming_call to role:manager")
 
         # Handle MISSED calls → Create Task + Emit WS
         if (event_type in ['CALL_MISSED', 'MISSED'] or status.upper() == 'MISSED') and lead:
@@ -8209,7 +8545,8 @@ async def ringostat_webhook(request: Request):
                 }
 
                 await db.tasks.insert_one(task_data)
-                logger.info(f"Task created for missed call: {task_data['_id']}")
+                logger.info(
+                    f"Task created for missed call: {task_data['_id']}")
 
                 # Emit WS event for missed call
                 ws_payload = {
@@ -8223,10 +8560,12 @@ async def ringostat_webhook(request: Request):
 
                 if manager_id:
                     await emit_to_user(manager_id, 'ringostat:missed_call', ws_payload)
-                    logger.info(f"[WS] Emitted ringostat:missed_call to user:{manager_id}")
+                    logger.info(
+                        f"[WS] Emitted ringostat:missed_call to user:{manager_id}")
                 else:
                     await emit_to_role('manager', 'ringostat:missed_call', ws_payload)
-                    logger.info(f"[WS] Broadcast ringostat:missed_call to role:manager")
+                    logger.info(
+                        f"[WS] Broadcast ringostat:missed_call to role:manager")
 
         # Handle CALL_END → Emit WS if answered and duration > threshold (from automation rules)
         require_outcome = automation_rules.get('require_outcome', True)
@@ -8245,10 +8584,12 @@ async def ringostat_webhook(request: Request):
 
             if manager_id:
                 await emit_to_user(manager_id, 'ringostat:call_needs_outcome', ws_payload)
-                logger.info(f"[WS] Emitted ringostat:call_needs_outcome to user:{manager_id}")
+                logger.info(
+                    f"[WS] Emitted ringostat:call_needs_outcome to user:{manager_id}")
             else:
                 await emit_to_role('manager', 'ringostat:call_needs_outcome', ws_payload)
-                logger.info(f"[WS] Broadcast ringostat:call_needs_outcome to role:manager")
+                logger.info(
+                    f"[WS] Broadcast ringostat:call_needs_outcome to role:manager")
 
             # 🔥 Fetch recording URL in background (for AI analysis later)
             if ringostat_config:
@@ -8256,7 +8597,8 @@ async def ringostat_webhook(request: Request):
                 api_key = ringostat_config.get('api_key')
                 if project_id and api_key:
                     import asyncio
-                    asyncio.create_task(fetch_recording_url(call_id, project_id, api_key))
+                    asyncio.create_task(fetch_recording_url(
+                        call_id, project_id, api_key))
 
         return {"success": True, "call_id": call_id, "lead_id": _lead_id, "direction": direction, "status": status.upper(), "event": event_type}
 
@@ -8268,6 +8610,7 @@ async def ringostat_webhook(request: Request):
         logger.error(traceback.format_exc())
         return {"success": False, "error": str(e)}
 
+
 @fastapi_app.get("/api/manager/calls/my", dependencies=[Depends(require_manager_or_admin)])
 async def get_my_calls(
     manager_id: str = None,
@@ -8277,15 +8620,15 @@ async def get_my_calls(
     """Get manager's calls history"""
     try:
         query = {}
-        
+
         if manager_id:
             query['manager_id'] = manager_id
-        
+
         if status:
             query['status'] = status
-        
+
         calls = await db.ringostat_calls.find(query).sort('started_at', -1).limit(limit).to_list(limit)
-        
+
         # Enrich with lead/deal info
         for call in calls:
             if call.get('lead_id'):
@@ -8296,7 +8639,7 @@ async def get_my_calls(
                         'name': lead.get('name'),
                         'phone': lead.get('phone')
                     }
-            
+
             if call.get('deal_id'):
                 deal = await db.deals.find_one({'_id': call['deal_id']})
                 if deal:
@@ -8305,7 +8648,7 @@ async def get_my_calls(
                         'title': deal.get('title'),
                         'stage': deal.get('stage')
                     }
-        
+
         return {
             "success": True,
             "calls": [serialize_doc(c) for c in calls],
@@ -8326,15 +8669,16 @@ async def fetch_recording_url(call_id: str, ringostat_project_id: str, ringostat
     """
     import asyncio
     import httpx
-    
+
     max_retries = 6
     retry_delay = 20  # seconds
-    
+
     for attempt in range(1, max_retries + 1):
         try:
             await asyncio.sleep(retry_delay)
-            logger.info(f"[RINGOSTAT] Fetching recording for call_id: {call_id} (attempt {attempt}/{max_retries})")
-            
+            logger.info(
+                f"[RINGOSTAT] Fetching recording for call_id: {call_id} (attempt {attempt}/{max_retries})")
+
             async with httpx.AsyncClient() as client:
                 # Ringostat API endpoint for calls list
                 url = f"https://api.ringostat.net/calls/list"
@@ -8345,18 +8689,20 @@ async def fetch_recording_url(call_id: str, ringostat_project_id: str, ringostat
                 params = {
                     "call_id": call_id
                 }
-                
+
                 response = await client.get(url, headers=headers, params=params, timeout=10.0)
-                
+
                 if response.status_code == 200:
                     data = response.json()
                     # Ringostat API returns array directly
-                    calls = data if isinstance(data, list) else data.get('calls', [])
-                    
+                    calls = data if isinstance(
+                        data, list) else data.get('calls', [])
+
                     if calls and len(calls) > 0:
                         call_data = calls[0]
-                        recording_url = call_data.get('recording', call_data.get('record_url', ''))
-                        
+                        recording_url = call_data.get(
+                            'recording', call_data.get('record_url', ''))
+
                         if recording_url:
                             # Update call in MongoDB
                             await db.ringostat_calls.update_one(
@@ -8369,21 +8715,26 @@ async def fetch_recording_url(call_id: str, ringostat_project_id: str, ringostat
                                     }
                                 }
                             )
-                            logger.info(f"[RINGOSTAT] ✓ Recording URL found on attempt {attempt} for call_id: {call_id}")
-                            
+                            logger.info(
+                                f"[RINGOSTAT] ✓ Recording URL found on attempt {attempt} for call_id: {call_id}")
+
                             # 🔥 Trigger AI analysis here
                             # await analyze_call_with_ai(call_id, recording_url)
                             return  # Success - exit retry loop
                         else:
-                            logger.warning(f"[RINGOSTAT] No recording yet (attempt {attempt}/{max_retries}) for call_id: {call_id}")
+                            logger.warning(
+                                f"[RINGOSTAT] No recording yet (attempt {attempt}/{max_retries}) for call_id: {call_id}")
                 else:
-                    logger.error(f"[RINGOSTAT] Failed to fetch recording: HTTP {response.status_code}")
-        
+                    logger.error(
+                        f"[RINGOSTAT] Failed to fetch recording: HTTP {response.status_code}")
+
         except Exception as e:
-            logger.error(f"[RINGOSTAT] Error fetching recording (attempt {attempt}/{max_retries}) for call_id {call_id}: {e}")
-    
+            logger.error(
+                f"[RINGOSTAT] Error fetching recording (attempt {attempt}/{max_retries}) for call_id {call_id}: {e}")
+
     # After all retries failed
-    logger.error(f"[RINGOSTAT] ✗ Recording URL not found after {max_retries} attempts for call_id: {call_id}")
+    logger.error(
+        f"[RINGOSTAT] ✗ Recording URL not found after {max_retries} attempts for call_id: {call_id}")
 
 
 # ==================== TRACKING WORKER (HYBRID SYSTEM) ====================
@@ -8394,10 +8745,10 @@ def interpolate_route(route, progress):
     """
     if not route or len(route) < 2:
         return None, None
-    
+
     total_segments = len(route) - 1
     segment_index = int(progress * total_segments)
-    
+
     # Helper — accept both dict and list/tuple waypoint formats.
     def _pt(p):
         if isinstance(p, dict):
@@ -8409,16 +8760,16 @@ def interpolate_route(route, progress):
     # Reached destination
     if segment_index >= total_segments:
         return _pt(route[-1])
-    
+
     start_lat, start_lng = _pt(route[segment_index])
     end_lat, end_lng = _pt(route[segment_index + 1])
-    
+
     # Calculate position within current segment
     local_progress = (progress * total_segments) - segment_index
-    
+
     lat = start_lat + (end_lat - start_lat) * local_progress
     lng = start_lng + (end_lng - start_lng) * local_progress
-    
+
     return lat, lng
 
 
@@ -8461,7 +8812,8 @@ def get_location_label(progress):
 # globals removed.  All reads now go through tracking_config_service
 # (see ``_tracking_snapshot()`` helper / ``server.tracking_config_service``).
 VESSEL_POSITION_TTL_SECONDS = 90  # reuse cached position if fresher than this
-VESSEL_POSITION_MAX_AGE_SECONDS = 2 * 60 * 60  # 2h — after this, stop interpolating
+VESSEL_POSITION_MAX_AGE_SECONDS = 2 * 60 * \
+    60  # 2h — after this, stop interpolating
 
 
 def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -8472,7 +8824,8 @@ def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     phi2 = math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlmb = math.radians(lng2 - lng1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlmb / 2) ** 2
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * \
+        math.cos(phi2) * math.sin(dlmb / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
@@ -8507,7 +8860,8 @@ def _project_progress_on_route(route: list, lat: float, lng: float) -> float:
         # parametrize
         dx = b['lng'] - a['lng']
         dy = b['lat'] - a['lat']
-        t = ((lng - a['lng']) * dx + (lat - a['lat']) * dy) / (dx * dx + dy * dy + 1e-12)
+        t = ((lng - a['lng']) * dx + (lat - a['lat']) * dy) / \
+            (dx * dx + dy * dy + 1e-12)
         t = max(0.0, min(1.0, t))
         px = a['lng'] + t * dx
         py = a['lat'] + t * dy
@@ -8568,7 +8922,8 @@ async def fetch_vessel_position(imo: str) -> Optional[Dict[str, Any]]:
                     data = res.json()
                     if isinstance(data, list):
                         for item in data:
-                            ais = item.get('AIS') if isinstance(item, dict) else None
+                            ais = item.get('AIS') if isinstance(
+                                item, dict) else None
                             if ais and str(ais.get('IMO')) == str(imo):
                                 try:
                                     lat = float(ais['LATITUDE'])
@@ -8629,7 +8984,8 @@ async def fetch_vessel_position(imo: str) -> Optional[Dict[str, Any]]:
                     )
                     return position
         except httpx.HTTPStatusError as e:
-            logger.warning(f"[VESSEL/VF] HTTP {e.response.status_code} for IMO {imo}")
+            logger.warning(
+                f"[VESSEL/VF] HTTP {e.response.status_code} for IMO {imo}")
         except Exception as e:
             logger.error(f"[VESSEL/VF] fetch error IMO={imo}: {e}")
 
@@ -8650,7 +9006,8 @@ def _calculate_eta_iso(route: list, current_lat: float, current_lng: float, spee
     if not route or len(route) < 1:
         return None
     dest = route[-1]
-    remaining_km = _haversine_km(current_lat, current_lng, dest['lat'], dest['lng'])
+    remaining_km = _haversine_km(
+        current_lat, current_lng, dest['lat'], dest['lng'])
     if remaining_km <= 0:
         return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
     # default cruising speed 14 knots if unknown / stationary
@@ -8706,8 +9063,10 @@ def _clamp_progress(p) -> float:
 # good position and log a 'tracking_rejected' event for visibility.
 # ═══════════════════════════════════════════════════════════════════
 
-JOURNEY_TRACKING_EVENT_THROTTLE_SEC = 15 * 60  # 'tracking_updated' at most once per 15 min
-JOURNEY_SOCKET_THROTTLE_SEC = 30               # shipment:update emits at most once / 30 s
+# 'tracking_updated' at most once per 15 min
+JOURNEY_TRACKING_EVENT_THROTTLE_SEC = 15 * 60
+# shipment:update emits at most once / 30 s
+JOURNEY_SOCKET_THROTTLE_SEC = 30
 # ─── Phase 5.4 / C-5a — moved to app/utils/shipments.py ──────────────
 # JOURNEY_SPIKE_MAX_KM_PER_120S and JOURNEY_ETA_SMOOTH_ALPHA were the
 # exclusive callers of the moved helpers (`_smooth_eta_iso` and
@@ -8723,10 +9082,6 @@ JOURNEY_SOCKET_THROTTLE_SEC = 30               # shipment:update emits at most o
 # `app.utils.shipments.JOURNEY_STAGE_TYPES` /
 # `app.utils.shipments.JOURNEY_STAGE_STATUSES`. Frozen invariants
 # enforced by `tests/test_phase6_2_shell_thinning.py` (B3 + B4 + S5).
-from app.utils.shipments import (
-    JOURNEY_STAGE_TYPES,
-    JOURNEY_STAGE_STATUSES,
-)
 # Valid stage-status transitions for manual edits via PUT /stages/{id}.
 # advance/activate endpoints bypass this (they orchestrate the transitions
 # themselves). Keys are "from", values are sets of allowed "to".
@@ -8931,12 +9286,6 @@ def serialize_journey(shipment: Dict[str, Any]) -> Dict[str, Any]:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-
-
-
-
-
-
 async def update_shipment_position(shipment):
     """
     Hybrid position update:
@@ -8990,7 +9339,8 @@ async def update_shipment_position(shipment):
         has_container = bool((current_stage.get('container') or {}).get('number')
                              or (shipment.get('container') or {}).get('number')
                              or shipment.get('containerNumber'))
-        has_vessel_ident = bool(vessel.get('mmsi') or vessel.get('imo') or vessel.get('name'))
+        has_vessel_ident = bool(vessel.get(
+            'mmsi') or vessel.get('imo') or vessel.get('name'))
         if not has_container or not has_vessel_ident:
             try:
                 # Phase 3.2 / C-9 — was: report = await _run_auto_resolver(shipment);
@@ -9016,14 +9366,16 @@ async def update_shipment_position(shipment):
                             f"container={persisted.get('container')} vessel={persisted.get('vesselName')}"
                         )
             except Exception as _rs_err:
-                logger.warning(f"[Resolver] {shipment_id} failed: {_rs_err}", exc_info=True)
+                logger.warning(
+                    f"[Resolver] {shipment_id} failed: {_rs_err}", exc_info=True)
 
     # ── 1. REAL (only when the active stage is of type 'vessel')
     if stage_is_vessel and (vessel.get('mmsi') or imo or vessel.get('name')):
         # REAL path: extension posts VF payload → /jobs/result. No server-side
         # scraping — we read the last known position from the shipment state
         # instead.
-        logger.info(f"[TRACKING] {shipment_id} REAL mmsi={vessel.get('mmsi')} imo={imo} name={vessel.get('name')}")
+        logger.info(
+            f"[TRACKING] {shipment_id} REAL mmsi={vessel.get('mmsi')} imo={imo} name={vessel.get('name')}")
 
         # 1b. Fallback to VesselFinder public API / ShipsGo Fleet
         if lat is None and imo:
@@ -9034,7 +9386,8 @@ async def update_shipment_position(shipment):
                 speed_knots = pos.get('speed')
                 course = pos.get('course')
                 real_timestamp = pos.get('fetched_at') or now
-                source_type = 'real' if pos.get('source') != 'cache' else 'real_cached'
+                source_type = 'real' if pos.get(
+                    'source') != 'cache' else 'real_cached'
 
     # ── 2. INTERPOLATE (last known real < 2h)
     if lat is None:
@@ -9061,7 +9414,8 @@ async def update_shipment_position(shipment):
                         prog_at_real = _project_progress_on_route(
                             route, last_real['lat'], last_real['lng']
                         )
-                        new_progress = min(prog_at_real + (step_km / total_km), 1.0)
+                        new_progress = min(
+                            prog_at_real + (step_km / total_km), 1.0)
                         lat, lng = interpolate_route(route, new_progress)
                         speed_knots = last_real.get('speed')
                         course = last_real.get('course')
@@ -9081,7 +9435,8 @@ async def update_shipment_position(shipment):
 
     # Guard: never emit invalid coordinates
     if not _is_valid_coord(lat, lng):
-        logger.warning(f"[TRACKING] skip invalid coords for {shipment_id}: lat={lat} lng={lng}")
+        logger.warning(
+            f"[TRACKING] skip invalid coords for {shipment_id}: lat={lat} lng={lng}")
         return
 
     # Clamp progress to [0..1]
@@ -9089,7 +9444,8 @@ async def update_shipment_position(shipment):
 
     # For REAL: project onto route to get progress
     if source_type.startswith('real'):
-        new_progress = _clamp_progress(_project_progress_on_route(route, lat, lng))
+        new_progress = _clamp_progress(
+            _project_progress_on_route(route, lat, lng))
 
     # ── MOVEMENT SANITY (only for real updates — estimated we trust by construction)
     # Reject GPS spikes: >200km in <120s OR faster than plausible cruise speed.
@@ -9136,7 +9492,8 @@ async def update_shipment_position(shipment):
 
     # Compute ETA (+ EMA smoothing to avoid jumps: 0.7*old + 0.3*new)
     raw_eta_iso = _calculate_eta_iso(route, lat, lng, speed_knots)
-    eta_iso = _smooth_eta_iso(shipment.get('liveEta'), raw_eta_iso, source_type)
+    eta_iso = _smooth_eta_iso(shipment.get(
+        'liveEta'), raw_eta_iso, source_type)
 
     new_position = {
         'lat': lat,
@@ -9179,7 +9536,8 @@ async def update_shipment_position(shipment):
     current_stage_local = current_stage or {}
     stages_list = list(shipment.get('stages') or [])
     cur_idx = next(
-        (i for i, st in enumerate(stages_list) if st.get('id') == current_stage_local.get('id')),
+        (i for i, st in enumerate(stages_list) if st.get(
+            'id') == current_stage_local.get('id')),
         None,
     )
     should_advance = (
@@ -9261,8 +9619,10 @@ async def update_shipment_position(shipment):
     prev_emit_stage = shipment.get('lastSocketEmitStageId')
     if isinstance(last_emit, datetime) and last_emit.tzinfo is None:
         last_emit = last_emit.replace(tzinfo=timezone.utc)
-    elapsed_emit = (now - last_emit).total_seconds() if isinstance(last_emit, datetime) else None
-    stage_changed_emit = (prev_emit_stage is not None and prev_emit_stage != current_stage_id)
+    elapsed_emit = (
+        now - last_emit).total_seconds() if isinstance(last_emit, datetime) else None
+    stage_changed_emit = (
+        prev_emit_stage is not None and prev_emit_stage != current_stage_id)
     source_category_changed = (
         prev_emit_source is not None and
         _source_category(prev_emit_source) != _source_category(source_type)
@@ -9288,7 +9648,8 @@ async def update_shipment_position(shipment):
             {
                 'shipmentId': shipment_id,
                 'currentPosition': {'lat': lat, 'lng': lng},
-                'position': {'lat': lat, 'lng': lng},  # alias for clients that read 'position'
+                # alias for clients that read 'position'
+                'position': {'lat': lat, 'lng': lng},
                 'progress': new_progress,
                 'location': location_label,
                 'type': source_type,
@@ -9423,25 +9784,25 @@ async def simulate_tracking_progress(shipment):
         ('customs', 'Митне оформлення', 'Customs'),
         ('ready_for_pickup', 'Готово до видачі', 'Warehouse')
     ]
-    
+
     # Find current stage
     events = await db.shipment_events.find(
         {'shipmentId': shipment['id']}
     ).sort('timestamp', -1).limit(1).to_list(1)
-    
+
     if not events:
         return stages[0]
-    
+
     last_event = events[0]
     current_stage_index = next(
         (i for i, s in enumerate(stages) if s[0] == last_event['type']),
         0
     )
-    
+
     # Progress to next stage if enough time passed (simulate every 30 min for demo)
     if current_stage_index < len(stages) - 1:
         return stages[current_stage_index + 1]
-    
+
     return None
 
 
@@ -9453,7 +9814,7 @@ async def fetch_tracking_data_from_api(shipment):
     container = shipment.get('containerNumber')
     if not container:
         return None
-    
+
     try:
         # NOTE (future work): real tracking-API integration (AfterShip / 17track / GoComet)
         # is intentionally NOT wired here yet — the function returns None so the
@@ -9471,31 +9832,31 @@ async def process_shipment_tracking(shipment):
     """
     shipment_id = shipment['id']
     customer_id = shipment.get('customerId')
-    
+
     # 1. Update position along route (always)
     await update_shipment_position(shipment)
-    
+
     # 2. Try real API first
     tracking_data = await fetch_tracking_data_from_api(shipment)
-    
+
     # 3. Fallback to simulation
     if not tracking_data:
         tracking_data = await simulate_tracking_progress(shipment)
-    
+
     if not tracking_data:
         return  # No updates needed
-    
+
     event_type, title, location = tracking_data
-    
+
     # 4. Check if this is actually NEW (don't duplicate events)
     last_event = await db.shipment_events.find_one(
         {'shipmentId': shipment_id},
         sort=[('timestamp', -1)]
     )
-    
+
     if last_event and last_event['type'] == event_type:
         return  # Same event, skip
-    
+
     # 5. Create event
     await create_shipment_event(
         shipment_id=shipment_id,
@@ -9505,13 +9866,13 @@ async def process_shipment_tracking(shipment):
         meta={'source': 'tracking_worker'},
         customer_id=customer_id
     )
-    
+
     # 6. Update last tracking time
     await db.shipments.update_one(
         {'id': shipment_id},
         {'$set': {'lastTrackingUpdate': datetime.now(timezone.utc)}}
     )
-    
+
     logger.info(f"[TRACKING] Updated shipment {shipment_id}: {event_type}")
 
 
@@ -9522,11 +9883,11 @@ async def detect_shipment_issues(shipment):
     now = datetime.now(timezone.utc)
     shipment_id = shipment['id']
     customer_id = shipment.get('customerId')
-    
+
     last_update = shipment.get('lastTrackingUpdate')
     if isinstance(last_update, datetime) and last_update.tzinfo is None:
         last_update = last_update.replace(tzinfo=timezone.utc)
-    
+
     # Issue: Stalled (no updates > 5 days)
     if last_update and (now - last_update).days > 5:
         await create_shipment_event(
@@ -9536,7 +9897,7 @@ async def detect_shipment_issues(shipment):
             meta={'daysSinceUpdate': (now - last_update).days},
             customer_id=customer_id
         )
-    
+
     # Issue: ETA passed
     eta_str = shipment.get('eta')
     if eta_str:
@@ -9549,7 +9910,8 @@ async def detect_shipment_issues(shipment):
                         shipment_id=shipment_id,
                         event_type='eta_overdue',
                         title='⚠️ Затримка доставки',
-                        meta={'etaWas': eta_str, 'daysOverdue': (now - eta).days},
+                        meta={'etaWas': eta_str,
+                              'daysOverdue': (now - eta).days},
                         customer_id=customer_id
                     )
         except:
@@ -9565,42 +9927,42 @@ async def tracking_worker_loop():
     print("🚢🚢🚢 TRACKING WORKER STARTED 🚢🚢🚢")
     print("="*80)
     logger.info("[TRACKING] Worker started")
-    
+
     # Wait 10s after startup (was 60s)
     await asyncio.sleep(int(os.environ.get('TRACKING_WORKER_STARTUP_DELAY_SEC', 10)))
-    
+
     while True:
         try:
             print("🔄 TRACKING TICK...")
             logger.info("[TRACKING] Tick...")
-            
+
             # Find active shipments
             shipments = await db.shipments.find({
                 'trackingActive': True
             }).to_list(100)
-            
+
             logger.info(f"[TRACKING] Processing {len(shipments)} shipments")
             print(f"✓ Processing {len(shipments)} shipments")
-            
+
             for shipment in shipments:
                 try:
                     # Process tracking
                     await process_shipment_tracking(shipment)
-                    
+
                     # Detect issues
                     await detect_shipment_issues(shipment)
-                    
+
                 except Exception as e:
                     logger.error(
                         f"[TRACKING] Error processing shipment {shipment['id']}: {e}",
                         exc_info=True,
                     )
-            
+
             logger.info("[TRACKING] Cycle complete")
-            
+
         except Exception as e:
             logger.error(f"[TRACKING] Worker error: {e}")
-        
+
         # Run every 2 minutes (was 30m — too slow for UX)
         await asyncio.sleep(int(os.environ.get('TRACKING_WORKER_INTERVAL_SEC', 120)))
 
@@ -9652,7 +10014,8 @@ async def resolver_worker_loop():
     while True:
         try:
             if not tracking_enabled():
-                logger.info("[RESOLVER] tracking disabled (kill switch) — skipping cycle")
+                logger.info(
+                    "[RESOLVER] tracking disabled (kill switch) — skipping cycle")
                 await audit("tracking_disabled_skipped", resource="resolver_worker", meta={})
                 await asyncio.sleep(interval)
                 continue
@@ -9747,7 +10110,6 @@ async def transfer_detector_loop():
         await asyncio.sleep(interval)
 
 
-
 async def ringostat_export_calls_cron(lookback_minutes: int = 15):
     """
     CRON task to export calls from Ringostat API.
@@ -9773,7 +10135,8 @@ async def ringostat_export_calls_cron(lookback_minutes: int = 15):
       to catch any calls missed by webhooks).
     """
     try:
-        logger.info(f"[CRON] Starting Ringostat calls export (lookback={lookback_minutes}m)…")
+        logger.info(
+            f"[CRON] Starting Ringostat calls export (lookback={lookback_minutes}m)…")
 
         ringostat_config = await db.ringostat_config.find_one({})
         # Phase IV-5: fall through to hardcoded defaults if DB is empty.
@@ -9783,7 +10146,8 @@ async def ringostat_export_calls_cron(lookback_minutes: int = 15):
         except Exception:
             pass
         if not ringostat_config:
-            logger.warning("[CRON] Ringostat config not found — nothing to sync")
+            logger.warning(
+                "[CRON] Ringostat config not found — nothing to sync")
             return
         project_id = ringostat_config.get("project_id")
         api_key = ringostat_config.get("api_key")
@@ -9800,7 +10164,8 @@ async def ringostat_export_calls_cron(lookback_minutes: int = 15):
         from datetime import timedelta
 
         now = datetime.now(timezone.utc)
-        start_time = (now - timedelta(minutes=lookback_minutes)).strftime("%Y-%m-%d %H:%M:%S")
+        start_time = (now - timedelta(minutes=lookback_minutes)
+                      ).strftime("%Y-%m-%d %H:%M:%S")
         end_time = now.strftime("%Y-%m-%d %H:%M:%S")
 
         FIELDS = ",".join([
@@ -9824,19 +10189,22 @@ async def ringostat_export_calls_cron(lookback_minutes: int = 15):
             response = await client.get(url, headers=headers, params=params)
 
         if response.status_code != 200:
-            logger.error(f"[CRON] Ringostat API error: HTTP {response.status_code} body={response.text[:300]}")
+            logger.error(
+                f"[CRON] Ringostat API error: HTTP {response.status_code} body={response.text[:300]}")
             return
 
         # Ringostat returns plain text starting with "You may have entered…"
         # if any unknown field name is sent.  Guard against that.
         text = response.text.strip()
         if not text.startswith("["):
-            logger.error(f"[CRON] Ringostat returned non-JSON body: {text[:300]}")
+            logger.error(
+                f"[CRON] Ringostat returned non-JSON body: {text[:300]}")
             return
         try:
             data = response.json()
         except Exception as e:
-            logger.error(f"[CRON] Ringostat JSON parse failed: {e} | body[:300]={response.text[:300]}")
+            logger.error(
+                f"[CRON] Ringostat JSON parse failed: {e} | body[:300]={response.text[:300]}")
             return
         calls = data if isinstance(data, list) else data.get("calls", [])
         logger.info(f"[CRON] Fetched {len(calls)} calls from Ringostat")
@@ -9844,7 +10212,8 @@ async def ringostat_export_calls_cron(lookback_minutes: int = 15):
         # Build SIP-alias → manager_id index (from ringostat_config.extension_mapping)
         ext_mapping = ringostat_config.get("extension_mapping", {}) or {}
         # Common Ringostat SIP-alias regex (configurable per project)
-        SIP_ALIAS_RE = _re.compile(r"^[A-Za-z][A-Za-z0-9_-]+$|^\d{1,5}$")  # alias or short ext
+        SIP_ALIAS_RE = _re.compile(
+            r"^[A-Za-z][A-Za-z0-9_-]+$|^\d{1,5}$")  # alias or short ext
 
         def _derive_call_id(record: dict, calldate_str: str) -> str:
             """Stable, idempotent id from recording filename or hash."""
@@ -9853,13 +10222,15 @@ async def ringostat_export_calls_cron(lookback_minutes: int = 15):
             m = _re.search(r"/([^/]+?)\.wav(?:\?|$)", rec)
             if m:
                 return m.group(1)  # bg1_-1779866441.1274279
-            blob = f"{calldate_str}|{record.get('caller','')}|{record.get('dst','')}|{record.get('billsec','')}"
+            blob = f"{calldate_str}|{record.get('caller', '')}|{record.get('dst', '')}|{record.get('billsec', '')}"
             return "rs_" + hashlib.sha1(blob.encode("utf-8")).hexdigest()[:16]
 
         def _derive_direction(caller: str, dst: str) -> str:
             # If caller looks like a SIP alias (alphanumeric, no leading +/digits-only-long), it's outbound
-            caller_is_sip = bool(SIP_ALIAS_RE.match(caller or "")) and not caller.isdigit() or (caller.isdigit() and len(caller) <= 5)
-            dst_is_sip = bool(SIP_ALIAS_RE.match(dst or "")) and not dst.isdigit() or (dst.isdigit() and len(dst) <= 5)
+            caller_is_sip = bool(SIP_ALIAS_RE.match(caller or "")) and not caller.isdigit(
+            ) or (caller.isdigit() and len(caller) <= 5)
+            dst_is_sip = bool(SIP_ALIAS_RE.match(dst or "")) and not dst.isdigit() or (
+                dst.isdigit() and len(dst) <= 5)
             if caller_is_sip and not dst_is_sip:
                 return "outbound"
             if dst_is_sip and not caller_is_sip:
@@ -9883,12 +10254,15 @@ async def ringostat_export_calls_cron(lookback_minutes: int = 15):
         for call_data in calls:
             try:
                 calldate_str = call_data.get("calldate") or ""
-                started_at = _parse_calldate(calldate_str).astimezone(timezone.utc)
+                started_at = _parse_calldate(
+                    calldate_str).astimezone(timezone.utc)
 
                 caller = (call_data.get("caller") or "").strip()
                 dst = (call_data.get("dst") or "").strip()
-                n_alias = (call_data.get("n_alias") or "").strip()  # which DID/manager picked up
-                disposition = (call_data.get("disposition") or "").strip().upper() or "UNKNOWN"
+                # which DID/manager picked up
+                n_alias = (call_data.get("n_alias") or "").strip()
+                disposition = (call_data.get("disposition")
+                               or "").strip().upper() or "UNKNOWN"
                 billsec = int(call_data.get("billsec") or 0)
                 duration = int(call_data.get("duration") or billsec or 0)
                 recording_url = call_data.get("recording") or ""
@@ -9910,7 +10284,8 @@ async def ringostat_export_calls_cron(lookback_minutes: int = 15):
                     manager_sip = caller
                 else:
                     manager_sip = dst or n_alias
-                manager_id = ext_mapping.get(manager_sip) if manager_sip else None
+                manager_id = ext_mapping.get(
+                    manager_sip) if manager_sip else None
 
                 # Fallbacks
                 if not manager_id:
@@ -9937,13 +10312,15 @@ async def ringostat_export_calls_cron(lookback_minutes: int = 15):
                             "updated_at": now,
                         }
                         await db.leads.insert_one(lead)
-                lead_id = (lead.get("id") if lead else None) or (lead.get("_id") if lead else None)
+                lead_id = (lead.get("id") if lead else None) or (
+                    lead.get("_id") if lead else None)
 
                 # Last resort: first active manager so call isn't orphaned
                 if not manager_id:
                     fallback = await db.staff.find_one({"role": "manager", "is_active": True})
                     if fallback:
-                        manager_id = fallback.get("id") or str(fallback.get("_id"))
+                        manager_id = fallback.get(
+                            "id") or str(fallback.get("_id"))
 
                 # Upsert
                 existing_call = await db.ringostat_calls.find_one({"call_id": call_id})
@@ -9995,10 +10372,12 @@ async def ringostat_export_calls_cron(lookback_minutes: int = 15):
                     await db.ringostat_calls.insert_one(new_call)
                     synced_inserted += 1
             except Exception as e:
-                logger.error(f"[CRON] Error processing call: {e}", exc_info=True)
+                logger.error(
+                    f"[CRON] Error processing call: {e}", exc_info=True)
                 continue
 
-        logger.info(f"[CRON] Synced {synced_inserted} inserted, {synced_updated} updated")
+        logger.info(
+            f"[CRON] Synced {synced_inserted} inserted, {synced_updated} updated")
 
     except Exception as e:
         logger.error(f"[CRON] Export calls error: {e}")
@@ -10031,11 +10410,13 @@ async def ringostat_initiate_callback(
     extension = (data or {}).get("extension")
 
     if not phone:
-        raise HTTPException(status_code=400, detail="phone is required (E.164)")
+        raise HTTPException(
+            status_code=400, detail="phone is required (E.164)")
 
     # Allow the manager to call without specifying extension — pull from staff.
     if not extension:
-        user_id = (current_user or {}).get("id") or (current_user or {}).get("_id")
+        user_id = (current_user or {}).get(
+            "id") or (current_user or {}).get("_id")
         if user_id:
             me = await db.staff.find_one({"$or": [{"id": user_id}, {"_id": user_id}]})
             extension = (me or {}).get("extension")
@@ -10049,17 +10430,19 @@ async def ringostat_initiate_callback(
         # Get Ringostat config
         ringostat_config = await db.ringostat_config.find_one({})
         if not ringostat_config:
-            raise HTTPException(status_code=400, detail="Ringostat not configured")
-        
+            raise HTTPException(
+                status_code=400, detail="Ringostat not configured")
+
         project_id = ringostat_config.get('project_id')
         api_key = ringostat_config.get('api_key')
-        
+
         if not project_id or not api_key:
-            raise HTTPException(status_code=400, detail="Ringostat credentials missing")
-        
+            raise HTTPException(
+                status_code=400, detail="Ringostat credentials missing")
+
         # Call Ringostat Callback API (simple method)
         import httpx
-        
+
         async with httpx.AsyncClient() as client:
             url = "https://api.ringostat.net/callback/outward_call"
             headers = {
@@ -10072,15 +10455,17 @@ async def ringostat_initiate_callback(
                 "destination": phone,     # Customer's phone
                 "direction": "out"
             }
-            
+
             response = await client.post(url, headers=headers, data=payload, timeout=10.0)
-            
+
             if response.status_code != 200:
-                logger.error(f"[CALLBACK] Ringostat API error: {response.status_code} - {response.text}")
-                raise HTTPException(status_code=502, detail="Ringostat callback failed")
-            
+                logger.error(
+                    f"[CALLBACK] Ringostat API error: {response.status_code} - {response.text}")
+                raise HTTPException(
+                    status_code=502, detail="Ringostat callback failed")
+
             result = response.json()
-            
+
             # Log callback initiation (audit trail — who dialled what when)
             callback_log = {
                 '_id': str(uuid.uuid4()),
@@ -10092,16 +10477,17 @@ async def ringostat_initiate_callback(
                 'ringostat_response': result
             }
             await db.ringostat_callbacks.insert_one(callback_log)
-            
-            logger.info(f"[CALLBACK] Initiated call to {phone} via extension {extension} by {callback_log['initiated_by']}")
-            
+
+            logger.info(
+                f"[CALLBACK] Initiated call to {phone} via extension {extension} by {callback_log['initiated_by']}")
+
             return {
                 "success": True,
                 "message": "Callback initiated",
                 "phone": phone,
                 "extension": extension
             }
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -10117,13 +10503,14 @@ async def get_missed_calls(manager_id: str = None):
         query = {'status': 'MISSED'}
         if manager_id:
             query['manager_id'] = manager_id
-        
+
         calls = await db.ringostat_calls.find(query).sort('created_at', -1).limit(20).to_list(20)
-        
+
         return {"success": True, "calls": calls}
     except Exception as e:
         logger.error(f"Get missed calls error: {e}")
         return {"success": False, "error": str(e)}
+
 
 @fastapi_app.post("/api/calls/{call_id}/outcome")
 async def save_call_outcome(call_id: str, data: Dict[str, Any] = Body(...)):
@@ -10131,7 +10518,7 @@ async def save_call_outcome(call_id: str, data: Dict[str, Any] = Body(...)):
     try:
         outcome = data.get('outcome')
         note = data.get('note', '')
-        
+
         await db.ringostat_calls.update_one(
             {'_id': call_id},
             {
@@ -10142,10 +10529,10 @@ async def save_call_outcome(call_id: str, data: Dict[str, Any] = Body(...)):
                 }
             }
         )
-        
+
         # Get call to access lead_id
         call = await db.ringostat_calls.find_one({'_id': call_id})
-        
+
         if call and call.get('lead_id'):
             # Update lead score based on outcome
             score_change = 0
@@ -10159,17 +10546,18 @@ async def save_call_outcome(call_id: str, data: Dict[str, Any] = Body(...)):
                 score_change = 30
             elif outcome == 'reject':
                 score_change = -10
-            
+
             if score_change != 0:
                 await db.leads.update_one(
                     {'_id': call['lead_id']},
                     {'$inc': {'score': score_change}}
                 )
-        
+
         return {"success": True}
     except Exception as e:
         logger.error(f"Save outcome error: {e}")
         return {"success": False, "error": str(e)}
+
 
 @fastapi_app.get("/api/leads/{lead_id}/calls")
 async def get_lead_calls(lead_id: str):
@@ -10178,7 +10566,7 @@ async def get_lead_calls(lead_id: str):
         calls = await db.ringostat_calls.find({
             'lead_id': lead_id
         }).sort('created_at', -1).to_list(100)
-        
+
         return {"success": True, "calls": calls}
     except Exception as e:
         logger.error(f"Get lead calls error: {e}")
@@ -10187,6 +10575,8 @@ async def get_lead_calls(lead_id: str):
 # ═══════════════════════════════════════════════════════════════════
 # DEBUG: Simulate Ringostat Events
 # ═══════════════════════════════════════════════════════════════════
+
+
 @fastapi_app.post("/api/debug/ringostat/simulate", dependencies=[Depends(require_admin)])
 async def simulate_ringostat_event(data: Dict[str, Any] = Body(...)):
     """
@@ -10205,7 +10595,7 @@ async def simulate_ringostat_event(data: Dict[str, Any] = Body(...)):
         to_number = data.get('to', '+380931234567')
         manager_ext = data.get('manager_extension', '')
         duration = int(data.get('duration', 0))
-        
+
         # Create fake webhook payload
         webhook_payload = {
             'event': event_type,
@@ -10220,7 +10610,7 @@ async def simulate_ringostat_event(data: Dict[str, Any] = Body(...)):
             'utm_source': 'debug',
             'utm_campaign': 'simulation'
         }
-        
+
         # Call the webhook endpoint directly without request object
         # Instead, process webhook logic here
         from_number = webhook_payload['from']
@@ -10229,7 +10619,7 @@ async def simulate_ringostat_event(data: Dict[str, Any] = Body(...)):
         duration = webhook_payload.get('duration', 0)
         event_type = webhook_payload['event']
         status = webhook_payload.get('status', 'ringing')
-        
+
         # Find or create lead
         lead = await db.leads.find_one({'phone': from_number})
         if not lead:
@@ -10244,14 +10634,14 @@ async def simulate_ringostat_event(data: Dict[str, Any] = Body(...)):
             }
             await db.leads.insert_one(lead)
             logger.info(f"[SIMULATE] Lead created: {lead['_id']}")
-        
+
         # Get manager by extension
         ringostat_config = await db.ringostat_config.find_one({})
         manager_id = None
         if ringostat_config and manager_ext:
             ext_mapping = ringostat_config.get('extension_mapping', {})
             manager_id = ext_mapping.get(str(manager_ext))
-        
+
         # Create call record
         now = datetime.now(timezone.utc)
         call_data = {
@@ -10270,7 +10660,7 @@ async def simulate_ringostat_event(data: Dict[str, Any] = Body(...)):
         }
         await db.ringostat_calls.insert_one(call_data)
         logger.info(f"[SIMULATE] Call created: {call_id}")
-        
+
         # Emit WebSocket event for CALL_START
         if event_type == 'CALL_START':
             ws_payload = {
@@ -10281,14 +10671,16 @@ async def simulate_ringostat_event(data: Dict[str, Any] = Body(...)):
                 'manager_id': manager_id,
                 'timestamp': now.isoformat()
             }
-            
+
             if manager_id:
                 await emit_to_user(manager_id, 'ringostat:incoming_call', ws_payload)
-                logger.info(f"[SIMULATE] Emitted incoming_call to user:{manager_id}")
+                logger.info(
+                    f"[SIMULATE] Emitted incoming_call to user:{manager_id}")
             else:
                 await emit_to_role('manager', 'ringostat:incoming_call', ws_payload)
-                logger.info(f"[SIMULATE] Broadcast incoming_call to role:manager")
-        
+                logger.info(
+                    f"[SIMULATE] Broadcast incoming_call to role:manager")
+
         # Emit WebSocket event for CALL_END
         elif event_type == 'CALL_END' and duration > 10:
             ws_payload = {
@@ -10300,14 +10692,16 @@ async def simulate_ringostat_event(data: Dict[str, Any] = Body(...)):
                 'duration': duration,
                 'timestamp': now.isoformat()
             }
-            
+
             if manager_id:
                 await emit_to_user(manager_id, 'ringostat:call_needs_outcome', ws_payload)
-                logger.info(f"[SIMULATE] Emitted call_needs_outcome to user:{manager_id}")
+                logger.info(
+                    f"[SIMULATE] Emitted call_needs_outcome to user:{manager_id}")
             else:
                 await emit_to_role('manager', 'ringostat:call_needs_outcome', ws_payload)
-                logger.info(f"[SIMULATE] Broadcast call_needs_outcome to role:manager")
-        
+                logger.info(
+                    f"[SIMULATE] Broadcast call_needs_outcome to role:manager")
+
         return {
             "success": True,
             "message": f"Simulated {event_type} event",
@@ -10408,7 +10802,8 @@ async def customer_google_verify(data: Dict[str, Any] = Body(...)):
     except Exception:
         client_id = (os.environ.get("GOOGLE_CLIENT_ID", "") or "").strip()
     if not client_id:
-        raise HTTPException(status_code=503, detail="Google Sign-In is not configured")
+        raise HTTPException(
+            status_code=503, detail="Google Sign-In is not configured")
 
     # Verify token with google-auth
     try:
@@ -10422,7 +10817,8 @@ async def customer_google_verify(data: Dict[str, Any] = Body(...)):
         )
     except Exception as exc:
         logger.warning(f"[google/verify] token invalid: {exc}")
-        raise HTTPException(status_code=401, detail="Invalid Google credential")
+        raise HTTPException(
+            status_code=401, detail="Invalid Google credential")
 
     # Basic sanity
     if idinfo.get("iss") not in ("https://accounts.google.com", "accounts.google.com"):
@@ -10430,7 +10826,8 @@ async def customer_google_verify(data: Dict[str, Any] = Body(...)):
 
     email = (idinfo.get("email") or "").strip().lower()
     if not email or not idinfo.get("email_verified", False):
-        raise HTTPException(status_code=400, detail="Google account email not verified")
+        raise HTTPException(
+            status_code=400, detail="Google account email not verified")
 
     # ── Allowed-domains gate (optional B2B whitelist) ─────────────────────
     # When the admin populates `app_settings.auth.google.allowedDomains` —
@@ -10441,15 +10838,19 @@ async def customer_google_verify(data: Dict[str, Any] = Body(...)):
     try:
         auth_cfg = await get_settings_service().get_auth()
         gcfg = auth_cfg.get("google") or {}
-        raw_allowed = gcfg.get("allowedDomains") or gcfg.get("allowed_domains") or ""
+        raw_allowed = gcfg.get("allowedDomains") or gcfg.get(
+            "allowed_domains") or ""
         if isinstance(raw_allowed, list):
-            allowed_list = [str(d).strip().lstrip("@").lower() for d in raw_allowed if str(d or "").strip()]
+            allowed_list = [str(d).strip().lstrip("@").lower()
+                            for d in raw_allowed if str(d or "").strip()]
         else:
-            allowed_list = [d.strip().lstrip("@").lower() for d in str(raw_allowed).split(",") if d.strip()]
+            allowed_list = [d.strip().lstrip("@").lower()
+                            for d in str(raw_allowed).split(",") if d.strip()]
         if allowed_list:
             domain = email.split("@", 1)[1] if "@" in email else ""
             if not any(domain == d or domain.endswith("." + d) for d in allowed_list):
-                logger.info(f"[google/verify] domain rejected: {domain} not in allowedDomains")
+                logger.info(
+                    f"[google/verify] domain rejected: {domain} not in allowedDomains")
                 raise HTTPException(
                     status_code=403,
                     detail=f"Sign-in restricted to specific domains. {domain} is not allowed.",
@@ -10470,7 +10871,8 @@ async def customer_google_verify(data: Dict[str, Any] = Body(...)):
     now_iso = datetime.now(timezone.utc).isoformat()
     if existing:
         customer_id = (
-            existing.get("customerId") or existing.get("id") or existing.get("user_id")
+            existing.get("customerId") or existing.get(
+                "id") or existing.get("user_id")
             or f"cust_{uuid.uuid4().hex[:12]}"
         )
         update = {
@@ -10480,9 +10882,11 @@ async def customer_google_verify(data: Dict[str, Any] = Body(...)):
             "last_login_at": now_iso,
             "source": existing.get("source") or "google",
         }
-        update.update({"id": customer_id, "customerId": customer_id, "user_id": customer_id})
+        update.update(
+            {"id": customer_id, "customerId": customer_id, "user_id": customer_id})
         await db.customers.update_one({"email": email}, {"$set": update})
-        customer = {**existing, **update, "email": email, "role": existing.get("role", "customer")}
+        customer = {**existing, **update, "email": email,
+                    "role": existing.get("role", "customer")}
     else:
         customer_id = f"cust_{uuid.uuid4().hex[:12]}"
         customer = {
@@ -10542,11 +10946,13 @@ async def cadence_definitions():
     from app.services import rules_engine as _re
     return await _re.list_cadence_definitions(db)
 
+
 @fastapi_app.get("/api/cadence/runs")
 async def cadence_runs():
     """Real active cadence runs from db.cadence_runs."""
     from app.services import rules_engine as _re
     return await _re.list_cadence_runs(db)
+
 
 @fastapi_app.get("/api/cadence/runs/{run_id}")
 async def cadence_run(run_id: str):
@@ -10556,11 +10962,13 @@ async def cadence_run(run_id: str):
         raise HTTPException(404, "Cadence run not found")
     return run
 
+
 @fastapi_app.post("/api/cadence/definitions")
 async def create_cadence(data: Dict[str, Any] = Body(...)):
     from app.services import rules_engine as _re
     doc = await _re.create_cadence(db, data)
     return {"success": True, "id": doc["id"], "data": doc}
+
 
 @fastapi_app.put("/api/cadence/definitions/{cadence_id}")
 async def update_cadence(cadence_id: str, data: Dict[str, Any] = Body(...)):
@@ -10570,6 +10978,7 @@ async def update_cadence(cadence_id: str, data: Dict[str, Any] = Body(...)):
         raise HTTPException(404, "Cadence definition not found")
     return {"success": True, "data": doc}
 
+
 @fastapi_app.delete("/api/cadence/definitions/{cadence_id}")
 async def delete_cadence(cadence_id: str):
     from app.services import rules_engine as _re
@@ -10578,6 +10987,7 @@ async def delete_cadence(cadence_id: str):
         raise HTTPException(404, "Cadence definition not found")
     return {"success": True}
 
+
 @fastapi_app.patch("/api/cadence/definitions/{cadence_id}/toggle")
 async def toggle_cadence(cadence_id: str, data: Dict[str, Any] = Body(default={})):
     from app.services import rules_engine as _re
@@ -10585,6 +10995,7 @@ async def toggle_cadence(cadence_id: str, data: Dict[str, Any] = Body(default={}
     if not doc:
         raise HTTPException(404, "Cadence definition not found")
     return {"success": True, "data": doc}
+
 
 @fastapi_app.post("/api/cadence/runs/{run_id}/stop")
 async def stop_cadence_run(run_id: str):
@@ -10595,6 +11006,8 @@ async def stop_cadence_run(run_id: str):
     return {"success": True}
 
 # Calls
+
+
 @fastapi_app.get("/api/calls/analytics")
 async def calls_analytics():
     """Real call analytics aggregated from db.ringostat_calls."""
@@ -10616,6 +11029,7 @@ async def calls_analytics():
         }
     except Exception:
         return {"totalCalls": 0, "answeredCalls": 0, "missedCalls": 0, "withOutcome": 0, "avgDuration": 0, "totalDuration": 0, "answerRate": 0}
+
 
 @fastapi_app.get("/api/calls/board")
 async def calls_board(limit: int = 100):
@@ -10671,7 +11085,8 @@ async def carfax_admin_analytics():
                         "est": {"$sum": {"$ifNull": ["$estimatedCost", 0]}}}},
         ]).to_list(length=1)
         total_cost = round(agg[0]["spent"], 2) if agg else 0
-        cost_saved = round(max(0, (agg[0]["est"] - agg[0]["spent"])), 2) if agg else 0
+        cost_saved = round(
+            max(0, (agg[0]["est"] - agg[0]["spent"])), 2) if agg else 0
         return {
             "totalRequests": total, "pendingRequests": pending, "processingRequests": processing,
             "uploadedRequests": uploaded, "rejectedRequests": rejected,
@@ -10767,7 +11182,7 @@ async def carfax_upload_pdf(request_id: str, data: Dict[str, Any] = Body(...)):
         {"id": request_id},
         {"$set": {
             "status": "uploaded", "pdfUrl": pdf_url,
-            "pdfFilename": data.get("pdfFilename") or f"carfax-{existing.get('vin','report')}.pdf",
+            "pdfFilename": data.get("pdfFilename") or f"carfax-{existing.get('vin', 'report')}.pdf",
             "actualCost": data.get("actualCost"),
             "uploadedAt": datetime.now(timezone.utc).isoformat(),
         }})
@@ -10804,7 +11219,7 @@ async def carfax_upload_file(
         {"id": request_id},
         {"$set": {
             "status": "uploaded", "pdfUrl": url,
-            "pdfFilename": file.filename or f"carfax-{existing.get('vin','report')}.pdf",
+            "pdfFilename": file.filename or f"carfax-{existing.get('vin', 'report')}.pdf",
             "actualCost": actualCost,
             "uploadedAt": datetime.now(timezone.utc).isoformat(),
         }})
@@ -10890,6 +11305,8 @@ async def carfax_delete(request_id: str):
 # Contracts
 
 # Auth
+
+
 @fastapi_app.post("/api/auth/change-password-legacy-removed", include_in_schema=False)
 async def _auth_change_password_removed_stub():
     """The real handler now lives in app/routers/auth_password.py.
@@ -10900,6 +11317,8 @@ async def _auth_change_password_removed_stub():
 # Cabinet
 
 # Customer Auth
+
+
 @fastapi_app.post("/api/customer-auth/me/avatar/upload")
 async def customer_avatar_upload():
     # Legacy endpoint — kept for compatibility but does nothing.
@@ -10921,16 +11340,19 @@ async def customer_cabinet_upload_avatar(
 
     # Validate content type
     ctype = (avatar.content_type or '').lower()
-    allowed = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif'}
+    allowed = {'image/jpeg': 'jpg', 'image/png': 'png',
+               'image/webp': 'webp', 'image/gif': 'gif'}
     if ctype not in allowed:
-        raise HTTPException(status_code=400, detail=f"Unsupported image type: {ctype}")
+        raise HTTPException(
+            status_code=400, detail=f"Unsupported image type: {ctype}")
 
     ext = allowed[ctype]
     content = await avatar.read()
 
     # Max 5MB
     if len(content) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Image too large (max 5MB)")
+        raise HTTPException(
+            status_code=413, detail="Image too large (max 5MB)")
 
     dest = _STATIC_DIR / "avatars" / f"{customer_id}.{ext}"
     # delete older extensions
@@ -10951,7 +11373,8 @@ async def customer_cabinet_upload_avatar(
 
     await db.customers.update_one(
         {'id': customer_id},
-        {'$set': {'avatar': url, 'picture': url, 'updatedAt': datetime.now(timezone.utc)}},
+        {'$set': {'avatar': url, 'picture': url,
+                  'updatedAt': datetime.now(timezone.utc)}},
         upsert=True,
     )
     return {'success': True, 'url': url, 'avatar': url, 'picture': url}
@@ -10969,7 +11392,8 @@ async def customer_cabinet_delete_avatar(customer_id: str):
                 pass
     await db.customers.update_one(
         {'id': customer_id},
-        {'$set': {'avatar': None, 'picture': None, 'updatedAt': datetime.now(timezone.utc)}},
+        {'$set': {'avatar': None, 'picture': None,
+                  'updatedAt': datetime.now(timezone.utc)}},
     )
     return {'success': True}
 
@@ -10982,6 +11406,7 @@ async def customer_cabinet_delete_avatar(customer_id: str):
 # ═══════════════════════════════════════════════════════════════════
 # PUBLIC API ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
+
 
 @fastapi_app.get("/api/public/vehicles")
 async def public_vehicles(
@@ -10996,7 +11421,8 @@ async def public_vehicles(
     mileage_min: Optional[int] = None,
     mileage_max: Optional[int] = None,
     damaged: Optional[str] = None,        # "true" / "false"
-    vehicle_type: Optional[str] = None,   # motorbike / sedan / suv / pickup / van
+    # motorbike / sedan / suv / pickup / van
+    vehicle_type: Optional[str] = None,
     country: Optional[str] = None,        # USA / KOREA
     body_type: Optional[str] = None,
     drive_type: Optional[str] = None,
@@ -11004,9 +11430,10 @@ async def public_vehicles(
     auction_name: Optional[str] = None,
     fuel: Optional[str] = None,           # CSV
     transmission: Optional[str] = None,   # CSV
-    auction_status: Optional[str] = None, # CSV: within7,upcoming,buyNow
+    auction_status: Optional[str] = None,  # CSV: within7,upcoming,buyNow
     sort: str = "popular",
-    price_filter_mode: str = "strict",     # "strict" (default, honest) | "liberal" (legacy)
+    # "strict" (default, honest) | "liberal" (legacy)
+    price_filter_mode: str = "strict",
 ):
     # Phase B3 — start timer for slow-query observation (set early so the
     # value is in scope by the time we hit the aggregate call below).
@@ -11058,7 +11485,8 @@ async def public_vehicles(
             # Indexed exact-match path OR backwards-compat regex on legacy `make`
             and_clauses.append({"$or": [
                 {"make_canonical": {"$in": canonical}},
-                {"make": {"$regex": "|".join(re.escape(c) for c in raw_makes), "$options": "i"}},
+                {"make": {"$regex": "|".join(re.escape(c)
+                                             for c in raw_makes), "$options": "i"}},
             ]})
         else:
             query["make"] = {"$regex": make, "$options": "i"}
@@ -11070,7 +11498,8 @@ async def public_vehicles(
             # legacy `model` to cover not-yet-migrated docs.
             and_clauses.append({"$or": [
                 {"model_canonical": {"$in": raw_models}},
-                {"model": {"$regex": "|".join(re.escape(m) for m in raw_models), "$options": "i"}},
+                {"model": {"$regex": "|".join(
+                    re.escape(m) for m in raw_models), "$options": "i"}},
             ]})
     if year_min is not None:
         query["year"] = {"$gte": year_min}
@@ -11163,9 +11592,11 @@ async def public_vehicles(
             {"origin_country": {"$regex": c, "$options": "i"}},
         ]
         if c == "USA":
-            country_or.append({"auction_name": {"$regex": r"copart|iaai|manheim|acva", "$options": "i"}})
+            country_or.append(
+                {"auction_name": {"$regex": r"copart|iaai|manheim|acva", "$options": "i"}})
         elif c == "KOREA":
-            country_or.append({"auction_name": {"$regex": r"encar", "$options": "i"}})
+            country_or.append(
+                {"auction_name": {"$regex": r"encar", "$options": "i"}})
         and_clauses.append({"$or": country_or})
 
     if body_type:
@@ -11181,7 +11612,8 @@ async def public_vehicles(
         ]
         patterns = VEH_TYPE_PATTERNS.get(bt, [])
         if patterns:
-            body_or.append({"model": {"$regex": "|".join(patterns), "$options": "i"}})
+            body_or.append(
+                {"model": {"$regex": "|".join(patterns), "$options": "i"}})
         and_clauses.append({"$or": body_or})
 
     if drive_type:
@@ -11224,7 +11656,8 @@ async def public_vehicles(
     # ("iaai|copart|encar"). The frontend's Auction Type dropdown sends
     # an array joined by `|`.
     if auction_name:
-        parts = [p.strip() for p in re.split(r"[|,]", auction_name) if p.strip()]
+        parts = [p.strip()
+                 for p in re.split(r"[|,]", auction_name) if p.strip()]
         if parts:
             joined = "|".join(re.escape(p) for p in parts)
             query["auction_name"] = {"$regex": joined, "$options": "i"}
@@ -11241,12 +11674,15 @@ async def public_vehicles(
         }
         fuels = [f.strip() for f in fuel.split(",") if f.strip()]
         if fuels:
-            patterns = [FUEL_SYNONYMS.get(f.lower(), re.escape(f)) for f in fuels]
-            query["fuel_type"] = {"$regex": "|".join(patterns), "$options": "i"}
+            patterns = [FUEL_SYNONYMS.get(
+                f.lower(), re.escape(f)) for f in fuels]
+            query["fuel_type"] = {
+                "$regex": "|".join(patterns), "$options": "i"}
     if transmission:
         trans = [t.strip() for t in transmission.split(",") if t.strip()]
         if trans:
-            query["transmission"] = {"$regex": "|".join(re.escape(t) for t in trans), "$options": "i"}
+            query["transmission"] = {"$regex": "|".join(
+                re.escape(t) for t in trans), "$options": "i"}
     # ── Price filter (works on current_bid / estimated_total_price / legacy price) ──
     # PHASE B2.1 OPERATIONAL FIX (May 2026):
     #   The filter was previously fully ignored because the listing path
@@ -11288,7 +11724,8 @@ async def public_vehicles(
                 {f: {"$lte": price_max, "$gt": 0}} for f in PRICE_FIELDS
             ]})
 
-        matches_range = {"$and": [priced_exists, *range_clauses]} if range_clauses else priced_exists
+        matches_range = {
+            "$and": [priced_exists, *range_clauses]} if range_clauses else priced_exists
 
         if (price_filter_mode or "strict").lower() == "liberal":
             # Legacy behaviour: also include docs that have no known price.
@@ -11304,10 +11741,12 @@ async def public_vehicles(
     if auction_status:
         try:
             now = datetime.now(timezone.utc)
-            statuses = [s.strip() for s in auction_status.split(",") if s.strip()]
+            statuses = [s.strip()
+                        for s in auction_status.split(",") if s.strip()]
             extras = []
             if "within7" in statuses:
-                extras.append({"sale_date": {"$gte": now, "$lte": now + timedelta(days=7)}})
+                extras.append(
+                    {"sale_date": {"$gte": now, "$lte": now + timedelta(days=7)}})
             if "upcoming" in statuses:
                 extras.append({"sale_date": {"$gte": now}})
             if "buyNow" in statuses:
@@ -11448,12 +11887,15 @@ async def public_vehicles(
             elif isinstance(sd_raw, str) and sd_raw:
                 # Accept DD.MM.YYYY or DD/MM/YYYY or ISO
                 try:
-                    m = re.match(r"^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$", sd_raw.strip())
+                    m = re.match(
+                        r"^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$", sd_raw.strip())
                     if m:
                         dd, mm, yyyy = m.groups()
-                        sd_date = datetime(int(yyyy), int(mm), int(dd), tzinfo=timezone.utc).date()
+                        sd_date = datetime(int(yyyy), int(mm), int(
+                            dd), tzinfo=timezone.utc).date()
                     else:
-                        sd_p = datetime.fromisoformat(sd_raw.replace("Z", "+00:00"))
+                        sd_p = datetime.fromisoformat(
+                            sd_raw.replace("Z", "+00:00"))
                         sd_date = sd_p.date()
                 except Exception:
                     sd_date = None
@@ -11461,7 +11903,8 @@ async def public_vehicles(
             it["sold"] = bool(explicit or past_sale)
             if it["sold"]:
                 if not it.get("sold_price"):
-                    it["sold_price"] = it.get("final_price") or it.get("current_bid") or it.get("price")
+                    it["sold_price"] = it.get("final_price") or it.get(
+                        "current_bid") or it.get("price")
                 if not it.get("sold_date"):
                     it["sold_date"] = it.get("sale_date")
     except Exception as _e:
@@ -11473,14 +11916,16 @@ async def public_vehicles(
     # the empty/short result set is explainable instead of mysterious.
     # Computed only when caller asked for price filtering; otherwise we
     # skip the extra count to keep the listing path O(1).
-    meta: Dict[str, Any] = {"price_filter_mode": (price_filter_mode or "strict").lower()}
+    meta: Dict[str, Any] = {"price_filter_mode": (
+        price_filter_mode or "strict").lower()}
     if price_min is not None or price_max is not None:
         try:
             # Re-run the query WITHOUT the price clause to know how many
             # docs matched everything else. Cheap (indexed) at our scale.
             non_price_query: Dict[str, Any] = dict(query)
             ands = non_price_query.get("$and") or []
-            price_clause_signature = ("current_bid", "estimated_total_price", "price")
+            price_clause_signature = (
+                "current_bid", "estimated_total_price", "price")
             stripped = []
             for clause in ands:
                 # Best-effort: drop the clause our price block produced.
@@ -11494,11 +11939,13 @@ async def public_vehicles(
                 non_price_query.pop("$and", None)
             total_without_price = await db.vin_data.count_documents(non_price_query)
             meta["total_without_price_filter"] = total_without_price
-            meta["hidden_by_price_filter"] = max(0, total_without_price - total)
+            meta["hidden_by_price_filter"] = max(
+                0, total_without_price - total)
         except Exception as _e:
             logger.debug(f"[public/vehicles] price meta skipped: {_e}")
 
     return {"success": True, "data": items, "total": total, "limit": limit, "skip": skip, "meta": meta}
+
 
 @fastapi_app.get("/api/public/vehicles/{vehicle_id}")
 async def public_vehicle_detail(vehicle_id: str):
@@ -11525,6 +11972,7 @@ _BRAND_CANONICAL = {
     "mercedes": "Mercedes-Benz",
     "vw": "Volkswagen",
 }
+
 
 @fastapi_app.get("/api/public/brands")
 async def public_brands():
@@ -11615,10 +12063,12 @@ async def public_brands():
         collapsed_counts: Dict[str, int] = {}
         for raw_key, n in db_counts.items():
             canon = _canon(raw_key)
-            collapsed_counts[canon] = collapsed_counts.get(canon, 0) + int(n or 0)
+            collapsed_counts[canon] = collapsed_counts.get(
+                canon, 0) + int(n or 0)
 
         # Build final list: every catalog brand + any DB-only collapsed names
-        all_names_set = set(VEHICLE_CATALOG.keys()) | set(collapsed_counts.keys())
+        all_names_set = set(VEHICLE_CATALOG.keys()) | set(
+            collapsed_counts.keys())
         items_by_lc: Dict[str, dict] = {}
         for name in all_names_set:
             aliases = BRAND_ALIASES_REVERSE.get(name, [name])
@@ -11629,7 +12079,8 @@ async def public_brands():
                 count += collapsed_counts.get(_canon(a), 0)
             count += collapsed_counts.get(name, 0) - (
                 # avoid double-counting when name itself is in aliases
-                collapsed_counts.get(name, 0) if name in (_canon(a) for a in aliases) else 0
+                collapsed_counts.get(name, 0) if name in (
+                    _canon(a) for a in aliases) else 0
             )
             lc = name.lower()
             existing = items_by_lc.get(lc)
@@ -11750,9 +12201,6 @@ async def public_models(brand: Optional[str] = None):
         return {"success": False, "data": [], "error": str(e)}
 
 
-
-
-
 # ═══════════════════════════════════════════════════════════════════
 # PUBLIC FEATURED LISTINGS (live BidMotors catalogue, 5-min TTL cache)
 # Used by the homepage "Top vehicles deals of the week" block.
@@ -11825,7 +12273,8 @@ async def public_featured_listings(
             for d in local:
                 imgs = d.get("images") or d.get("image_urls") or []
                 title = d.get("title") or (
-                    f"{d.get('year', '')} {d.get('make', '')} {d.get('model', '')}".strip() or None
+                    f"{d.get('year', '')} {d.get('make', '')} {d.get('model', '')}".strip(
+                    ) or None
                 )
                 items.append({
                     "vin": d.get("vin"),
@@ -11870,6 +12319,7 @@ async def public_featured_listings(
 
     return payload
 
+
 @fastapi_app.post("/api/public/leads/quick")
 async def create_quick_lead(data: Dict[str, Any] = Body(...)):
     """Create quick lead from public site (incl. calculator leads)."""
@@ -11893,6 +12343,7 @@ async def create_quick_lead(data: Dict[str, Any] = Body(...)):
     }
     await db.leads.insert_one(lead)
     return {"success": True, "leadId": lead["id"]}
+
 
 @fastapi_app.post("/api/public/leads/from-quote")
 async def create_lead_from_quote(data: Dict[str, Any] = Body(...)):
@@ -11927,7 +12378,8 @@ async def create_lead_from_quote(data: Dict[str, Any] = Body(...)):
         "message":  data.get("message") or "",
         "source":   data.get("source") or "calculator",
         "status":   "new",
-        "score":    80,                                 # calculator-originated leads are warmer
+        # calculator-originated leads are warmer
+        "score":    80,
         "created_at": now,
     }
     await db.leads.insert_one(lead)
@@ -11939,8 +12391,10 @@ async def create_lead_from_quote(data: Dict[str, Any] = Body(...)):
                 {"$set": {"lead_id": lead_id, "updated_at": now}},
             )
         except Exception as _e:
-            logger.warning(f"[lead-from-quote] could not attach lead_id to calculation {calc_id}: {_e}")
+            logger.warning(
+                f"[lead-from-quote] could not attach lead_id to calculation {calc_id}: {_e}")
     return {"success": True, "leadId": lead_id, "calculationId": calc_id}
+
 
 @fastapi_app.get("/api/public/vin/{vin}")
 async def public_vin_lookup(vin: str):
@@ -11948,26 +12402,27 @@ async def public_vin_lookup(vin: str):
     vin = vin.upper()
     if not is_valid_vin(vin):
         raise HTTPException(status_code=400, detail="Invalid VIN")
-    
+
     vehicle = await db.vin_data.find_one({"vin": vin}, {'_id': 0})
     if vehicle:
         return {"success": True, "data": vehicle, "source": "database"}
-    
+
     return {"success": True, "data": None, "message": "VIN not found in database"}
 
 # ═══════════════════════════════════════════════════════════════════
 # VIN SEARCH V2 (compatibility layer)
 # ═══════════════════════════════════════════════════════════════════
 
+
 @fastapi_app.get("/api/v2/search/{vin}")
 async def vin_search_v2(vin: str):
     """VIN search endpoint for frontend compatibility - now with bid.cars integration"""
     start_time = time.time()
     vin = vin.upper()
-    
+
     if not is_valid_vin(vin):
         raise HTTPException(status_code=400, detail="Invalid VIN format")
-    
+
     # 1. Check local database first
     vehicle = await db.vin_data.find_one({"vin": vin}, {'_id': 0})
     if vehicle:
@@ -12004,7 +12459,7 @@ async def vin_search_v2(vin: str):
             "cached": True,
             "quality_level": vehicle.get("quality"),
         }
-        
+
         # Try to enrich with BidMotors live data if images are missing or incomplete
         if len(result.get("image_urls", [])) < 5 and BITMOTORS_AVAILABLE and bitmotors_parser_instance:
             try:
@@ -12018,12 +12473,14 @@ async def vin_search_v2(vin: str):
                     if not result.get("source_url") and bm_result.get("source_url"):
                         result["source_url"] = bm_result["source_url"]
                     result["winning_source"] = "local_db+bidmotors_live"
-                    result["response_time_ms"] = int((time.time() - start_time) * 1000)
+                    result["response_time_ms"] = int(
+                        (time.time() - start_time) * 1000)
             except Exception as e:
-                logger.warning(f"[VIN-SEARCH] BidMotors enrichment failed: {e}")
-        
+                logger.warning(
+                    f"[VIN-SEARCH] BidMotors enrichment failed: {e}")
+
         return result
-    
+
     # 2. Check bid.cars parsed vehicles
     bidcars_vehicle = await db.bidcars_vehicles.find_one({"vin": vin}, {'_id': 0})
     if bidcars_vehicle:
@@ -12055,7 +12512,7 @@ async def vin_search_v2(vin: str):
             "response_time_ms": int((time.time() - start_time) * 1000),
             "cached": True
         }
-    
+
     # 3. Try BidMotors live search
     if BITMOTORS_AVAILABLE and bitmotors_parser_instance:
         try:
@@ -12096,7 +12553,7 @@ async def vin_search_v2(vin: str):
                 }
         except Exception as e:
             logger.warning(f"[VIN-SEARCH] BidMotors live search failed: {e}")
-    
+
     # 4. Return not found - explicitly mark as error so frontend doesn't confuse it with found
     return {
         "success": False,
@@ -12184,7 +12641,8 @@ def _vehicle_doc_to_public_card(vehicle: Dict[str, Any]) -> Dict[str, Any]:
 
 @fastapi_app.get("/api/public/search/suggest")
 async def public_search_suggest(
-    q: str = Query(..., min_length=1, max_length=32, description="Search term (VIN/LOT/title fragment)"),
+    q: str = Query(..., min_length=1, max_length=32,
+                   description="Search term (VIN/LOT/title fragment)"),
     limit: int = Query(6, ge=1, le=12),
     live: bool = Query(True, description="Hit BidMotors live (recommended)."),
 ):
@@ -12279,7 +12737,7 @@ async def public_search_suggest(
         return {
             "vin": d.get("vin"),
             "title": d.get("title")
-                or (f"{d.get('year', '')} {d.get('make', '')} {d.get('model', '')} {d.get('trim', '')}".strip() or None),
+            or (f"{d.get('year', '')} {d.get('make', '')} {d.get('model', '')} {d.get('trim', '')}".strip() or None),
             "year": d.get("year"), "make": d.get("make"), "model": d.get("model"), "trim": d.get("trim"),
             "lot_number": d.get("lot_number"), "price": d.get("price"),
             "image": imgs[0] if imgs else None,
@@ -12311,7 +12769,8 @@ async def public_search_suggest(
                 docs = [d]
         if not docs and re.fullmatch(r"\d{3,10}", clean_q):
             cursor = db.vin_data.find(
-                {"lot_number": {"$regex": f"^{re.escape(clean_q)}", "$options": "i"}},
+                {"lot_number": {
+                    "$regex": f"^{re.escape(clean_q)}", "$options": "i"}},
                 projection,
             ).limit(limit)
             docs = await cursor.to_list(length=limit)
@@ -12391,6 +12850,7 @@ async def vin_search_query(q: str = ""):
     ).limit(20)
     items = await cursor.to_list(length=20)
     return {"success": True, "data": items}
+
 
 @fastapi_app.get("/api/vin/{vin}")
 async def vin_lookup_v2(vin: str):
@@ -12658,7 +13118,8 @@ async def vin_shell(vin: str):
     if db is None:
         raise HTTPException(status_code=503, detail="db not available")
     start = time.time()
-    vin_clean = (vs_normalize_vin(vin) if VIN_SERVICE_AVAILABLE and vin else (vin or "")).strip().upper()
+    vin_clean = (vs_normalize_vin(vin) if VIN_SERVICE_AVAILABLE and vin else (
+        vin or "")).strip().upper()
 
     if not vin_clean:
         return {
@@ -12675,7 +13136,8 @@ async def vin_shell(vin: str):
         missing = [f for f in _SHELL_ESSENTIAL_FIELDS
                    if projection.get(f) in (None, "", [])]
         last_seen = doc.get("last_seen")
-        last_enr = doc.get("last_enriched_at") or doc.get("updated_at") or last_seen
+        last_enr = doc.get("last_enriched_at") or doc.get(
+            "updated_at") or last_seen
         freshness, age = _shell_freshness(last_seen, last_enr)
         return {
             "found": True,
@@ -12838,7 +13300,8 @@ async def vin_enrich(vin: str):
                 if isinstance(live_images, list) and len(live_images) > 0:
                     # Cap at 30 to keep the doc small.
                     update_fields["image_urls"] = list(live_images[:30])
-                    update_fields["image_count"] = len(update_fields["image_urls"])
+                    update_fields["image_count"] = len(
+                        update_fields["image_urls"])
             except Exception:
                 pass
             await db.vin_data.update_one(
@@ -12847,7 +13310,8 @@ async def vin_enrich(vin: str):
                 upsert=False,
             )
     except Exception as _e:
-        logger.debug(f"[vin/{vin_clean}/enrich] mark last_enriched_at failed: {_e}")
+        logger.debug(
+            f"[vin/{vin_clean}/enrich] mark last_enriched_at failed: {_e}")
 
     elapsed_ms = int((time.time() - start) * 1000)
     res["response_time_ms"] = elapsed_ms
@@ -12946,7 +13410,8 @@ async def parser_circuits_alias():
     if not VIN_SERVICE_AVAILABLE:
         return {"success": False, "error": "vin_service not loaded", "breakers": {}}
     breakers = vs_get_circuit_stats() or {}
-    open_count = sum(1 for v in breakers.values() if isinstance(v, dict) and v.get("state") == "open")
+    open_count = sum(1 for v in breakers.values() if isinstance(
+        v, dict) and v.get("state") == "open")
     return {
         "success": True,
         "breakers": breakers,
@@ -13002,7 +13467,8 @@ async def parser_self_heal():
         # PARSER_REGISTRY lives in module scope of server.py, so just access it
         for entry in PARSER_REGISTRY.values():  # noqa: F821
             try:
-                entry.last_seen_at = datetime.now(timezone.utc).isoformat()  # type: ignore[attr-defined]
+                entry.last_seen_at = datetime.now(
+                    timezone.utc).isoformat()  # type: ignore[attr-defined]
             except Exception:
                 pass
         actions.append("parser_registry_touched")
@@ -13100,7 +13566,8 @@ async def public_unified_search(query: str):
                 imgs = d.get("images") or d.get("image_urls") or []
                 if isinstance(imgs, str):
                     imgs = [imgs]
-                src_u = vs_res.get("source", "SEARCH")  # SEARCH | WESTMOTORS | LEMON | PAGE | CACHE
+                # SEARCH | WESTMOTORS | LEMON | PAGE | CACHE
+                src_u = vs_res.get("source", "SEARCH")
                 # UI source label — keep the legacy LIVE/CACHE/STALE_FALLBACK badge alphabet
                 ui_source = (
                     "CACHE" if src_u == "CACHE"
@@ -13113,7 +13580,7 @@ async def public_unified_search(query: str):
                     "success": True,
                     "vin": d.get("vin") or value,
                     "title": d.get("title")
-                        or (f"{d.get('year','')} {d.get('make','')} {d.get('model','')}".strip() or None),
+                    or (f"{d.get('year', '')} {d.get('make', '')} {d.get('model', '')}".strip() or None),
                     "year": d.get("year"),
                     "make": d.get("make"),
                     "model": d.get("model"),
@@ -13194,7 +13661,7 @@ async def public_unified_search(query: str):
                     "success": True,
                     "vin": history_payload.get("vin") or value,
                     "title": history_payload.get("title")
-                        or (f"{history_payload.get('year','')} {history_payload.get('make','')} {history_payload.get('model','')}".strip() or None),
+                    or (f"{history_payload.get('year', '')} {history_payload.get('make', '')} {history_payload.get('model', '')}".strip() or None),
                     "year": history_payload.get("year"),
                     "make": history_payload.get("make"),
                     "model": history_payload.get("model"),
@@ -13265,7 +13732,8 @@ async def public_unified_search(query: str):
                     pass
                 return ho_payload
         except Exception as e:
-            logger.warning(f"[PUBLIC-SEARCH] vin_service failed for {value}: {e}")
+            logger.warning(
+                f"[PUBLIC-SEARCH] vin_service failed for {value}: {e}")
 
     # ─── For non-VIN queries (LOT / partial / unknown) keep legacy LIVE-FIRST ───
 
@@ -13277,7 +13745,7 @@ async def public_unified_search(query: str):
             "success": True,
             "vin": payload.get("vin"),
             "title": payload.get("title")
-                or (f"{payload.get('year','')} {payload.get('make','')} {payload.get('model','')}".strip() or None),
+            or (f"{payload.get('year', '')} {payload.get('make', '')} {payload.get('model', '')}".strip() or None),
             "year": payload.get("year"),
             "make": payload.get("make"),
             "model": payload.get("model"),
@@ -13345,7 +13813,8 @@ async def public_unified_search(query: str):
             live_payload = None
 
     if live_payload:
-        card = _build_card(live_payload, "LIVE", fresh=True, multi_items=multi_live)
+        card = _build_card(live_payload, "LIVE", fresh=True,
+                           multi_items=multi_live)
         # Save fresh result into TTL cache
         try:
             if live_search_cache is not None:
@@ -13383,8 +13852,10 @@ async def public_unified_search(query: str):
         except Exception:
             cached = None
         if cached and cached.get("payload"):
-            card = _build_card(cached["payload"], "CACHE", fresh=False, multi_items=cached.get("items") or [])
-            card["cache_age_seconds"] = int(time.time() - cached.get("ts", time.time()))
+            card = _build_card(
+                cached["payload"], "CACHE", fresh=False, multi_items=cached.get("items") or [])
+            card["cache_age_seconds"] = int(
+                time.time() - cached.get("ts", time.time()))
             try:
                 asyncio.create_task(_log_public_search(
                     raw=query, clean=value, kind=parsed["kind"],
@@ -13413,9 +13884,12 @@ async def public_unified_search(query: str):
             if not local and parsed["kind"] == "unknown":
                 local = await db.vin_data.find_one(
                     {"$or": [
-                        {"vin": {"$regex": f"^{re.escape(value)}", "$options": "i"}},
-                        {"lot_number": {"$regex": f"^{re.escape(value)}", "$options": "i"}},
-                        {"title": {"$regex": re.escape(value), "$options": "i"}},
+                        {"vin": {
+                            "$regex": f"^{re.escape(value)}", "$options": "i"}},
+                        {"lot_number": {
+                            "$regex": f"^{re.escape(value)}", "$options": "i"}},
+                        {"title": {"$regex": re.escape(
+                            value), "$options": "i"}},
                     ]},
                     {"_id": 0},
                 )
@@ -13435,7 +13909,8 @@ async def public_unified_search(query: str):
                     "image": (c.get("images") or [None])[0],
                     "auction_name": c.get("auction_name"),
                 })
-        card = _build_card(local, "STALE_FALLBACK", fresh=False, multi_items=mini)
+        card = _build_card(local, "STALE_FALLBACK",
+                           fresh=False, multi_items=mini)
         try:
             asyncio.create_task(_log_public_search(
                 raw=query, clean=value, kind=parsed["kind"],
@@ -13481,17 +13956,18 @@ async def bulk_vehicle_lookup(vin: str):
     """Bulk vehicle lookup fallback"""
     vin = vin.upper()
     vehicle = await db.vin_data.find_one({"vin": vin}, {'_id': 0})
-    
+
     if vehicle:
         return {"success": True, "data": vehicle}
     return {"success": False, "data": None}
+
 
 @fastapi_app.get("/api/vin-resolver/{vin}/test")
 async def vin_resolver_test(vin: str):
     """Test VIN resolver"""
     vin = vin.upper()
     vehicle = await db.vin_data.find_one({"vin": vin}, {'_id': 0})
-    
+
     return {
         "success": True,
         "vin": vin,
@@ -13719,8 +14195,10 @@ async def calculator_ports():
         "vehicleTypes": VEHICLE_TYPES,
         "auctions": AUCTIONS,
         "origins": [
-            {"code": "usa", "name": "USA → Bulgaria", "profileCode": DEFAULT_PROFILE_CODE},
-            {"code": "korea", "name": "Korea → Romania → Bulgaria", "profileCode": KOREA_PROFILE_CODE},
+            {"code": "usa", "name": "USA → Bulgaria",
+                "profileCode": DEFAULT_PROFILE_CODE},
+            {"code": "korea", "name": "Korea → Romania → Bulgaria",
+                "profileCode": KOREA_PROFILE_CODE},
         ],
     }
 
@@ -13778,6 +14256,7 @@ from app.services.calculator import _apply_usa_visibility_overrides as _apply_us
 
 _orig_calc_fn = calculator_calculate
 
+
 @fastapi_app.post("/api/calculator/calculate-with-visibility")
 async def calculator_calculate_with_visibility(data: Dict[str, Any] = _Body_block5(...)):
     """Same as /api/calculator/calculate but post-applies admin visibility overrides.
@@ -13808,7 +14287,8 @@ async def calculator_get_profile(code: str = DEFAULT_PROFILE_CODE):
 async def calculator_update_profile(data: Dict[str, Any] = Body(...)):
     """Update calculator profile (admin)."""
     code = data.get("code") or DEFAULT_PROFILE_CODE
-    patch = {k: v for k, v in data.items() if k not in ("_id", "code", "updated_at")}
+    patch = {k: v for k, v in data.items() if k not in (
+        "_id", "code", "updated_at")}
     patch["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.calculator_profile.update_one({"code": code}, {"$set": patch}, upsert=True)
     _invalidate_calc_cache()
@@ -13828,7 +14308,7 @@ async def calculator_get_routes(code: str):
 async def calculator_upsert_route(data: Dict[str, Any] = Body(...)):
     """Create or update a route rate (admin)."""
     route_id = data.get("id") or data.get("_id") or (
-        f"{data.get('rateType','route')}-{data.get('destinationCode','')}-{data.get('vehicleType','')}"
+        f"{data.get('rateType', 'route')}-{data.get('destinationCode', '')}-{data.get('vehicleType', '')}"
         .strip("-").replace(" ", "-").lower()
     )
     doc = {k: v for k, v in data.items() if k not in ("_id", "id")}
@@ -13854,14 +14334,16 @@ async def calculator_delete_route(route_id: str):
 async def calculator_get_auction_fees(code: str):
     """List tiered auction buyer fees for a profile."""
     await _ensure_calculator_seed()
-    cursor = db.calculator_auction_fees.find({"profileCode": code}, {"_id": 0}).sort("minBid", 1)
+    cursor = db.calculator_auction_fees.find(
+        {"profileCode": code}, {"_id": 0}).sort("minBid", 1)
     return await cursor.to_list(length=100)
 
 
 @fastapi_app.post("/api/calculator/config/auction-fees")
 async def calculator_upsert_auction_fee(data: Dict[str, Any] = Body(...)):
     """Create or update a tiered auction fee rule (admin)."""
-    fee_id = data.get("id") or data.get("_id") or f"tier-{data.get('minBid', 0)}"
+    fee_id = data.get("id") or data.get(
+        "_id") or f"tier-{data.get('minBid', 0)}"
     doc = {k: v for k, v in data.items() if k not in ("_id", "id")}
     doc["id"] = fee_id
     doc.setdefault("profileCode", DEFAULT_PROFILE_CODE)
@@ -13915,7 +14397,8 @@ async def calculator_get_usa_inland_defaults():
         "exportPorts":        USA_EXPORT_PORTS,
         "destinationPorts":   USA_DESTINATION_PORTS,
         "stateMatrix":        USA_STATE_TO_PORT,         # preferred port per state
-        "stateDistances":     STATE_PORT_DISTANCES,      # 51 × 8 derived miles (read-only)
+        # 51 × 8 derived miles (read-only)
+        "stateDistances":     STATE_PORT_DISTANCES,
         "buckets":            USA_INLAND_BUCKETS_DEFAULT,
         "vehicleMultipliers": USA_INLAND_VEHICLE_MULTIPLIERS_DEFAULT,
         "auctionFallback":    AUCTION_DEFAULT_STATE,
@@ -14060,7 +14543,8 @@ async def calculator_admin_stats():
     try:
         async for q in db.quotes.find({}, {"calculation.total": 1, "_id": 0}):
             try:
-                total_value += float((q.get("calculation") or {}).get("total") or 0)
+                total_value += float((q.get("calculation")
+                                     or {}).get("total") or 0)
             except (TypeError, ValueError):
                 continue
     except Exception:
@@ -14069,7 +14553,8 @@ async def calculator_admin_stats():
     active_profile_doc = await db.calculator_profile.find_one(
         {"isActive": True}, {"_id": 0, "name": 1, "code": 1}
     )
-    active_profile_label = (active_profile_doc or {}).get("name") or DEFAULT_PROFILE_CODE
+    active_profile_label = (active_profile_doc or {}).get(
+        "name") or DEFAULT_PROFILE_CODE
 
     return {
         # current schema
@@ -14084,6 +14569,7 @@ async def calculator_admin_stats():
         "profiles": profiles_total,
         "activeProfile": active_profile_label,
     }
+
 
 @fastapi_app.post("/api/calculator/quote")
 async def calculator_quote(data: Dict[str, Any] = Body(...)):
@@ -14111,6 +14597,7 @@ async def calculator_quote(data: Dict[str, Any] = Body(...)):
     # Remove _id before returning to avoid serialization issues
     quote.pop("_id", None)
     return {"success": True, "quote": quote}
+
 
 @fastapi_app.patch("/api/calculator/quote/{quote_id}/scenario")
 async def update_quote_scenario(quote_id: str, data: Dict[str, Any] = Body(...)):
@@ -14140,6 +14627,7 @@ async def list_quotes(limit: int = 20):
     items = await cursor.to_list(length=limit)
     return {"success": True, "data": items}
 
+
 @fastapi_app.get("/api/calculator/config/routes")
 async def calculator_routes():
     """Get shipping routes"""
@@ -14152,6 +14640,7 @@ async def calculator_routes():
         ]
     }
 
+
 @fastapi_app.get("/api/calculator/config/auction-fees/{auction}")
 async def calculator_auction_fees(auction: str):
     """Get auction fees config"""
@@ -14161,6 +14650,7 @@ async def calculator_auction_fees(auction: str):
 # ═══════════════════════════════════════════════════════════════════
 # AUCTION RANKING ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
+
 
 @fastapi_app.get("/api/auction-ranking/stats")
 async def auction_ranking_stats():
@@ -14176,12 +14666,14 @@ async def auction_ranking_stats():
         }
     }
 
+
 @fastapi_app.get("/api/auction-ranking/hot")
 async def auction_ranking_hot(limit: int = 8):
     """Hot vehicles (most viewed)"""
     cursor = db.vin_data.find({}, {'_id': 0}).sort('views', -1).limit(limit)
     items = await cursor.to_list(length=limit)
     return {"success": True, "data": items}
+
 
 @fastapi_app.get("/api/auction-ranking/ending-soon")
 async def auction_ranking_ending_soon(limit: int = 8):
@@ -14193,12 +14685,15 @@ async def auction_ranking_ending_soon(limit: int = 8):
     items = await cursor.to_list(length=limit)
     return {"success": True, "data": items}
 
+
 @fastapi_app.get("/api/auction-ranking/upcoming")
 async def auction_ranking_upcoming(limit: int = 8):
     """Upcoming auctions"""
-    cursor = db.vin_data.find({}, {'_id': 0}).sort('created_at', -1).limit(limit)
+    cursor = db.vin_data.find({}, {'_id': 0}).sort(
+        'created_at', -1).limit(limit)
     items = await cursor.to_list(length=limit)
     return {"success": True, "data": items}
+
 
 @fastapi_app.get("/api/auction-ranking/vehicle/{vehicle_id}")
 async def auction_ranking_vehicle(vehicle_id: str):
@@ -14215,18 +14710,26 @@ async def auction_ranking_vehicle(vehicle_id: str):
 # SEO CLUSTERS / COLLECTIONS
 # ═══════════════════════════════════════════════════════════════════
 
+
 @fastapi_app.get("/api/seo-clusters/public")
 async def seo_clusters_public():
     """Public SEO clusters (collections)"""
     clusters = [
-        {"slug": "bmw-3-series", "name": "BMW 3 Series", "count": 45, "image": "/images/bmw-3.jpg"},
-        {"slug": "mercedes-c-class", "name": "Mercedes C-Class", "count": 38, "image": "/images/merc-c.jpg"},
-        {"slug": "audi-a4", "name": "Audi A4", "count": 32, "image": "/images/audi-a4.jpg"},
-        {"slug": "toyota-camry", "name": "Toyota Camry", "count": 55, "image": "/images/camry.jpg"},
-        {"slug": "honda-accord", "name": "Honda Accord", "count": 42, "image": "/images/accord.jpg"},
-        {"slug": "lexus-es", "name": "Lexus ES", "count": 28, "image": "/images/lexus-es.jpg"},
+        {"slug": "bmw-3-series", "name": "BMW 3 Series",
+            "count": 45, "image": "/images/bmw-3.jpg"},
+        {"slug": "mercedes-c-class", "name": "Mercedes C-Class",
+            "count": 38, "image": "/images/merc-c.jpg"},
+        {"slug": "audi-a4", "name": "Audi A4",
+            "count": 32, "image": "/images/audi-a4.jpg"},
+        {"slug": "toyota-camry", "name": "Toyota Camry",
+            "count": 55, "image": "/images/camry.jpg"},
+        {"slug": "honda-accord", "name": "Honda Accord",
+            "count": 42, "image": "/images/accord.jpg"},
+        {"slug": "lexus-es", "name": "Lexus ES",
+            "count": 28, "image": "/images/lexus-es.jpg"},
     ]
     return {"success": True, "data": clusters}
+
 
 @fastapi_app.get("/api/seo-clusters/public/{slug}")
 async def seo_cluster_detail(slug: str):
@@ -14234,13 +14737,13 @@ async def seo_cluster_detail(slug: str):
     # Parse slug to get make/model
     parts = slug.split("-")
     make = parts[0] if parts else ""
-    
+
     cursor = db.vin_data.find(
         {"make": {"$regex": make, "$options": "i"}},
         {'_id': 0}
     ).limit(50)
     items = await cursor.to_list(length=50)
-    
+
     return {
         "success": True,
         "cluster": {"slug": slug, "name": slug.replace("-", " ").title()},
@@ -14252,36 +14755,44 @@ async def seo_cluster_detail(slug: str):
 # PUBLISHING / MODERATION
 # ═══════════════════════════════════════════════════════════════════
 
+
 @fastapi_app.get("/api/publishing/queue")
 async def publishing_queue(status: str = "pending", limit: int = 50):
     """Get publishing queue"""
-    cursor = db.publishing_queue.find({"status": status}, {'_id': 0}).limit(limit)
+    cursor = db.publishing_queue.find(
+        {"status": status}, {'_id': 0}).limit(limit)
     items = await cursor.to_list(length=limit)
     return {"success": True, "data": items, "total": len(items)}
+
 
 @fastapi_app.post("/api/publishing/bulk/{action}")
 async def publishing_bulk_action(action: str, data: Dict[str, Any] = Body(...)):
     """Bulk approve/reject — literal route, MUST stay above the parameterized one."""
     ids = data.get("ids", [])
-    status_map = {"approve": "approved", "reject": "rejected", "publish": "published"}
+    status_map = {"approve": "approved",
+                  "reject": "rejected", "publish": "published"}
     await db.publishing_queue.update_many(
         {"id": {"$in": ids}},
         {"$set": {"status": status_map.get(action, action)}}
     )
     return {"success": True, "updated": len(ids)}
 
+
 @fastapi_app.post("/api/publishing/{item_id}/{action}")
 async def publishing_action(item_id: str, action: str, data: Dict[str, Any] = Body(...)):
     """Approve/reject publishing item"""
     if action not in ["approve", "reject", "publish", "unpublish"]:
         raise HTTPException(status_code=400, detail="Invalid action")
-    
-    status_map = {"approve": "approved", "reject": "rejected", "publish": "published", "unpublish": "draft"}
+
+    status_map = {"approve": "approved", "reject": "rejected",
+                  "publish": "published", "unpublish": "draft"}
     await db.publishing_queue.update_one(
         {"id": item_id},
-        {"$set": {"status": status_map.get(action, action), "updatedBy": data.get("userId")}}
+        {"$set": {"status": status_map.get(
+            action, action), "updatedBy": data.get("userId")}}
     )
     return {"success": True}
+
 
 @fastapi_app.get("/api/publishing/public/listings/{listing_id}")
 async def publishing_public_listing(listing_id: str):
@@ -14297,6 +14808,7 @@ async def publishing_public_listing(listing_id: str):
 # ═══════════════════════════════════════════════════════════════════
 # CUSTOMER AUTH ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _legacy_sha256(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
@@ -14321,6 +14833,7 @@ def _customer_auth_provider(customer: Dict[str, Any]) -> str:
     if src == "google" or (customer or {}).get("googleId") or (customer or {}).get("google_id"):
         return "google"
     return "email"
+
 
 def generate_token() -> str:
     return secrets.token_urlsafe(32)
@@ -14381,7 +14894,8 @@ _CUSTOMER_SESSION_TTL_DAYS = 7
 
 def _customer_response(customer: Dict[str, Any], session_token: str) -> Dict[str, Any]:
     """Build the response shape the frontend expects (flat, top-level fields)."""
-    customer_id = customer.get("customerId") or customer.get("id") or customer.get("user_id")
+    customer_id = customer.get("customerId") or customer.get(
+        "id") or customer.get("user_id")
     has_password = _customer_has_password(customer)
     auth_provider = _customer_auth_provider(customer)
     two_factor = bool(customer.get("totp_enabled"))
@@ -14464,7 +14978,8 @@ async def _resolve_bearer(authorization: Optional[str]) -> Optional[Dict[str, An
     if not customer_id:
         return None
     customer = await db.customers.find_one(
-        {"$or": [{"id": customer_id}, {"customerId": customer_id}, {"user_id": customer_id}]},
+        {"$or": [{"id": customer_id}, {"customerId": customer_id},
+                 {"user_id": customer_id}]},
         {"_id": 0},
     )
     if customer is not None:
@@ -14510,7 +15025,8 @@ async def _access_control_gate(request: Request, call_next):
 
     # Extract bearer (Authorization header only; ?token= honoured ONLY for the
     # call-recording media route that cannot send headers).
-    authz = request.headers.get("authorization") or request.headers.get("Authorization")
+    authz = request.headers.get(
+        "authorization") or request.headers.get("Authorization")
     token = None
     if authz and authz[:7].lower() == "bearer ":
         token = authz[7:].strip()
@@ -14649,7 +15165,8 @@ async def _csp_violation_report(request: Request):
     except Exception:
         payload = {"_unparsed": True}
     try:
-        xff = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+        xff = (request.headers.get("x-forwarded-for")
+               or "").split(",")[0].strip()
         await db.security_csp_reports.insert_one({
             "ts": datetime.now(timezone.utc),
             "ip": xff or (request.client.host if request.client else None),
@@ -14660,7 +15177,6 @@ async def _csp_violation_report(request: Request):
         logger.warning(f"[CSP] report store failed: {e}")
     from starlette.responses import Response as _Resp
     return _Resp(status_code=204)
-
 
 
 # ─── Launch-Candidate security fix (2026-06-09) ───
@@ -14677,7 +15193,8 @@ async def _authorize_customer_cabinet_access(
 
     Returns {"actor": "customer"|"staff", "id": <id>, ...} on success.
     """
-    auth_hdr = request.headers.get("authorization") or request.headers.get("Authorization")
+    auth_hdr = request.headers.get(
+        "authorization") or request.headers.get("Authorization")
     if not auth_hdr:
         raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -14729,15 +15246,19 @@ async def customer_register(data: Dict[str, Any] = Body(...)):
     phone = (data.get("phone") or "").strip()
 
     if not email or not password:
-        raise HTTPException(status_code=400, detail="Email and password required")
+        raise HTTPException(
+            status_code=400, detail="Email and password required")
     if "@" not in email or "." not in email.split("@")[-1]:
-        raise HTTPException(status_code=400, detail="Please enter a valid email address")
+        raise HTTPException(
+            status_code=400, detail="Please enter a valid email address")
     if len(password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+        raise HTTPException(
+            status_code=400, detail="Password must be at least 6 characters")
 
     existing = await db.customers.find_one({"email": email})
     if existing:
-        raise HTTPException(status_code=400, detail="Email already registered. Please sign in instead.")
+        raise HTTPException(
+            status_code=400, detail="Email already registered. Please sign in instead.")
 
     code = _gen_otp_code()
     now = datetime.now(timezone.utc)
@@ -14777,11 +15298,13 @@ async def customer_verify_email(data: Dict[str, Any] = Body(...)):
     email = (data.get("email") or "").strip().lower()
     code = (data.get("code") or "").strip()
     if not email or not code:
-        raise HTTPException(status_code=400, detail="Email and code are required")
+        raise HTTPException(
+            status_code=400, detail="Email and code are required")
 
     doc = await db.customer_email_verifications.find_one({"email": email})
     if not doc:
-        raise HTTPException(status_code=404, detail="No pending verification. Please register again.")
+        raise HTTPException(
+            status_code=404, detail="No pending verification. Please register again.")
 
     now = datetime.now(timezone.utc)
     try:
@@ -14790,11 +15313,13 @@ async def customer_verify_email(data: Dict[str, Any] = Body(...)):
         expires_at = now - timedelta(seconds=1)
     if now > expires_at:
         await db.customer_email_verifications.delete_one({"email": email})
-        raise HTTPException(status_code=400, detail="This code has expired. Please request a new one.")
+        raise HTTPException(
+            status_code=400, detail="This code has expired. Please request a new one.")
 
     if int(doc.get("attempts", 0)) >= _EMAIL_OTP_MAX_ATTEMPTS:
         await db.customer_email_verifications.delete_one({"email": email})
-        raise HTTPException(status_code=429, detail="Too many incorrect attempts. Please register again.")
+        raise HTTPException(
+            status_code=429, detail="Too many incorrect attempts. Please register again.")
 
     if _legacy_sha256(code) != doc.get("code_hash"):
         await db.customer_email_verifications.update_one(
@@ -14804,14 +15329,15 @@ async def customer_verify_email(data: Dict[str, Any] = Body(...)):
         raise HTTPException(
             status_code=400,
             detail=f"Incorrect code. {remaining} attempt(s) left." if remaining > 0
-                   else "Incorrect code. Please request a new one.",
+            else "Incorrect code. Please request a new one.",
         )
 
     # ── Success — guard against a race where the email got registered ──
     existing = await db.customers.find_one({"email": email})
     if existing:
         await db.customer_email_verifications.delete_one({"email": email})
-        raise HTTPException(status_code=400, detail="Email already registered. Please sign in instead.")
+        raise HTTPException(
+            status_code=400, detail="Email already registered. Please sign in instead.")
 
     customer_id = f"cust_{uuid.uuid4().hex[:12]}"
     customer = {
@@ -14852,19 +15378,23 @@ async def customer_resend_email_code(data: Dict[str, Any] = Body(...)):
 
     doc = await db.customer_email_verifications.find_one({"email": email})
     if not doc:
-        raise HTTPException(status_code=404, detail="No pending verification. Please register again.")
+        raise HTTPException(
+            status_code=404, detail="No pending verification. Please register again.")
 
     now = datetime.now(timezone.utc)
     try:
-        cooldown_until = datetime.fromisoformat(doc.get("cooldown_until")) if doc.get("cooldown_until") else now
+        cooldown_until = datetime.fromisoformat(
+            doc.get("cooldown_until")) if doc.get("cooldown_until") else now
     except Exception:
         cooldown_until = now
     if now < cooldown_until:
         wait = int((cooldown_until - now).total_seconds()) + 1
-        raise HTTPException(status_code=429, detail=f"Please wait {wait}s before requesting a new code.")
+        raise HTTPException(
+            status_code=429, detail=f"Please wait {wait}s before requesting a new code.")
 
     if int(doc.get("resends", 0)) >= _EMAIL_OTP_MAX_RESENDS:
-        raise HTTPException(status_code=429, detail="Resend limit reached. Please register again.")
+        raise HTTPException(
+            status_code=429, detail="Resend limit reached. Please register again.")
 
     code = _gen_otp_code()
     await db.customer_email_verifications.update_one(
@@ -14894,13 +15424,15 @@ async def customer_login(data: Dict[str, Any] = Body(...)):
     password = data.get("password") or ""
 
     if not email or not password:
-        raise HTTPException(status_code=400, detail="Email and password required")
+        raise HTTPException(
+            status_code=400, detail="Email and password required")
 
     customer = await db.customers.find_one({"email": email}, {"_id": 0})
     if not customer or customer.get("password") != _legacy_sha256(password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    cid = customer.get("customerId") or customer.get("id") or customer.get("user_id")
+    cid = customer.get("customerId") or customer.get(
+        "id") or customer.get("user_id")
 
     # 2FA gate — if enabled, do NOT mint a session yet; return a short-lived
     # challenge so the client must present a valid TOTP / backup code next.
@@ -14966,13 +15498,16 @@ async def customer_google_logout(authorization: Optional[str] = Header(None)):
                         "$or": [{"token": token}, {"session_token": token}]
                     })
                 except Exception as exc:
-                    logger.warning(f"[customer-auth/logout] delete failed: {exc}")
+                    logger.warning(
+                        f"[customer-auth/logout] delete failed: {exc}")
     return {"success": True}
+
 
 @fastapi_app.put("/api/customer-auth/me/profile")
 async def customer_update_profile(data: Dict[str, Any] = Body(...)):
     """Update customer profile"""
     return {"success": True}
+
 
 @fastapi_app.api_route("/api/customer-auth/me/password", methods=["PUT", "PATCH"])
 async def customer_update_password(
@@ -14991,17 +15526,22 @@ async def customer_update_password(
     if not customer:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    new_password = (data.get("newPassword") or data.get("new_password") or "").strip()
-    current_password = (data.get("currentPassword") or data.get("current_password") or "")
+    new_password = (data.get("newPassword") or data.get(
+        "new_password") or "").strip()
+    current_password = (data.get("currentPassword")
+                        or data.get("current_password") or "")
 
     if len(new_password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+        raise HTTPException(
+            status_code=400, detail="Password must be at least 6 characters")
 
-    customer_id = customer.get("customerId") or customer.get("id") or customer.get("user_id")
+    customer_id = customer.get("customerId") or customer.get(
+        "id") or customer.get("user_id")
 
     # Re-fetch the full doc (with the hash) to verify the current password.
     full = await db.customers.find_one(
-        {"$or": [{"id": customer_id}, {"customerId": customer_id}, {"user_id": customer_id}]}
+        {"$or": [{"id": customer_id}, {
+            "customerId": customer_id}, {"user_id": customer_id}]}
     )
     if not full:
         raise HTTPException(status_code=404, detail="Customer not found")
@@ -15009,11 +15549,13 @@ async def customer_update_password(
     has_password = bool(full.get("password"))
     if has_password:
         if not current_password or full.get("password") != _legacy_sha256(current_password):
-            raise HTTPException(status_code=401, detail="Incorrect current password")
+            raise HTTPException(
+                status_code=401, detail="Incorrect current password")
 
     await db.customers.update_one(
         {"id": full.get("id") or customer_id},
-        {"$set": {"password": _legacy_sha256(new_password), "updatedAt": datetime.now(timezone.utc)}},
+        {"$set": {"password": _legacy_sha256(
+            new_password), "updatedAt": datetime.now(timezone.utc)}},
     )
 
     # Session revocation: drop every OTHER active session for this customer,
@@ -15034,9 +15576,11 @@ async def customer_update_password(
             ]
         })
     except Exception as exc:
-        logger.warning(f"[customer-auth/password] session revoke failed: {exc}")
+        logger.warning(
+            f"[customer-auth/password] session revoke failed: {exc}")
 
     return {"success": True, "hasPassword": True, "wasSet": not has_password}
+
 
 @fastapi_app.put("/api/customer-auth/me/email")
 async def customer_update_email(data: Dict[str, Any] = Body(...)):
@@ -15090,7 +15634,8 @@ def _gen_backup_codes(n: int = _2FA_BACKUP_CODE_COUNT):
         raw = secrets.token_hex(5).upper()  # 10 hex chars
         code = f"{raw[:5]}-{raw[5:]}"
         plain.append(code)
-        docs.append({"hash": _legacy_sha256(code.replace("-", "").upper()), "usedAt": None})
+        docs.append({"hash": _legacy_sha256(
+            code.replace("-", "").upper()), "usedAt": None})
     return plain, docs
 
 
@@ -15133,7 +15678,8 @@ async def _2fa_register_failure(customer_id: str, current_attempts: int) -> int:
         ).isoformat()
         update["twofa_failed_attempts"] = 0  # reset counter once locked
     await db.customers.update_one(
-        {"$or": [{"id": customer_id}, {"customerId": customer_id}, {"user_id": customer_id}]},
+        {"$or": [{"id": customer_id}, {"customerId": customer_id},
+                 {"user_id": customer_id}]},
         {"$set": update},
     )
     return new_attempts
@@ -15141,14 +15687,16 @@ async def _2fa_register_failure(customer_id: str, current_attempts: int) -> int:
 
 async def _2fa_reset_failures(customer_id: str) -> None:
     await db.customers.update_one(
-        {"$or": [{"id": customer_id}, {"customerId": customer_id}, {"user_id": customer_id}]},
+        {"$or": [{"id": customer_id}, {"customerId": customer_id},
+                 {"user_id": customer_id}]},
         {"$set": {"twofa_failed_attempts": 0, "twofa_locked_until": None}},
     )
 
 
 async def _fetch_full_customer(customer_id: str) -> Optional[Dict[str, Any]]:
     return await db.customers.find_one(
-        {"$or": [{"id": customer_id}, {"customerId": customer_id}, {"user_id": customer_id}]}
+        {"$or": [{"id": customer_id}, {
+            "customerId": customer_id}, {"user_id": customer_id}]}
     )
 
 
@@ -15158,7 +15706,8 @@ async def customer_2fa_status(authorization: Optional[str] = Header(None)):
     customer = await _resolve_bearer(authorization)
     if not customer:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    cid = customer.get("customerId") or customer.get("id") or customer.get("user_id")
+    cid = customer.get("customerId") or customer.get(
+        "id") or customer.get("user_id")
     full = await _fetch_full_customer(cid) or {}
     backup = full.get("totp_backup_codes") or []
     remaining = len([b for b in backup if not b.get("usedAt")])
@@ -15189,14 +15738,17 @@ async def customer_2fa_email_enable(
     customer = await _resolve_bearer(authorization)
     if not customer:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    cid = customer.get("customerId") or customer.get("id") or customer.get("user_id")
+    cid = customer.get("customerId") or customer.get(
+        "id") or customer.get("user_id")
     full = await _fetch_full_customer(cid)
     if not full:
         raise HTTPException(status_code=404, detail="Customer not found")
     if full.get("totp_enabled"):
-        raise HTTPException(status_code=400, detail="Authenticator 2FA is already enabled — disable it first.")
+        raise HTTPException(
+            status_code=400, detail="Authenticator 2FA is already enabled — disable it first.")
     if full.get("email_2fa_enabled"):
-        raise HTTPException(status_code=400, detail="Email 2FA is already enabled")
+        raise HTTPException(
+            status_code=400, detail="Email 2FA is already enabled")
     if full.get("password"):
         password = (data or {}).get("password") or ""
         if not password or full.get("password") != _legacy_sha256(password):
@@ -15220,7 +15772,8 @@ async def customer_2fa_email_disable(
     customer = await _resolve_bearer(authorization)
     if not customer:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    cid = customer.get("customerId") or customer.get("id") or customer.get("user_id")
+    cid = customer.get("customerId") or customer.get(
+        "id") or customer.get("user_id")
     full = await _fetch_full_customer(cid)
     if not full:
         raise HTTPException(status_code=404, detail="Customer not found")
@@ -15249,14 +15802,16 @@ async def customer_2fa_setup(
     customer = await _resolve_bearer(authorization)
     if not customer:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    cid = customer.get("customerId") or customer.get("id") or customer.get("user_id")
+    cid = customer.get("customerId") or customer.get(
+        "id") or customer.get("user_id")
     full = await _fetch_full_customer(cid)
     if not full:
         raise HTTPException(status_code=404, detail="Customer not found")
     if full.get("totp_enabled"):
         raise HTTPException(status_code=400, detail="2FA is already enabled")
     if full.get("email_2fa_enabled"):
-        raise HTTPException(status_code=400, detail="Email 2FA is enabled — disable it first to switch to the authenticator app.")
+        raise HTTPException(
+            status_code=400, detail="Email 2FA is enabled — disable it first to switch to the authenticator app.")
 
     # Password re-auth (only enforceable when the account has a password —
     # Google-only accounts have none, so the active session is the auth).
@@ -15272,7 +15827,8 @@ async def customer_2fa_setup(
 
     secret = pyotp.random_base32()
     account = full.get("email") or cid
-    uri = pyotp.TOTP(secret).provisioning_uri(name=account, issuer_name=_TOTP_ISSUER)
+    uri = pyotp.TOTP(secret).provisioning_uri(
+        name=account, issuer_name=_TOTP_ISSUER)
     img = qrcode.make(uri)
     buf = _BytesIO()
     img.save(buf, format="PNG")
@@ -15280,7 +15836,8 @@ async def customer_2fa_setup(
 
     await db.customers.update_one(
         {"id": full.get("id") or cid},
-        {"$set": {"totp_pending_secret": secret, "updatedAt": datetime.now(timezone.utc)}},
+        {"$set": {"totp_pending_secret": secret,
+                  "updatedAt": datetime.now(timezone.utc)}},
     )
     return {
         "manualKey": secret,
@@ -15301,7 +15858,8 @@ async def customer_2fa_verify(
     customer = await _resolve_bearer(authorization)
     if not customer:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    cid = customer.get("customerId") or customer.get("id") or customer.get("user_id")
+    cid = customer.get("customerId") or customer.get(
+        "id") or customer.get("user_id")
     full = await _fetch_full_customer(cid)
     if not full:
         raise HTTPException(status_code=404, detail="Customer not found")
@@ -15340,7 +15898,8 @@ async def customer_2fa_disable(
     customer = await _resolve_bearer(authorization)
     if not customer:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    cid = customer.get("customerId") or customer.get("id") or customer.get("user_id")
+    cid = customer.get("customerId") or customer.get(
+        "id") or customer.get("user_id")
     full = await _fetch_full_customer(cid)
     if not full:
         raise HTTPException(status_code=404, detail="Customer not found")
@@ -15353,10 +15912,12 @@ async def customer_2fa_disable(
             raise HTTPException(status_code=401, detail="Incorrect password")
 
     code = str((data or {}).get("code") or "").strip()
-    backup_code = str((data or {}).get("backupCode") or (data or {}).get("backup_code") or "").strip()
+    backup_code = str((data or {}).get("backupCode") or (
+        data or {}).get("backup_code") or "").strip()
     ok = _totp_verify(full.get("totp_secret"), code)
     if not ok and backup_code:
-        ok = _consume_backup_code(full.get("totp_backup_codes") or [], backup_code) is not None
+        ok = _consume_backup_code(
+            full.get("totp_backup_codes") or [], backup_code) is not None
     if not ok:
         raise HTTPException(status_code=400, detail="Invalid code")
 
@@ -15382,7 +15943,8 @@ async def customer_2fa_regenerate_backup(
     customer = await _resolve_bearer(authorization)
     if not customer:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    cid = customer.get("customerId") or customer.get("id") or customer.get("user_id")
+    cid = customer.get("customerId") or customer.get(
+        "id") or customer.get("user_id")
     full = await _fetch_full_customer(cid)
     if not full:
         raise HTTPException(status_code=404, detail="Customer not found")
@@ -15400,7 +15962,8 @@ async def customer_2fa_regenerate_backup(
     plain_codes, stored = _gen_backup_codes()
     await db.customers.update_one(
         {"id": full.get("id") or cid},
-        {"$set": {"totp_backup_codes": stored, "updatedAt": datetime.now(timezone.utc)}},
+        {"$set": {"totp_backup_codes": stored,
+                  "updatedAt": datetime.now(timezone.utc)}},
     )
     return {"success": True, "backupCodes": plain_codes}
 
@@ -15466,13 +16029,15 @@ async def customer_2fa_challenge_verify(data: Dict[str, Any] = Body(...)):
     success, mint the customer session. Enforces the lockout policy."""
     token = (data.get("challenge_token") or "").strip()
     code = str(data.get("code") or "").strip()
-    backup_code = str(data.get("backupCode") or data.get("backup_code") or "").strip()
+    backup_code = str(data.get("backupCode")
+                      or data.get("backup_code") or "").strip()
     if not token:
         raise HTTPException(status_code=400, detail="challenge_token required")
 
     challenge = await db.customer_2fa_challenges.find_one({"token": token})
     if not challenge:
-        raise HTTPException(status_code=400, detail="Invalid or expired challenge")
+        raise HTTPException(
+            status_code=400, detail="Invalid or expired challenge")
     exp = challenge.get("expires_at")
     if isinstance(exp, str):
         try:
@@ -15483,15 +16048,18 @@ async def customer_2fa_challenge_verify(data: Dict[str, Any] = Body(...)):
         exp = exp.replace(tzinfo=timezone.utc)
     if exp and exp < datetime.now(timezone.utc):
         await db.customer_2fa_challenges.delete_one({"token": token})
-        raise HTTPException(status_code=400, detail="Challenge expired — please sign in again")
+        raise HTTPException(
+            status_code=400, detail="Challenge expired — please sign in again")
 
     cid = challenge.get("customerId")
     method = challenge.get("method") or "totp"
     full = await _fetch_full_customer(cid)
-    active = bool(full and (full.get("totp_enabled") if method == "totp" else full.get("email_2fa_enabled")))
+    active = bool(full and (full.get("totp_enabled") if method ==
+                  "totp" else full.get("email_2fa_enabled")))
     if not active:
         await db.customer_2fa_challenges.delete_one({"token": token})
-        raise HTTPException(status_code=400, detail="2FA not active for this account")
+        raise HTTPException(
+            status_code=400, detail="2FA not active for this account")
 
     # Lockout check
     remaining = _2fa_locked_remaining(full)
@@ -15505,12 +16073,14 @@ async def customer_2fa_challenge_verify(data: Dict[str, Any] = Body(...)):
     if method == "email":
         # Verify the e-mailed one-time code against the hashed challenge value.
         expected = challenge.get("code_hash") or ""
-        ok = bool(code) and hashlib.sha256(code.encode()).hexdigest() == expected
+        ok = bool(code) and hashlib.sha256(
+            code.encode()).hexdigest() == expected
     else:
         # Verify TOTP or a one-time backup code
         ok = _totp_verify(full.get("totp_secret"), code)
         if not ok and backup_code:
-            used_backup_idx = _consume_backup_code(full.get("totp_backup_codes") or [], backup_code)
+            used_backup_idx = _consume_backup_code(
+                full.get("totp_backup_codes") or [], backup_code)
             ok = used_backup_idx is not None
     if not ok:
         attempts = await _2fa_register_failure(cid, full.get("twofa_failed_attempts"))
@@ -15518,22 +16088,22 @@ async def customer_2fa_challenge_verify(data: Dict[str, Any] = Body(...)):
         raise HTTPException(
             status_code=401,
             detail=f"Invalid code. {left} attempt(s) left." if left else
-                   f"Too many attempts. Locked for {_2FA_LOCK_MINUTES} minutes.",
+            f"Too many attempts. Locked for {_2FA_LOCK_MINUTES} minutes.",
         )
 
     # Success — consume backup code if used, clear challenge + failures, mint session
     if used_backup_idx is not None:
         codes = full.get("totp_backup_codes") or []
-        codes[used_backup_idx]["usedAt"] = datetime.now(timezone.utc).isoformat()
+        codes[used_backup_idx]["usedAt"] = datetime.now(
+            timezone.utc).isoformat()
         await db.customers.update_one(
-            {"id": full.get("id") or cid}, {"$set": {"totp_backup_codes": codes}}
+            {"id": full.get("id") or cid}, {
+                "$set": {"totp_backup_codes": codes}}
         )
     await db.customer_2fa_challenges.delete_one({"token": token})
     await _2fa_reset_failures(cid)
     session_token = await _create_customer_session(cid)
     return _customer_response(full, session_token)
-
-
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -15550,9 +16120,9 @@ async def customer_2fa_challenge_verify(data: Dict[str, Any] = Body(...)):
 #
 # The SettingsService singleton is attached to the app at startup; the
 # helper below resolves it with a safe fallback.
-from settings_service import SettingsService, public_subset as _auth_public_subset
 
 _settings_singleton: Optional[SettingsService] = None
+
 
 def get_settings_service() -> SettingsService:
     """Lazy-create the SettingsService tied to the existing `db` handle."""
@@ -15628,7 +16198,8 @@ async def admin_patch_auth_settings(
     NOTE: passing `jwt.secret == "********"` is treated as "keep existing".
     Pass an empty string to explicitly clear it.
     """
-    ALLOWED = {"baseUrl", "frontendUrl", "google", "jwt", "features", "password", "email"}
+    ALLOWED = {"baseUrl", "frontendUrl", "google",
+               "jwt", "features", "password", "email"}
     clean = {k: v for k, v in (payload or {}).items() if k in ALLOWED}
 
     # Guard: masked secret means "don't change"
@@ -15702,11 +16273,13 @@ async def customer_forgot_password(
     svc = get_settings_service()
     auth_cfg = await svc.get_auth()
     if not (auth_cfg.get("features") or {}).get("resetPasswordEnabled", True):
-        raise HTTPException(status_code=403, detail="Password reset is disabled")
+        raise HTTPException(
+            status_code=403, detail="Password reset is disabled")
 
     email = (data.get("email") or "").strip().lower()
     # Never reveal whether the email exists
-    response_ok = {"success": True, "message": "If that email exists, a reset link has been sent."}
+    response_ok = {"success": True,
+                   "message": "If that email exists, a reset link has been sent."}
     if not email:
         return response_ok
 
@@ -15714,7 +16287,8 @@ async def customer_forgot_password(
     if not customer:
         return response_ok
 
-    ttl_minutes = int(((auth_cfg.get("password") or {}).get("resetTokenTtlMinutes")) or 60)
+    ttl_minutes = int(
+        ((auth_cfg.get("password") or {}).get("resetTokenTtlMinutes")) or 60)
     now = datetime.now(timezone.utc)
     token = secrets.token_urlsafe(32)
     await db.password_reset_tokens.insert_one({
@@ -15743,7 +16317,8 @@ async def customer_forgot_password(
             event="customer_password_reset", context={"email": email},
         )
         send_ok = bool(_res.get("ok")) and _res.get("mode") != "dry_run"
-        logger.info("[password-reset] email to=%s mode=%s ok=%s", email, _res.get("mode"), send_ok)
+        logger.info("[password-reset] email to=%s mode=%s ok=%s",
+                    email, _res.get("mode"), send_ok)
     except Exception as exc:
         logger.warning(f"[password-reset] real send failed: {exc}")
 
@@ -15776,7 +16351,8 @@ async def customer_reset_password(data: Dict[str, Any] = Body(...)):
     svc = get_settings_service()
     auth_cfg = await svc.get_auth()
     if not (auth_cfg.get("features") or {}).get("resetPasswordEnabled", True):
-        raise HTTPException(status_code=403, detail="Password reset is disabled")
+        raise HTTPException(
+            status_code=403, detail="Password reset is disabled")
 
     token = (data.get("token") or "").strip()
     new_password = data.get("password") or ""
@@ -15804,7 +16380,8 @@ async def customer_reset_password(data: Dict[str, Any] = Body(...)):
 
     customer_id = row.get("customerId")
     customer = await db.customers.find_one(
-        {"$or": [{"id": customer_id}, {"customerId": customer_id}, {"user_id": customer_id}]},
+        {"$or": [{"id": customer_id}, {"customerId": customer_id},
+                 {"user_id": customer_id}]},
         {"_id": 0},
     )
     if not customer:
@@ -15812,7 +16389,8 @@ async def customer_reset_password(data: Dict[str, Any] = Body(...)):
 
     # Update password using same legacy SHA-256 as /register & /login
     await db.customers.update_one(
-        {"$or": [{"id": customer_id}, {"customerId": customer_id}, {"user_id": customer_id}]},
+        {"$or": [{"id": customer_id}, {"customerId": customer_id},
+                 {"user_id": customer_id}]},
         {
             "$set": {
                 "password": _legacy_sha256(new_password),
@@ -15839,7 +16417,8 @@ async def customer_reset_password(data: Dict[str, Any] = Body(...)):
     try:
         from notifications import EmailChannel
         from app.services.customer_email_templates import render_password_changed_email
-        _subj, _html, _text = render_password_changed_email(name=customer.get("name") or "")
+        _subj, _html, _text = render_password_changed_email(
+            name=customer.get("name") or "")
         await EmailChannel(db).send(
             to=customer.get("email"), subject=_subj, html=_html, text=_text,
             event="customer_password_changed", context={"email": customer.get("email")},
@@ -15894,6 +16473,7 @@ async def customer_cabinet_dashboard():
         }
     }
 
+
 @fastapi_app.get("/api/favorites")
 async def list_favorites(customerId: Optional[str] = None):
     """List customer favorites — admin/legacy. Use /api/favorites/me for the cabinet."""
@@ -15910,6 +16490,7 @@ async def list_favorites(customerId: Optional[str] = None):
 # they require a customer Bearer token and are wired to the frontend
 # FavoriteButton + FavoritesPage in the cabinet.
 
+
 @fastapi_app.post("/api/favorites/add")
 async def add_favorite_alt(
     data: Dict[str, Any] = Body(...),
@@ -15917,6 +16498,7 @@ async def add_favorite_alt(
 ):
     """Alt POST endpoint kept for backwards compat. Delegates to the auth-gated handler."""
     return await add_favorite(data=data, authorization=authorization)  # type: ignore[name-defined]
+
 
 @fastapi_app.post("/api/favorites/remove/{vin}")
 async def remove_favorite_by_vin(
@@ -15930,10 +16512,13 @@ async def remove_favorite_by_vin(
 # ── compare endpoints moved to authoritative implementation around line 18415 ──
 
 # History reports
+
+
 @fastapi_app.get("/api/history/quota/me")
 async def history_quota():
     """Get history report quota"""
     return {"success": True, "quota": {"used": 0, "total": 5, "remaining": 5}}
+
 
 @fastapi_app.post("/api/history/request")
 async def request_history_report(data: Dict[str, Any] = Body(...)):
@@ -15947,6 +16532,7 @@ async def request_history_report(data: Dict[str, Any] = Body(...)):
     from app.repositories.history_reports import HistoryReportRepository
     report = await HistoryReportRepository(db).submit_request(vin=data.get("vin"))
     return {"success": True, "reportId": report["id"]}
+
 
 @fastapi_app.get("/api/history/report/{report_id}")
 async def get_history_report(report_id: str):
@@ -15962,6 +16548,8 @@ async def get_history_report(report_id: str):
     return {"success": True, "data": report}
 
 # Shipping tracking
+
+
 @fastapi_app.get("/api/shipping/me")
 async def my_shipping(customerId: Optional[str] = None, limit: int = 50):
     """Get shipments for the current customer (cabinet view)"""
@@ -15979,6 +16567,7 @@ async def my_shipping(customerId: Optional[str] = None, limit: int = 50):
 # STAFF MANAGEMENT ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
 
+
 @fastapi_app.get("/api/staff", dependencies=[Depends(require_admin)])
 async def list_staff(role: Optional[str] = None, limit: int = 50):
     """List staff members"""
@@ -15988,6 +16577,7 @@ async def list_staff(role: Optional[str] = None, limit: int = 50):
     cursor = db.staff.find(query, {'_id': 0, 'password': 0}).limit(limit)
     items = await cursor.to_list(length=limit)
     return {"success": True, "items": items}
+
 
 @fastapi_app.get("/api/staff/stats", dependencies=[Depends(require_admin)])
 async def staff_stats():
@@ -16004,12 +16594,13 @@ async def staff_stats():
         }
     }
 
+
 @fastapi_app.get("/api/staff/performance", dependencies=[Depends(require_admin)])
 async def staff_performance(period: str = "week"):
     """Staff performance metrics"""
     cursor = db.staff.find({}, {'_id': 0, 'password': 0}).limit(20)
     staff = await cursor.to_list(length=20)
-    
+
     performance = []
     for s in staff:
         performance.append({
@@ -16021,13 +16612,15 @@ async def staff_performance(period: str = "week"):
             "calls": 0,
             "avgResponseTime": 0
         })
-    
+
     return {"success": True, "data": performance}
+
 
 @fastapi_app.get("/api/staff/inactive", dependencies=[Depends(require_admin)])
 async def staff_inactive(hours: int = 2):
     """Get inactive staff"""
     return {"success": True, "data": []}
+
 
 @fastapi_app.post("/api/staff", dependencies=[Depends(require_admin)])
 async def create_staff(data: Dict[str, Any] = Body(...)):
@@ -16057,6 +16650,7 @@ async def create_staff(data: Dict[str, Any] = Body(...)):
     await db.staff.insert_one(staff)
     return {"success": True, "id": staff["id"]}
 
+
 @fastapi_app.put("/api/staff/{staff_id}", dependencies=[Depends(require_admin)])
 async def update_staff(staff_id: str, data: Dict[str, Any] = Body(...)):
     """Update staff member.
@@ -16068,14 +16662,16 @@ async def update_staff(staff_id: str, data: Dict[str, Any] = Body(...)):
     update_data = {k: v for k, v in data.items() if k != "password"}
     if "teamId" in update_data:
         v = update_data["teamId"]
-        update_data["teamId"] = (v or "").strip() or None if isinstance(v, str) else (v or None)
+        update_data["teamId"] = (v or "").strip(
+        ) or None if isinstance(v, str) else (v or None)
     if data.get("password"):
         # Bug-A fix — bcrypt + canonical field name.
         update_data["password_hash"] = hash_password(data["password"])
 
     await db.staff.update_one({"id": staff_id}, {"$set": update_data,
-                                                  "$unset": {"password": ""} if data.get("password") else {}})
+                                                 "$unset": {"password": ""} if data.get("password") else {}})
     return {"success": True}
+
 
 @fastapi_app.get("/api/staff/teams", dependencies=[Depends(require_admin)])
 async def list_staff_teams():
@@ -16089,6 +16685,7 @@ async def list_staff_teams():
     teams = sorted({(t or "").strip() for t in raw if (t or "").strip()})
     return {"success": True, "data": teams}
 
+
 @fastapi_app.put("/api/staff/{staff_id}/toggle-active", dependencies=[Depends(require_admin)])
 async def toggle_staff_active(staff_id: str):
     """Toggle staff active status"""
@@ -16099,6 +16696,7 @@ async def toggle_staff_active(staff_id: str):
             {"$set": {"active": not staff.get("active", True)}}
         )
     return {"success": True}
+
 
 @fastapi_app.post("/api/staff/{staff_id}/reset-password", dependencies=[Depends(require_admin)])
 async def reset_staff_password(staff_id: str, data: Dict[str, Any] = Body(...)):
@@ -16112,7 +16710,8 @@ async def reset_staff_password(staff_id: str, data: Dict[str, Any] = Body(...)):
     Accepts the new password under either ``newPassword`` (legacy camelCase
     from the admin UI) or ``new_password`` (snake_case).
     """
-    new_password = data.get("newPassword") or data.get("new_password") or "Changeme123!"
+    new_password = data.get("newPassword") or data.get(
+        "new_password") or "Changeme123!"
     await db.staff.update_one(
         {"id": staff_id},
         {
@@ -16122,6 +16721,7 @@ async def reset_staff_password(staff_id: str, data: Dict[str, Any] = Body(...)):
     )
     return {"success": True}
 
+
 @fastapi_app.get("/api/staff/{staff_id}", dependencies=[Depends(require_admin)])
 async def get_staff_member(staff_id: str):
     """Get staff member by ID"""
@@ -16129,6 +16729,7 @@ async def get_staff_member(staff_id: str):
     if not member:
         raise HTTPException(status_code=404, detail="Staff member not found")
     return {"success": True, "data": member}
+
 
 @fastapi_app.delete("/api/staff/{staff_id}", dependencies=[Depends(require_admin)])
 async def delete_staff_member(staff_id: str):
@@ -16140,18 +16741,20 @@ async def delete_staff_member(staff_id: str):
 # USERS ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
 
+
 @fastapi_app.get("/api/users", dependencies=[Depends(require_admin)])
 async def list_users(role: Optional[str] = None, limit: int = 50):
     """List users (staff + customers)"""
     query = {}
     if role:
         query["role"] = role
-    
+
     # Get from staff collection
     cursor = db.staff.find(query, {'_id': 0, 'password': 0}).limit(limit)
     items = await cursor.to_list(length=limit)
-    
+
     return {"success": True, "data": items}
+
 
 @fastapi_app.get("/api/users/me")
 async def get_current_user_endpoint(current_user: Dict[str, Any] = Depends(require_user)):
@@ -16168,6 +16771,7 @@ async def get_current_user_endpoint(current_user: Dict[str, Any] = Depends(requi
         "managerId": current_user.get("managerId"),
     }}
 
+
 @fastapi_app.get("/api/users/{user_id}", dependencies=[Depends(require_admin)])
 async def get_user(user_id: str):
     """Get user by ID"""
@@ -16175,7 +16779,6 @@ async def get_user(user_id: str):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return {"success": True, "data": user}
-
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -16197,12 +16800,14 @@ async def team_dashboard():
         "overdue": []
     }
 
+
 @fastapi_app.get("/api/team/managers")
 async def team_managers():
     """Get team managers"""
-    cursor = db.staff.find({"role": {"$in": ["manager", "team_lead"]}}, {'_id': 0, 'password': 0})
+    cursor = db.staff.find({"role": {"$in": ["manager", "team_lead"]}}, {
+                           '_id': 0, 'password': 0})
     items = await cursor.to_list(length=50)
-    
+
     # Add stats to each manager
     for m in items:
         m["stats"] = {
@@ -16210,8 +16815,9 @@ async def team_managers():
             "deals": await db.deals.count_documents({"managerId": m.get("id")}),
             "tasks": await db.tasks.count_documents({"assigneeId": m.get("id")})
         }
-    
+
     return {"success": True, "data": items}
+
 
 @fastapi_app.get("/api/team/managers/{manager_id}")
 async def team_manager_detail(manager_id: str):
@@ -16219,14 +16825,15 @@ async def team_manager_detail(manager_id: str):
     manager = await db.staff.find_one({"id": manager_id}, {'_id': 0, 'password': 0})
     if not manager:
         raise HTTPException(status_code=404, detail="Manager not found")
-    
+
     manager["stats"] = {
         "leads": await db.leads.count_documents({"managerId": manager_id}),
         "deals": await db.deals.count_documents({"managerId": manager_id}),
         "tasks": await db.tasks.count_documents({"assigneeId": manager_id})
     }
-    
+
     return {"success": True, "data": manager}
+
 
 @fastapi_app.get("/api/team/alerts")
 async def team_alerts():
@@ -16235,12 +16842,14 @@ async def team_alerts():
     items = await cursor.to_list(length=20)
     return {"success": True, "data": items}
 
+
 @fastapi_app.get("/api/team/payments/overdue")
 async def team_payments_overdue():
     """Overdue payments"""
     cursor = db.invoices.find({"status": "overdue"}, {'_id': 0}).limit(50)
     items = await cursor.to_list(length=50)
     return {"success": True, "data": items}
+
 
 @fastapi_app.get("/api/team/shipping/stalled")
 async def team_shipping_stalled():
@@ -16249,12 +16858,13 @@ async def team_shipping_stalled():
     items = await cursor.to_list(length=50)
     return {"success": True, "data": items}
 
+
 @fastapi_app.get("/api/team/performance")
 async def team_performance():
     """Team performance metrics"""
     cursor = db.staff.find({"role": "manager"}, {'_id': 0, 'password': 0})
     managers = await cursor.to_list(length=20)
-    
+
     performance = []
     for m in managers:
         performance.append({
@@ -16265,8 +16875,9 @@ async def team_performance():
             "avgResponseTime": 5,
             "score": 85
         })
-    
+
     return {"success": True, "data": performance}
+
 
 @fastapi_app.get("/api/team/reassignments")
 async def team_reassignments():
@@ -16275,24 +16886,29 @@ async def team_reassignments():
     items = await cursor.to_list(length=50)
     return {"success": True, "data": items}
 
+
 @fastapi_app.post("/api/team/reassignments/{reassignment_id}/accept")
 async def accept_reassignment(reassignment_id: str, data: Dict[str, Any] = Body(...)):
     """Accept reassignment"""
     await db.reassignments.update_one(
         {"id": reassignment_id},
-        {"$set": {"status": "accepted", "newManagerId": data.get("newManagerId")}}
+        {"$set": {"status": "accepted",
+                  "newManagerId": data.get("newManagerId")}}
     )
     return {"success": True}
+
 
 @fastapi_app.post("/api/team/reassignments/{reassignment_id}/snooze")
 async def snooze_reassignment(reassignment_id: str, data: Dict[str, Any] = Body(...)):
     """Snooze reassignment"""
     return {"success": True}
 
+
 @fastapi_app.post("/api/team/reassignments/{reassignment_id}/queue")
 async def queue_reassignment(reassignment_id: str):
     """Queue reassignment"""
     return {"success": True}
+
 
 @fastapi_app.get("/api/team/leads")
 async def team_leads():
@@ -16301,6 +16917,7 @@ async def team_leads():
     items = await cursor.to_list(length=100)
     return {"success": True, "data": items}
 
+
 @fastapi_app.get("/api/team/leads/hot")
 async def team_leads_hot():
     """Hot leads"""
@@ -16308,10 +16925,12 @@ async def team_leads_hot():
     items = await cursor.to_list(length=50)
     return {"success": True, "data": items}
 
+
 @fastapi_app.get("/api/team/leads/stale")
 async def team_leads_stale():
     """Stale leads"""
     return {"success": True, "data": []}
+
 
 @fastapi_app.post("/api/team/leads/{lead_id}/reassign")
 async def reassign_lead(
@@ -16364,6 +16983,7 @@ async def reassign_lead(
         logger.debug("[reassign_lead] notify failed: %s", _e)
     return {"success": result["success"], "data": result}
 
+
 @fastapi_app.get("/api/team/tasks")
 async def team_tasks(
     manager_id: Optional[str] = Query(None, alias="managerId"),
@@ -16384,6 +17004,7 @@ async def team_tasks(
     cursor = db.tasks.find(q, {"_id": 0}).sort("dueDate", -1).limit(limit)
     items = await cursor.to_list(length=limit)
     return {"success": True, "data": items, "items": items}
+
 
 @fastapi_app.get("/api/team/tasks/overdue")
 async def team_tasks_overdue(
@@ -16414,11 +17035,13 @@ async def team_tasks_overdue(
     total = await db.tasks.count_documents(q)
     return {"success": True, "data": items, "items": items, "total": total}
 
+
 @fastapi_app.post("/api/team/tasks/{task_id}/escalate")
 async def escalate_task(task_id: str):
     """Escalate task"""
     await db.tasks.update_one({"id": task_id}, {"$set": {"escalated": True}})
     return {"success": True}
+
 
 @fastapi_app.get("/api/team/shipping")
 async def team_shipping():
@@ -16427,10 +17050,12 @@ async def team_shipping():
     items = await cursor.to_list(length=50)
     return {"success": True, "data": items}
 
+
 @fastapi_app.get("/api/team/shipping/risky")
 async def team_shipping_risky():
     """Risky shipments"""
     return {"success": True, "data": []}
+
 
 @fastapi_app.get("/api/response-time/team")
 async def response_time_team(days: int = 7):
@@ -16447,6 +17072,8 @@ async def response_time_team(days: int = 7):
 # ═══════════════════════════════════════════════════════════════════
 # INGESTION/PARSER ADMIN ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
+
+
 def _derive_parser_status(key: str, p) -> str:
     """P1.4 — Honest 4-state parser lifecycle for the admin UI.
 
@@ -16470,13 +17097,12 @@ def _derive_parser_status(key: str, p) -> str:
     return "disabled"
 
 
-
 @fastapi_app.get("/api/ingestion/admin/parsers", dependencies=[Depends(require_admin)])
 async def ingestion_parsers():
     """Unified parser registry with real status for each source"""
     stats = aggregator.get_stats()
     v3_stats = session_service.get_stats()
-    
+
     result = []
     for key, p in PARSER_REGISTRY.items():
         entry = {
@@ -16509,11 +17135,12 @@ async def ingestion_parsers():
             # Replaces the {active|standby} boolean with a real lifecycle.
             "parserStatus": _derive_parser_status(key, p),
         }
-        
+
         # Enrich with live data
         if key == "bitmotors" and bitmotors_parser_instance:
             scraper_stats = bitmotors_parser_instance.get_stats()
-            entry["status"] = "active" if scraper_stats.get("running") else "standby"
+            entry["status"] = "active" if scraper_stats.get(
+                "running") else "standby"
             entry["enabled"] = scraper_stats.get("running", False)
             entry["itemsParsed"] = scraper_stats.get("total_scraped", 0)
             entry["itemsCreated"] = scraper_stats.get("total_new", 0)
@@ -16553,7 +17180,8 @@ async def ingestion_parsers():
             if westmotors_sync_instance and hasattr(westmotors_sync_instance, "settings"):
                 entry["status"] = "active"
                 entry["enabled"] = True
-                entry["intervalSeconds"] = westmotors_sync_instance.settings.get("incremental_interval_sec", 3600)
+                entry["intervalSeconds"] = westmotors_sync_instance.settings.get(
+                    "incremental_interval_sec", 3600)
         elif key == "lemon":
             try:
                 count = await db.vin_data_lemon.count_documents({})
@@ -16564,7 +17192,8 @@ async def ingestion_parsers():
             if lemon_sync_instance and hasattr(lemon_sync_instance, "settings"):
                 entry["status"] = "active"
                 entry["enabled"] = True
-                entry["intervalSeconds"] = lemon_sync_instance.settings.get("discovery_incremental_interval_sec", 3600)
+                entry["intervalSeconds"] = lemon_sync_instance.settings.get(
+                    "discovery_incremental_interval_sec", 3600)
         elif key == "carfast":
             try:
                 count = await db.carfast_vehicles.count_documents({})
@@ -16600,8 +17229,9 @@ async def ingestion_parsers():
                 entry["readiness"] = "needs_config"
 
         result.append(entry)
-    
+
     return {"success": True, "parsers": result}
+
 
 @fastapi_app.get("/api/ingestion/admin/parsers/audit", dependencies=[Depends(require_admin)])
 async def parsers_audit():
@@ -16622,7 +17252,7 @@ async def parsers_audit():
             db_count = await db[coll].count_documents({})
         except Exception:
             pass
-        
+
         audit.append({
             "source": p.source,
             "name": p.name,
@@ -16638,7 +17268,7 @@ async def parsers_audit():
             "hasParseEndpoint": any("/parse" in e for e in p.endpoints),
             "endpoints": p.endpoints,
         })
-    
+
     return {
         "success": True,
         "generatedAt": datetime.now(timezone.utc).isoformat(),
@@ -16647,6 +17277,7 @@ async def parsers_audit():
         "standbyParsers": sum(1 for p in PARSER_REGISTRY.values() if p.status == "standby"),
         "audit": audit,
     }
+
 
 @fastapi_app.get("/api/ingestion/admin/health", dependencies=[Depends(require_admin)])
 async def ingestion_health():
@@ -16660,15 +17291,18 @@ async def ingestion_health():
         }
     }
 
+
 @fastapi_app.get("/api/ingestion/admin/alerts", dependencies=[Depends(require_admin)])
 async def ingestion_alerts():
     """Ingestion alerts - returns array directly"""
     return []
 
+
 @fastapi_app.get("/api/ingestion/admin/logs", dependencies=[Depends(require_admin)])
 async def ingestion_logs(limit: int = 100):
     """Ingestion logs"""
     return {"success": True, "logs": []}
+
 
 @fastapi_app.post("/api/ingestion/admin/parsers/{source}/run", dependencies=[Depends(require_master_admin)])
 async def run_parser(source: str):
@@ -16680,11 +17314,11 @@ async def run_parser(source: str):
         return {"success": False, "message": f"{p.name}: {p.readiness_detail}"}
     if p.readiness == "incomplete":
         return {"success": False, "message": f"{p.name} is incomplete: {p.readiness_detail}"}
-    
+
     p.enabled = True
     p.status = "active"
     p.last_run = datetime.now(timezone.utc).isoformat()
-    
+
     if source == "carfast":
         parser_config.enabled = True
     elif source == "bitmotors" and bitmotors_parser_instance:
@@ -16722,8 +17356,9 @@ async def run_parser(source: str):
             "extensionsOnline": len(online),
             "message": f"{p.name} armed — {len(online)} extension(s) online.",
         }
-    
+
     return {"success": True, "message": f"{p.name} parser started", "status": p.status}
+
 
 @fastapi_app.post("/api/ingestion/admin/parsers/{source}/stop", dependencies=[Depends(require_master_admin)])
 async def stop_parser(source: str):
@@ -16731,10 +17366,10 @@ async def stop_parser(source: str):
     p = PARSER_REGISTRY.get(source)
     if not p:
         return {"success": False, "message": f"Unknown parser: {source}"}
-    
+
     p.enabled = False
     p.status = "standby"
-    
+
     if source == "carfast":
         parser_config.enabled = False
     elif source == "bitmotors" and bitmotors_parser_instance:
@@ -16746,8 +17381,9 @@ async def stop_parser(source: str):
     elif source == "lemon" and lemon_sync_instance:
         lemon_sync_instance.stop()
         return {"success": True, "message": f"{p.name} sync stopped", "status": p.status}
-    
+
     return {"success": True, "message": f"{p.name} parser stopped", "status": p.status}
+
 
 @fastapi_app.post("/api/ingestion/admin/parsers/{source}/run-once", dependencies=[Depends(require_master_admin)])
 async def run_once_parser(source: str, data: Dict[str, Any] = Body(default={})):
@@ -16783,7 +17419,8 @@ async def run_once_parser(source: str, data: Dict[str, Any] = Body(default={})):
                     await target.load_settings()
                     target.running = True
                     globals()["bitmotors_full_sync_instance"] = target
-                    logger.info("[parsers/run-once] lazy-init BitmotorsFullSync")
+                    logger.info(
+                        "[parsers/run-once] lazy-init BitmotorsFullSync")
                 except Exception as ie:
                     return {"success": False, "message": f"BidMotors sync init failed: {ie}"}
             if max_pages and hasattr(target, "settings"):
@@ -16903,10 +17540,12 @@ def _engine_probe(deep: bool = False) -> Dict[str, Any]:
             import glob as _glob
             import os as _os
             cache = _os.path.expanduser("~/.cache/ms-playwright")
-            out["chromium"] = bool(_glob.glob(_os.path.join(cache, "chromium-*")))
+            out["chromium"] = bool(_glob.glob(
+                _os.path.join(cache, "chromium-*")))
         except Exception:
             out["chromium"] = False
-    out["ready"] = bool(out["playwright"] and out["playwright_stealth"] and out["chromium"])
+    out["ready"] = bool(
+        out["playwright"] and out["playwright_stealth"] and out["chromium"])
     return out
 
 
@@ -17021,7 +17660,6 @@ async def parser_install_engine(source: str):
     return {"success": True, "message": "Engine install started. Poll engine-status for progress.", "status": "running"}
 
 
-
 @fastapi_app.post("/api/ingestion/admin/parsers/{source}/configure", dependencies=[Depends(require_master_admin)])
 async def configure_parser(source: str, data: Dict[str, Any] = Body(...)):
     """Configure parser API keys and settings.
@@ -17045,12 +17683,15 @@ async def configure_parser(source: str, data: Dict[str, Any] = Body(...)):
     # Apply runtime limits to live sync instances
     if source == "westmotors" and westmotors_sync_instance and hasattr(westmotors_sync_instance, "settings"):
         if "incremental_interval_sec" in data:
-            westmotors_sync_instance.settings["incremental_interval_sec"] = max(60, int(data["incremental_interval_sec"]))
+            westmotors_sync_instance.settings["incremental_interval_sec"] = max(
+                60, int(data["incremental_interval_sec"]))
     elif source == "lemon" and lemon_sync_instance and hasattr(lemon_sync_instance, "settings"):
         if "discovery_incremental_interval_sec" in data:
-            lemon_sync_instance.settings["discovery_incremental_interval_sec"] = max(60, int(data["discovery_incremental_interval_sec"]))
+            lemon_sync_instance.settings["discovery_incremental_interval_sec"] = max(
+                60, int(data["discovery_incremental_interval_sec"]))
 
     return {"success": True, "message": f"{p.name} configured"}
+
 
 @fastapi_app.post("/api/ingestion/admin/parsers/{source}/resume", dependencies=[Depends(require_master_admin)])
 async def resume_parser(source: str):
@@ -17059,10 +17700,12 @@ async def resume_parser(source: str):
         parser_config.enabled = True
     return {"success": True}
 
+
 @fastapi_app.post("/api/ingestion/admin/parsers/{source}/circuit-breaker/reset", dependencies=[Depends(require_master_admin)])
 async def reset_circuit_breaker(source: str):
     """Reset circuit breaker"""
     return {"success": True}
+
 
 @fastapi_app.post("/api/ingestion/admin/promotion/run-once", dependencies=[Depends(require_master_admin)])
 async def promote_run_once(data: Dict[str, Any] = Body(default={})):
@@ -17149,7 +17792,8 @@ async def westmotors_parser_run_once(data: Dict[str, Any] = Body(default={})):
         await westmotors_parser_instance.configure(concurrency=int(data["concurrency"]))
     cycles = max(1, int(data.get("cycles") or 1))
 
-    agg = {"picked": 0, "ok": 0, "failed": 0, "no_payload": 0, "skipped": 0, "cycles_run": 0}
+    agg = {"picked": 0, "ok": 0, "failed": 0,
+           "no_payload": 0, "skipped": 0, "cycles_run": 0}
     for _ in range(cycles):
         res = await westmotors_parser_instance.run_once()
         if res.get("status") == "busy":
@@ -17426,11 +18070,13 @@ async def stabilization_snapshot(window_minutes: int = 5):
                 {"ts": {"$gte": cutoff}}
             ).sort([("ts", -1)]).to_list(length=200)
             if sq:
-                ds = [float(x.get("ms") or x.get("duration_ms") or 0) for x in sq]
+                ds = [float(x.get("ms") or x.get("duration_ms") or 0)
+                      for x in sq]
                 ds = [x for x in ds if x > 0]
                 if ds:
                     snap["latency"]["slow_query_count"] = len(ds)
-                    snap["latency"]["slow_avg_ms"] = round(sum(ds) / len(ds), 1)
+                    snap["latency"]["slow_avg_ms"] = round(
+                        sum(ds) / len(ds), 1)
                     snap["latency"]["slow_max_ms"] = round(max(ds), 1)
     except Exception:
         pass
@@ -17553,6 +18199,7 @@ async def run_all_parsers(data: Dict[str, Any] = Body(default={})):
         "results": results,
     }
 
+
 @fastapi_app.post("/api/ingestion/admin/parsers/stop-all", dependencies=[Depends(require_master_admin)])
 async def stop_all_parsers():
     """Stop every parser in a single click."""
@@ -17585,6 +18232,7 @@ async def stop_all_parsers():
 
     return {"success": True, "message": "All parsers stopped", "results": results}
 
+
 @fastapi_app.post("/api/ingestion/admin/alerts/{alert_id}/resolve", dependencies=[Depends(require_admin)])
 async def resolve_ingestion_alert(alert_id: str):
     """Resolve alert"""
@@ -17604,6 +18252,7 @@ _DEPRECATED_SYNC_MSG = (
     "Local accumulation has been disabled."
 )
 
+
 def _deprecated_sync_response():
     return JSONResponse(
         status_code=410,
@@ -17616,35 +18265,42 @@ def _deprecated_sync_response():
         },
     )
 
+
 @fastapi_app.get("/api/ingestion/admin/parsers/bitmotors/full-sync/status",
                  dependencies=[Depends(require_admin)])
 async def bitmotors_full_sync_status_deprecated():
     return _deprecated_sync_response()
+
 
 @fastapi_app.post("/api/ingestion/admin/parsers/bitmotors/full-sync/configure",
                   dependencies=[Depends(require_master_admin)])
 async def bitmotors_full_sync_configure_deprecated(data: Dict[str, Any] = Body(default={})):
     return _deprecated_sync_response()
 
+
 @fastapi_app.post("/api/ingestion/admin/parsers/bitmotors/full-sync/run-now",
                   dependencies=[Depends(require_master_admin)])
 async def bitmotors_full_sync_run_now_deprecated():
     return _deprecated_sync_response()
+
 
 @fastapi_app.post("/api/ingestion/admin/parsers/bitmotors/full-sync/cancel",
                   dependencies=[Depends(require_master_admin)])
 async def bitmotors_full_sync_cancel_deprecated():
     return _deprecated_sync_response()
 
+
 @fastapi_app.post("/api/ingestion/admin/parsers/bitmotors/full-sync/scheduler/start",
                   dependencies=[Depends(require_master_admin)])
 async def bitmotors_full_sync_scheduler_start_deprecated():
     return _deprecated_sync_response()
 
+
 @fastapi_app.post("/api/ingestion/admin/parsers/bitmotors/full-sync/scheduler/stop",
                   dependencies=[Depends(require_master_admin)])
 async def bitmotors_full_sync_scheduler_stop_deprecated():
     return _deprecated_sync_response()
+
 
 @fastapi_app.post("/api/ingestion/admin/parsers/bitmotors/full-sync/cache/clear",
                   dependencies=[Depends(require_master_admin)])
@@ -17660,6 +18316,8 @@ async def bitmotors_full_sync_cache_clear():
 # ═══════════════════════════════════════════════════════════════════
 # Phase IV — WestMotors Index admin endpoints
 # ═══════════════════════════════════════════════════════════════════
+
+
 @fastapi_app.get("/api/westmotors/status")
 async def westmotors_status():
     """Public-readable status of the WestMotors index sync (incl. latency)."""
@@ -17689,7 +18347,8 @@ async def westmotors_status():
 async def westmotors_sync_prefetch(data: Dict[str, Any] = Body(default={})):
     """Manually fire a top-N prefetch (background)."""
     if westmotors_sync_instance is None:
-        raise HTTPException(status_code=503, detail="westmotors_sync not available")
+        raise HTTPException(
+            status_code=503, detail="westmotors_sync not available")
     n = (data or {}).get("n")
     asyncio.create_task(westmotors_sync_instance.run_prefetch(n=n))
     return {"success": True, "scheduled": "prefetch", "n": n or "default"}
@@ -17700,10 +18359,12 @@ async def westmotors_sync_prefetch(data: Dict[str, Any] = Body(default={})):
 async def westmotors_sync_warmup(data: Dict[str, Any] = Body(default={})):
     """Manually fire a search-log-driven warmup (background)."""
     if westmotors_sync_instance is None:
-        raise HTTPException(status_code=503, detail="westmotors_sync not available")
+        raise HTTPException(
+            status_code=503, detail="westmotors_sync not available")
     top = (data or {}).get("top")
     days = (data or {}).get("window_days")
-    asyncio.create_task(westmotors_sync_instance.run_warmup(top=top, window_days=days))
+    asyncio.create_task(westmotors_sync_instance.run_warmup(
+        top=top, window_days=days))
     return {"success": True, "scheduled": "warmup", "top": top or "default"}
 
 
@@ -17711,7 +18372,8 @@ async def westmotors_sync_warmup(data: Dict[str, Any] = Body(default={})):
                   dependencies=[Depends(require_admin)])
 async def westmotors_sync_configure(data: Dict[str, Any] = Body(default={})):
     if westmotors_sync_instance is None:
-        raise HTTPException(status_code=503, detail="westmotors_sync not available")
+        raise HTTPException(
+            status_code=503, detail="westmotors_sync not available")
     allowed = {"enabled", "full_daily_hour_utc", "incremental_interval_sec",
                "delay_between_sitemaps_sec", "archive_safety_threshold",
                "startup_delay_sec",
@@ -17729,7 +18391,8 @@ async def westmotors_sync_configure(data: Dict[str, Any] = Body(default={})):
 async def westmotors_sync_run_now(data: Dict[str, Any] = Body(default={})):
     """Fire a single sync cycle in the background. kind = 'full' | 'incremental'"""
     if westmotors_sync_instance is None:
-        raise HTTPException(status_code=503, detail="westmotors_sync not available")
+        raise HTTPException(
+            status_code=503, detail="westmotors_sync not available")
     kind = (data or {}).get("kind", "incremental")
     if kind == "full":
         asyncio.create_task(westmotors_sync_instance.run_full_sync())
@@ -17743,7 +18406,8 @@ async def westmotors_sync_run_now(data: Dict[str, Any] = Body(default={})):
                   dependencies=[Depends(require_admin)])
 async def westmotors_sync_cancel():
     if westmotors_sync_instance is None:
-        raise HTTPException(status_code=503, detail="westmotors_sync not available")
+        raise HTTPException(
+            status_code=503, detail="westmotors_sync not available")
     westmotors_sync_instance.cancel_current()
     return {"success": True, "message": "Cancellation signal sent"}
 
@@ -17752,7 +18416,8 @@ async def westmotors_sync_cancel():
                   dependencies=[Depends(require_admin)])
 async def westmotors_sync_scheduler_start():
     if westmotors_sync_instance is None:
-        raise HTTPException(status_code=503, detail="westmotors_sync not available")
+        raise HTTPException(
+            status_code=503, detail="westmotors_sync not available")
     westmotors_sync_instance.start()
     return {"success": True, "message": "Schedulers started"}
 
@@ -17761,7 +18426,8 @@ async def westmotors_sync_scheduler_start():
                   dependencies=[Depends(require_admin)])
 async def westmotors_sync_scheduler_stop():
     if westmotors_sync_instance is None:
-        raise HTTPException(status_code=503, detail="westmotors_sync not available")
+        raise HTTPException(
+            status_code=503, detail="westmotors_sync not available")
     westmotors_sync_instance.stop()
     return {"success": True, "message": "Schedulers stopped"}
 
@@ -17872,7 +18538,8 @@ async def lemon_sync_scheduler(action: str):
     if action == "stop":
         lemon_sync_instance.stop()
         return {"success": True, "message": "Stopped discovery + worker"}
-    raise HTTPException(status_code=400, detail="action must be 'start' or 'stop'")
+    raise HTTPException(
+        status_code=400, detail="action must be 'start' or 'stop'")
 
 
 @fastapi_app.get("/api/lemon/runs",
@@ -17919,31 +18586,35 @@ async def lemon_lookup_lot_admin(lot: str):
         return {"success": False, "error": str(e)}
 
 
-
 @fastapi_app.get("/api/ingestion/admin/parsers/bitmotors/incremental/status",
                  dependencies=[Depends(require_admin)])
 async def bitmotors_incremental_status_deprecated():
     return _deprecated_sync_response()
+
 
 @fastapi_app.post("/api/ingestion/admin/parsers/bitmotors/incremental/configure",
                   dependencies=[Depends(require_master_admin)])
 async def bitmotors_incremental_configure_deprecated(data: Dict[str, Any] = Body(default={})):
     return _deprecated_sync_response()
 
+
 @fastapi_app.post("/api/ingestion/admin/parsers/bitmotors/incremental/run-now",
                   dependencies=[Depends(require_master_admin)])
 async def bitmotors_incremental_run_now_deprecated():
     return _deprecated_sync_response()
+
 
 @fastapi_app.post("/api/ingestion/admin/parsers/bitmotors/incremental/cancel",
                   dependencies=[Depends(require_master_admin)])
 async def bitmotors_incremental_cancel_deprecated():
     return _deprecated_sync_response()
 
+
 @fastapi_app.post("/api/ingestion/admin/parsers/bitmotors/incremental/scheduler/start",
                   dependencies=[Depends(require_master_admin)])
 async def bitmotors_incremental_scheduler_start_deprecated():
     return _deprecated_sync_response()
+
 
 @fastapi_app.post("/api/ingestion/admin/parsers/bitmotors/incremental/scheduler/stop",
                   dependencies=[Depends(require_master_admin)])
@@ -17956,6 +18627,7 @@ async def bitmotors_incremental_scheduler_stop_deprecated():
 # ``/api/ingestion/admin/parsers/{source}/...`` handlers defined earlier
 # and therefore unreachable. The generic handlers correctly return a
 # deprecated response for ``source=bitmotors``.
+
 
 @fastapi_app.get("/api/ingestion/admin/parsers/bitmotors/stats",
                  dependencies=[Depends(require_admin)])
@@ -17987,6 +18659,7 @@ async def bitmotors_stats_lite():
         "message": "Accumulation disabled. Each query hits BidMotors live (5-min TTL cache).",
     }
 
+
 @fastapi_app.post("/api/ingestion/admin/parsers/bitmotors/configure",
                   dependencies=[Depends(require_master_admin)], include_in_schema=False, deprecated=True)
 async def bitmotors_configure_deprecated(data: Dict[str, Any] = Body(default={})):
@@ -17994,6 +18667,7 @@ async def bitmotors_configure_deprecated(data: Dict[str, Any] = Body(default={})
     ``/api/ingestion/admin/parsers/{source}/configure`` defined earlier.
     Kept only so explicit imports of this name keep working."""
     return _deprecated_sync_response()
+
 
 @fastapi_app.get("/api/ingestion/admin/parsers/bitmotors/settings",
                  dependencies=[Depends(require_admin)])
@@ -18035,7 +18709,8 @@ async def public_search_watch(
     Idempotent: if the same VIN+email/userId is already pending, returns
     the existing row without creating a duplicate.
     """
-    raw_vin = str(data.get("vin") or data.get("query") or "").strip().upper().replace(" ", "").replace("-", "")
+    raw_vin = str(data.get("vin") or data.get("query")
+                  or "").strip().upper().replace(" ", "").replace("-", "")
     if not raw_vin:
         raise HTTPException(status_code=400, detail="vin is required")
     if len(raw_vin) < 4 or len(raw_vin) > 20:
@@ -18047,7 +18722,8 @@ async def public_search_watch(
     user_email = (user or {}).get("email") if user else None
     owner_email = email or user_email
     if not owner_email and not user_id:
-        raise HTTPException(status_code=400, detail="email or authentication is required")
+        raise HTTPException(
+            status_code=400, detail="email or authentication is required")
 
     # Idempotency: match by (vin, email or userId) not yet notified
     match_filter: Dict[str, Any] = {"vin": raw_vin, "notified": False}
@@ -18105,7 +18781,6 @@ async def public_search_watch_delete(
     return {"success": bool(res.deleted_count), "deleted": res.deleted_count}
 
 
-
 @fastapi_app.post("/api/public/search/rescan")
 async def public_search_rescan(data: Dict[str, Any] = Body(...)):
     """Force a live BidMotors fetch for a VIN/LOT, bypassing the TTL cache.
@@ -18122,7 +18797,8 @@ async def public_search_rescan(data: Dict[str, Any] = Body(...)):
     if live_search_cache is not None:
         try:
             async with live_search_cache._lock:  # type: ignore[attr-defined]
-                keys_to_drop = [k for k in list(live_search_cache._store.keys()) if clean in k]
+                keys_to_drop = [k for k in list(
+                    live_search_cache._store.keys()) if clean in k]
                 for k in keys_to_drop:
                     live_search_cache._store.pop(k, None)
         except Exception:
@@ -18160,10 +18836,9 @@ async def vin_search(vin_input: str):
     """
     if not bitmotors_parser_instance:
         return {"success": False, "error": "BidMotors adapter not available"}
-    
+
     result = await bitmotors_parser_instance.search_vin(vin_input)
     return result
-
 
 
 # Proxies
@@ -18175,6 +18850,7 @@ async def ingestion_proxies():
         return {"success": True, "proxies": proxies, "total": len(proxies)}
     except Exception:
         return {"success": True, "proxies": [], "total": 0}
+
 
 @fastapi_app.post("/api/ingestion/admin/proxies", dependencies=[Depends(require_admin)])
 async def add_proxy(data: Dict[str, Any] = Body(...)):
@@ -18193,12 +18869,14 @@ async def add_proxy(data: Dict[str, Any] = Body(...)):
     doc.pop("_id", None)
     return {"success": True, "id": pid, "data": doc}
 
+
 @fastapi_app.post("/api/ingestion/admin/proxies/{proxy_id}/enable", dependencies=[Depends(require_admin)])
 async def enable_proxy(proxy_id: str):
     res = await db.scraper_proxies.update_one({"id": proxy_id}, {"$set": {"enabled": True}})
     if res.matched_count == 0:
         raise HTTPException(404, "Proxy not found")
     return {"success": True}
+
 
 @fastapi_app.post("/api/ingestion/admin/proxies/{proxy_id}/disable", dependencies=[Depends(require_admin)])
 async def disable_proxy(proxy_id: str):
@@ -18207,12 +18885,14 @@ async def disable_proxy(proxy_id: str):
         raise HTTPException(404, "Proxy not found")
     return {"success": True}
 
+
 @fastapi_app.delete("/api/ingestion/admin/proxies/{proxy_id}", dependencies=[Depends(require_admin)])
 async def delete_proxy(proxy_id: str):
     res = await db.scraper_proxies.delete_one({"id": proxy_id})
     if res.deleted_count == 0:
         raise HTTPException(404, "Proxy not found")
     return {"success": True}
+
 
 async def _real_proxy_test(proxy: Dict[str, Any]) -> Dict[str, Any]:
     """Actually connect through the proxy and measure latency."""
@@ -18231,6 +18911,7 @@ async def _real_proxy_test(proxy: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return {"status": "error", "error": str(e)[:120]}
 
+
 @fastapi_app.post("/api/ingestion/admin/proxies/{proxy_id}/test", dependencies=[Depends(require_admin)])
 async def test_proxy(proxy_id: str):
     """Real connectivity test through the stored proxy."""
@@ -18240,6 +18921,7 @@ async def test_proxy(proxy_id: str):
     result = await _real_proxy_test(proxy)
     await db.scraper_proxies.update_one({"id": proxy_id}, {"$set": {"last_test": {**result, "at": datetime.now(timezone.utc).isoformat()}}})
     return {"success": result.get("status") == "ok", "result": result}
+
 
 @fastapi_app.post("/api/ingestion/admin/proxies/test", dependencies=[Depends(require_admin)])
 async def test_all_proxies():
@@ -18255,6 +18937,7 @@ async def test_all_proxies():
 # ═══════════════════════════════════════════════════════════════════
 # INVOICES FULL ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
+
 
 @fastapi_app.post("/api/invoices/create")
 async def create_invoice(data: Dict[str, Any] = Body(...)):
@@ -18275,10 +18958,13 @@ async def create_invoice(data: Dict[str, Any] = Body(...)):
     return {"success": True, "invoice": invoice}
 
 # IMPORTANT: Specific routes MUST be before /{invoice_id} dynamic route!
+
+
 @fastapi_app.get("/api/invoices/me")
 async def my_invoices():
     """Customer invoices - MUST be before /{invoice_id}"""
     return {"success": True, "data": []}
+
 
 @fastapi_app.get("/api/invoices/manager/my", dependencies=[Depends(require_manager_or_admin)])
 async def manager_invoices():
@@ -18287,12 +18973,14 @@ async def manager_invoices():
     items = await cursor.to_list(length=50)
     return {"success": True, "data": items}
 
+
 @fastapi_app.get("/api/invoices/overdue")
 async def overdue_invoices():
     """Overdue invoices - MUST be before /{invoice_id}"""
     cursor = db.invoices.find({"status": "overdue"}, {'_id': 0}).limit(50)
     items = await cursor.to_list(length=50)
     return {"success": True, "data": items}
+
 
 @fastapi_app.get("/api/invoices/analytics")
 async def invoice_analytics():
@@ -18309,6 +18997,7 @@ async def invoice_analytics():
         }
     }
 
+
 @fastapi_app.post("/api/invoices/checkout")
 async def invoice_checkout(request: Request, data: Dict[str, Any] = Body(...)):
     """Create a real Stripe Checkout session for an existing invoice.
@@ -18321,12 +19010,14 @@ async def invoice_checkout(request: Request, data: Dict[str, Any] = Body(...)):
         raise HTTPException(status_code=400, detail="invoiceId is required")
     invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not invoice:
-        raise HTTPException(status_code=404, detail=f"Invoice {invoice_id} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Invoice {invoice_id} not found")
     if invoice.get("status") == "paid":
         raise HTTPException(status_code=400, detail="Invoice is already paid")
 
     amount = invoice.get("amount") or invoice.get("total") or 0
-    description = invoice.get("description") or invoice.get("title") or f"Invoice {invoice_id}"
+    description = invoice.get("description") or invoice.get(
+        "title") or f"Invoice {invoice_id}"
     customer_id = invoice.get("customerId") or invoice.get("customer_id")
     customer = (await db.customers.find_one({"customerId": customer_id}, {"_id": 0})) if customer_id else None
     customer_email = (customer or {}).get("email")
@@ -18350,9 +19041,12 @@ async def invoice_checkout(request: Request, data: Dict[str, Any] = Body(...)):
     if data.get("originUrl"):
         cfg = await get_stripe_config()
         origin = str(data["originUrl"]).rstrip("/")
-        succ = cfg["successUrl"]; canc = cfg["cancelUrl"]
-        payload["successUrl"] = (succ if succ.startswith("http") else origin + (succ if succ.startswith("/") else f"/{succ}"))
-        payload["cancelUrl"]  = (canc if canc.startswith("http") else origin + (canc if canc.startswith("/") else f"/{canc}"))
+        succ = cfg["successUrl"]
+        canc = cfg["cancelUrl"]
+        payload["successUrl"] = (succ if succ.startswith(
+            "http") else origin + (succ if succ.startswith("/") else f"/{succ}"))
+        payload["cancelUrl"] = (canc if canc.startswith(
+            "http") else origin + (canc if canc.startswith("/") else f"/{canc}"))
 
     return await create_checkout_session(request, payload)
 
@@ -18378,10 +19072,11 @@ async def create_invoice_from_package(data: Dict[str, Any] = Body(...)):
     return await create_invoice(data)
 
 # ═══════════════════════════════════════════════════════════════════
-# SHIPMENTS FULL ENDPOINTS  
+# SHIPMENTS FULL ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
 
 # ==================== SHIPMENT EVENT SYSTEM (ЯДРО) ====================
+
 
 async def create_shipment_event(
     shipment_id: str,
@@ -18393,11 +19088,11 @@ async def create_shipment_event(
 ):
     """
     Create shipment event and emit real-time notification
-    
+
     This is the CORE of tracking system - everything flows through events
     """
     now = datetime.now(timezone.utc)
-    
+
     event_id = str(uuid.uuid4())
     event = {
         '_id': event_id,
@@ -18405,7 +19100,8 @@ async def create_shipment_event(
         'shipmentId': shipment_id,
         'type': event_type,
         'title': title,
-        'label': title,     # alias for new JourneyPanel consumers (uses `label`)
+        # alias for new JourneyPanel consumers (uses `label`)
+        'label': title,
         'createdAt': now,   # alias for new consumers (uses `createdAt`)
         'location': location,
         'meta': meta or {},
@@ -18413,10 +19109,10 @@ async def create_shipment_event(
         'source': 'system',
         'created_at': now
     }
-    
+
     # Save event to collection
     await db.shipment_events.insert_one(event)
-    
+
     # Update shipment with latest event
     await db.shipments.update_one(
         {'id': shipment_id},
@@ -18429,9 +19125,10 @@ async def create_shipment_event(
             }
         }
     )
-    
-    logger.info(f"[SHIPPING] Event created: {event_type} for shipment {shipment_id}")
-    
+
+    logger.info(
+        f"[SHIPPING] Event created: {event_type} for shipment {shipment_id}")
+
     # 🔥 REAL-TIME SOCKET.IO EMIT
     if customer_id:
         try:
@@ -18450,7 +19147,7 @@ async def create_shipment_event(
             logger.info(f"[SHIPPING] Socket emitted to user_{customer_id}")
         except Exception as e:
             logger.error(f"[SHIPPING] Socket emit error: {e}")
-    
+
     # Special event types with dedicated socket events
     if event_type == 'status_changed':
         await sio.emit('shipment:status_changed', event, room=f"user_{customer_id}")
@@ -18460,7 +19157,7 @@ async def create_shipment_event(
         await sio.emit('shipment:arrived', event, room=f"user_{customer_id}")
     elif event_type == 'ready_for_pickup':
         await sio.emit('shipment:ready_for_pickup', event, room=f"user_{customer_id}")
-    
+
     return event
 
 
@@ -18471,10 +19168,10 @@ async def calculate_shipment_status(shipment_id: str):
     events = await db.shipment_events.find(
         {'shipmentId': shipment_id}
     ).sort('timestamp', -1).to_list(100)
-    
+
     if not events:
         return 'pending'
-    
+
     # Status mapping from event types
     status_mapping = {
         'deal_created': 'pending',
@@ -18489,7 +19186,7 @@ async def calculate_shipment_status(shipment_id: str):
         'ready_for_pickup': 'ready',
         'delivered': 'delivered'
     }
-    
+
     last_event = events[0]
     return status_mapping.get(last_event['type'], 'in_transit')
 
@@ -18501,12 +19198,12 @@ async def stalled_shipments():
     """Stalled shipments (no updates > 5 days) — literal route, MUST stay
     above ``/api/shipments/{shipment_id}``."""
     five_days_ago = datetime.now(timezone.utc) - timedelta(days=5)
-    
+
     cursor = db.shipments.find({
         "lastTrackingUpdate": {"$lt": five_days_ago},
         "trackingActive": True
     }).limit(50)
-    
+
     items = await cursor.to_list(length=50)
     return {"success": True, "data": [serialize_doc(i) for i in items]}
 
@@ -18517,29 +19214,30 @@ async def get_shipment(shipment_id: str):
     shipment = await db.shipments.find_one({"id": shipment_id})
     if not shipment:
         raise HTTPException(status_code=404, detail="Shipment not found")
-    
+
     # Get events
     events = await db.shipment_events.find(
         {'shipmentId': shipment_id}
     ).sort('timestamp', -1).to_list(100)
-    
+
     # Calculate current status from events
     shipment['status'] = await calculate_shipment_status(shipment_id)
     shipment['events'] = [serialize_doc(e) for e in events]
-    
+
     return {"success": True, "data": serialize_doc(shipment)}
+
 
 @fastapi_app.post("/api/shipments", dependencies=[Depends(require_manager_or_admin)])
 async def create_shipment(data: Dict[str, Any] = Body(...)):
     """Create shipment with initial event, route and journey stages."""
     now = datetime.now(timezone.utc)
-    
+
     shipment_id = f"ship_{int(now.timestamp())}_{str(uuid.uuid4())[:8]}"
-    
+
     # Origin and destination with coordinates
     origin = data.get("origin")
     destination = data.get("destination")
-    
+
     # If coordinates not provided, use defaults
     if not origin or not origin.get("lat"):
         origin = {
@@ -18547,14 +19245,14 @@ async def create_shipment(data: Dict[str, Any] = Body(...)):
             "lat": 33.7405,
             "lng": -118.2755
         }
-    
+
     if not destination or not destination.get("lat"):
         destination = {
             "name": data.get("destinationPort", "Odesa"),
             "lat": 46.4825,
             "lng": 30.7233
         }
-    
+
     # Generate route
     route = generate_route(origin, destination)
 
@@ -18605,9 +19303,9 @@ async def create_shipment(data: Dict[str, Any] = Body(...)):
         "created_at": now,
         "updated_at": now
     }
-    
+
     await db.shipments.insert_one(shipment)
-    
+
     # Create initial event
     await create_shipment_event(
         shipment_id=shipment_id,
@@ -18616,39 +19314,39 @@ async def create_shipment(data: Dict[str, Any] = Body(...)):
         location=origin.get("name"),
         customer_id=data.get("customerId")
     )
-    
+
     logger.info(
         f"[SHIPPING] Shipment created: {shipment_id} with {len(route)} route points, "
         f"{len(stages)} stages, currentStage={current_stage_id}"
     )
-    
+
     return {"success": True, "shipment": serialize_doc(shipment)}
 
 
 @fastapi_app.put("/api/shipments/{shipment_id}", dependencies=[Depends(require_manager_or_admin)])
 async def update_shipment(shipment_id: str, data: Dict[str, Any] = Body(...)):
     """Update shipment and create event if status/eta changed"""
-    
+
     # Get current shipment
     shipment = await db.shipments.find_one({"id": shipment_id})
     if not shipment:
         raise HTTPException(status_code=404, detail="Shipment not found")
-    
+
     # Check what changed
     old_eta = shipment.get('eta')
     new_eta = data.get('eta')
     old_status = shipment.get('status')
     new_status = data.get('status')
-    
+
     # Update shipment
     await db.shipments.update_one(
         {"id": shipment_id},
         {"$set": {**data, "updated_at": datetime.now(timezone.utc)}}
     )
-    
+
     # Create events for important changes
     customer_id = shipment.get('customerId')
-    
+
     if new_status and new_status != old_status:
         await create_shipment_event(
             shipment_id=shipment_id,
@@ -18658,7 +19356,7 @@ async def update_shipment(shipment_id: str, data: Dict[str, Any] = Body(...)):
             meta={'oldStatus': old_status, 'newStatus': new_status},
             customer_id=customer_id
         )
-    
+
     if new_eta and new_eta != old_eta:
         await create_shipment_event(
             shipment_id=shipment_id,
@@ -18667,7 +19365,7 @@ async def update_shipment(shipment_id: str, data: Dict[str, Any] = Body(...)):
             meta={'oldEta': old_eta, 'newEta': new_eta},
             customer_id=customer_id
         )
-    
+
     if data.get('containerNumber') and not shipment.get('containerNumber'):
         await create_shipment_event(
             shipment_id=shipment_id,
@@ -18675,7 +19373,7 @@ async def update_shipment(shipment_id: str, data: Dict[str, Any] = Body(...)):
             title=f'Додано трекінг: {data["containerNumber"]}',
             customer_id=customer_id
         )
-    
+
     return {"success": True}
 
 # ═══════════════════════════════════════════════════════════════════
@@ -18725,13 +19423,15 @@ async def update_shipment_stage(
         raise HTTPException(status_code=404, detail="Shipment not found")
     ensure_shipment_stages(shipment)
     stages = shipment["stages"]
-    idx = next((i for i, s in enumerate(stages) if s.get("id") == stage_id), -1)
+    idx = next((i for i, s in enumerate(stages)
+               if s.get("id") == stage_id), -1)
     if idx < 0:
         raise HTTPException(status_code=404, detail="Stage not found")
 
     stage = dict(stages[idx])
     prev_status = stage.get("status")
-    allowed = {"label", "from", "to", "fromPoint", "toPoint", "type", "vessel", "status"}
+    allowed = {"label", "from", "to", "fromPoint",
+               "toPoint", "type", "vessel", "status"}
     for k in list(payload.keys()):
         if k in allowed:
             stage[k] = payload[k]
@@ -18743,7 +19443,8 @@ async def update_shipment_stage(
     # safely; PUT is only for field edits, so we restrict status moves.
     new_status = stage.get("status")
     if new_status != prev_status:
-        allowed_next = JOURNEY_STAGE_TRANSITIONS.get(prev_status or "pending", set())
+        allowed_next = JOURNEY_STAGE_TRANSITIONS.get(
+            prev_status or "pending", set())
         if new_status not in allowed_next:
             raise HTTPException(
                 status_code=400,
@@ -18792,7 +19493,8 @@ async def replace_shipment_stages(
         raise HTTPException(status_code=404, detail="Shipment not found")
     raw = payload.get("stages") or []
     if not isinstance(raw, list) or not raw:
-        raise HTTPException(status_code=400, detail="stages[] must be a non-empty array")
+        raise HTTPException(
+            status_code=400, detail="stages[] must be a non-empty array")
     now = datetime.now(timezone.utc)
     # ensure exactly one active; fallback to first
     normalized: List[Dict[str, Any]] = []
@@ -18896,7 +19598,8 @@ async def activate_shipment_stage(shipment_id: str, stage_id: str):
         raise HTTPException(status_code=404, detail="Shipment not found")
     ensure_shipment_stages(shipment)
     stages = shipment["stages"]
-    target_idx = next((i for i, s in enumerate(stages) if s.get("id") == stage_id), -1)
+    target_idx = next((i for i, s in enumerate(stages)
+                      if s.get("id") == stage_id), -1)
     if target_idx < 0:
         raise HTTPException(status_code=404, detail="Stage not found")
     now = datetime.now(timezone.utc)
@@ -18929,22 +19632,20 @@ async def activate_shipment_stage(shipment_id: str, stage_id: str):
     return {"ok": True, "shipment": serialize_journey(fresh)}
 
 
-
-
 # ==================== TEAM LEAD ENDPOINTS ====================
 
 @fastapi_app.get("/api/team/shipping")
 async def team_shipping_overview(issue: Optional[str] = None):
     """
     Team Lead shipping dashboard
-    
+
     ?issue=stalled - застрявшие (>5 дней без обновлений)
     ?issue=no_tracking - без трекинга
     ?issue=risky - рисковые (ETA просрочена)
     """
     now = datetime.now(timezone.utc)
     query = {}
-    
+
     if issue == 'stalled':
         five_days_ago = now - timedelta(days=5)
         query = {
@@ -18964,17 +19665,17 @@ async def team_shipping_overview(issue: Optional[str] = None):
             "eta": {"$lt": now.isoformat()},
             "status": {"$nin": ["delivered", "ready_for_pickup"]}
         }
-    
+
     shipments = await db.shipments.find(query).sort('created_at', -1).limit(50).to_list(50)
-    
+
     # Enrich with events count
     for s in shipments:
         events_count = await db.shipment_events.count_documents({'shipmentId': s['id']})
         s['eventsCount'] = events_count
-        
+
         # Calculate status from events
         s['status'] = await calculate_shipment_status(s['id'])
-    
+
     return {
         "success": True,
         "data": [serialize_doc(s) for s in shipments],
@@ -19000,11 +19701,11 @@ async def ping_manager_about_shipment(shipment_id: str):
     shipment = await db.shipments.find_one({"id": shipment_id})
     if not shipment:
         raise HTTPException(status_code=404, detail="Shipment not found")
-    
+
     manager_id = shipment.get('managerId')
     if not manager_id:
         raise HTTPException(status_code=400, detail="No manager assigned")
-    
+
     # Create notification
     notification = {
         '_id': str(uuid.uuid4()),
@@ -19017,12 +19718,12 @@ async def ping_manager_about_shipment(shipment_id: str):
         'read': False,
         'created_at': datetime.now(timezone.utc)
     }
-    
+
     await db.notifications.insert_one(notification)
-    
+
     # Emit to manager via Socket.IO
     await sio.emit('notification', notification, room=f"user_{manager_id}")
-    
+
     return {"success": True, "message": "Manager notified"}
 
 
@@ -19032,11 +19733,11 @@ async def create_shipment_task(shipment_id: str):
     shipment = await db.shipments.find_one({"id": shipment_id})
     if not shipment:
         raise HTTPException(status_code=404, detail="Shipment not found")
-    
+
     manager_id = shipment.get('managerId')
     if not manager_id:
         raise HTTPException(status_code=400, detail="No manager assigned")
-    
+
     # Create task
     task = {
         '_id': str(uuid.uuid4()),
@@ -19050,9 +19751,9 @@ async def create_shipment_task(shipment_id: str):
         'deadline': datetime.now(timezone.utc) + timedelta(hours=24),
         'created_at': datetime.now(timezone.utc)
     }
-    
+
     await db.tasks.insert_one(task)
-    
+
     return {"success": True, "taskId": task['_id']}
 
 
@@ -19062,7 +19763,7 @@ async def escalate_shipment(shipment_id: str):
     shipment = await db.shipments.find_one({"id": shipment_id})
     if not shipment:
         raise HTTPException(status_code=404, detail="Shipment not found")
-    
+
     # Create alert
     alert = {
         '_id': str(uuid.uuid4()),
@@ -19075,14 +19776,14 @@ async def escalate_shipment(shipment_id: str):
         'created_at': datetime.now(timezone.utc),
         'resolved': False
     }
-    
+
     await db.alerts.insert_one(alert)
-    
+
     # Emit to admin (find user with role=master_admin/admin)
     admin = await db.staff.find_one({'role': {'$in': ['master_admin', 'admin']}})
     if admin:
         await sio.emit('alert', alert, room=f"user_{admin['_id']}")
-    
+
     return {"success": True, "alertId": alert['_id']}
 
 
@@ -19095,6 +19796,7 @@ async def get_docusign_envelope(envelope_id: str):
         raise HTTPException(404, "Envelope not found")
     return {"success": True, "data": env}
 
+
 @fastapi_app.post("/api/docusign/envelopes")
 async def create_docusign_envelope(data: Dict[str, Any] = Body(...), current_user: Dict[str, Any] = Depends(require_manager_or_admin)):
     """Persist a real envelope record. Sending via DocuSign happens in
@@ -19103,7 +19805,8 @@ async def create_docusign_envelope(data: Dict[str, Any] = Body(...), current_use
     (no fake 'sent' state). For internal e-signing use /api/contracts/{id}/sign.
     """
     import os as _os
-    configured = bool(_os.environ.get("DOCUSIGN_INTEGRATION_KEY") and _os.environ.get("DOCUSIGN_ACCOUNT_ID"))
+    configured = bool(_os.environ.get("DOCUSIGN_INTEGRATION_KEY")
+                      and _os.environ.get("DOCUSIGN_ACCOUNT_ID"))
     env = {
         "id": f"env_{uuid.uuid4().hex[:12]}",
         "contract_id": data.get("contract_id") or data.get("contractId"),
@@ -19120,6 +19823,7 @@ async def create_docusign_envelope(data: Dict[str, Any] = Body(...), current_use
 # ═══════════════════════════════════════════════════════════════════
 # ESCALATIONS ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
+
 
 @fastapi_app.get("/api/escalations")
 async def list_escalations(limit: int = 50, includeSnoozed: bool = False, includeResolved: bool = False):
@@ -19144,6 +19848,7 @@ async def list_escalations(limit: int = 50, includeSnoozed: bool = False, includ
     items = await cursor.to_list(length=limit)
     return items if items else []
 
+
 @fastapi_app.post("/api/escalations")
 async def create_escalation(data: Dict[str, Any] = Body(...)):
     """Create escalation"""
@@ -19158,10 +19863,12 @@ async def create_escalation(data: Dict[str, Any] = Body(...)):
     await db.escalations.insert_one(escalation)
     return {"success": True, "id": escalation["id"]}
 
+
 @fastapi_app.post("/api/escalations/process")
 async def process_escalations():
     """Process escalations"""
     return {"success": True, "processed": 0}
+
 
 @fastapi_app.get("/api/escalations/stats")
 async def escalation_stats():
@@ -19176,6 +19883,7 @@ async def escalation_stats():
         "total": await db.escalations.count_documents({})
     }
 
+
 @fastapi_app.patch("/api/escalations/{escalation_id}/resolve")
 async def resolve_escalation(escalation_id: str, data: Dict[str, Any] = Body(...)):
     """Resolve escalation"""
@@ -19183,15 +19891,19 @@ async def resolve_escalation(escalation_id: str, data: Dict[str, Any] = Body(...
     return {"success": True}
 
 # Wave-8: Also accept POST (frontend Insights → Escalation Queue uses POST for inline action)
+
+
 @fastapi_app.post("/api/escalations/{escalation_id}/resolve")
 async def resolve_escalation_post(escalation_id: str, data: Dict[str, Any] = Body(default={})):
     """Resolve escalation (POST alias used by Insights → Risk & Alerts → Escalation Queue)."""
     now_iso = datetime.now(timezone.utc).isoformat()
     res = await db.escalations.update_one(
         {"$or": [{"_id": escalation_id}, {"id": escalation_id}]},
-        {"$set": {"status": "resolved", "resolvedAt": now_iso, "resolvedBy": (data.get("actor") if isinstance(data, dict) else None)}}
+        {"$set": {"status": "resolved", "resolvedAt": now_iso, "resolvedBy": (
+            data.get("actor") if isinstance(data, dict) else None)}}
     )
     return {"success": True, "matched": res.matched_count, "modified": res.modified_count}
+
 
 @fastapi_app.post("/api/escalations/{escalation_id}/snooze")
 async def snooze_escalation(escalation_id: str, data: Dict[str, Any] = Body(default={})):
@@ -19228,6 +19940,7 @@ async def snooze_escalation(escalation_id: str, data: Dict[str, Any] = Body(defa
         "hours": hours,
     }
 
+
 @fastapi_app.post("/api/escalations/{escalation_id}/reassign")
 async def reassign_escalation(escalation_id: str, data: Dict[str, Any] = Body(...)):
     """Reassign an escalation to another owner. Body: { "owner": <email>, "actor": <optional> }"""
@@ -19248,6 +19961,7 @@ async def reassign_escalation(escalation_id: str, data: Dict[str, Any] = Body(..
         {"$set": update}
     )
     return {"success": True, "matched": res.matched_count, "owner": owner}
+
 
 @fastapi_app.put("/api/escalations/{escalation_id}")
 async def update_escalation(escalation_id: str, data: Dict[str, Any] = Body(...)):
@@ -19271,7 +19985,8 @@ REMINDER_SETTINGS_DEFAULTS: Dict[str, Any] = {
     "level3_days": 5,    # Owner
     "critical_days": 7,  # Immediate action
     # Dispatch policy.
-    "reminder_after_days": 3,   # start dispatching reminders this many days after issue/dueDate
+    # start dispatching reminders this many days after issue/dueDate
+    "reminder_after_days": 3,
     "cooldown_hours": 48,       # min hours between two reminders for the same invoice
     "pre_reminder_hours": 24,   # T-24h pre-reminder before the due date
     "channels": ["email", "in_app"],  # supported: email, in_app, telegram, sms
@@ -19300,7 +20015,8 @@ async def _load_reminder_settings() -> Dict[str, Any]:
             logger.exception("[reminders] failed to seed default settings")
         return seed
     except Exception:
-        logger.exception("[reminders] _load_reminder_settings failed; using in-memory defaults")
+        logger.exception(
+            "[reminders] _load_reminder_settings failed; using in-memory defaults")
         return dict(REMINDER_SETTINGS_DEFAULTS)
 
 
@@ -19368,7 +20084,8 @@ async def update_reminder_settings(payload: Dict[str, Any] = Body(default={})):
       • at least one channel must remain enabled
     """
     if not isinstance(payload, dict):
-        raise HTTPException(status_code=400, detail="payload must be an object")
+        raise HTTPException(
+            status_code=400, detail="payload must be an object")
 
     updates: Dict[str, Any] = {}
     errors: List[str] = []
@@ -19393,11 +20110,13 @@ async def update_reminder_settings(payload: Dict[str, Any] = Body(default={})):
         if not isinstance(raw, list):
             errors.append("channels must be a list of strings")
         else:
-            cleaned = [c for c in raw if isinstance(c, str) and c in _REMINDER_CHANNEL_ALLOWED]
+            cleaned = [c for c in raw if isinstance(
+                c, str) and c in _REMINDER_CHANNEL_ALLOWED]
             if not cleaned:
                 errors.append("at least one valid channel is required")
             else:
-                updates["channels"] = list(dict.fromkeys(cleaned))  # dedupe preserving order
+                updates["channels"] = list(dict.fromkeys(
+                    cleaned))  # dedupe preserving order
 
     if errors:
         raise HTTPException(status_code=422, detail={"errors": errors})
@@ -19409,7 +20128,8 @@ async def update_reminder_settings(payload: Dict[str, Any] = Body(default={})):
     # Order invariant: level1 ≤ level2 ≤ level3 ≤ critical (use merged view).
     current = await _load_reminder_settings()
     merged = {**current, **updates}
-    order = [merged["level1_days"], merged["level2_days"], merged["level3_days"], merged["critical_days"]]
+    order = [merged["level1_days"], merged["level2_days"],
+             merged["level3_days"], merged["critical_days"]]
     if not (order[0] <= order[1] <= order[2] <= order[3]):
         raise HTTPException(
             status_code=422,
@@ -19422,12 +20142,14 @@ async def update_reminder_settings(payload: Dict[str, Any] = Body(default={})):
     try:
         await db.reminder_settings.update_one(
             {"id": REMINDER_SETTINGS_ID},
-            {"$set": updates, "$setOnInsert": {"id": REMINDER_SETTINGS_ID, "created_at": updates["updated_at"]}},
+            {"$set": updates, "$setOnInsert": {
+                "id": REMINDER_SETTINGS_ID, "created_at": updates["updated_at"]}},
             upsert=True,
         )
     except Exception:
         logger.exception("[reminders] failed to persist settings")
-        raise HTTPException(status_code=500, detail="failed to persist settings")
+        raise HTTPException(
+            status_code=500, detail="failed to persist settings")
 
     return {"success": True, "data": await _load_reminder_settings()}
 
@@ -19448,7 +20170,8 @@ async def critical_reminders(limit: int = 50):
         {"dueDate": {"$exists": False}, "created_at": {"$lte": cutoff}},
     ]
     try:
-        cursor = db.invoices.find(q, {"_id": 0}).sort("dueDate", 1).limit(int(limit))
+        cursor = db.invoices.find(q, {"_id": 0}).sort(
+            "dueDate", 1).limit(int(limit))
         items = await cursor.to_list(length=int(limit))
     except Exception:
         logger.exception("[reminders] critical_reminders query failed")
@@ -19580,6 +20303,7 @@ async def process_reminders():
 # TASKS EXTENDED ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
 
+
 @fastapi_app.post("/api/tasks")
 async def create_task(
     data: Dict[str, Any] = Body(...),
@@ -19613,7 +20337,8 @@ async def create_task(
 
     assignee = await db.staff.find_one({"id": assignee_id}, {"_id": 0, "password": 0})
     if not assignee:
-        raise HTTPException(status_code=400, detail=f"Assignee not found: {assignee_id}")
+        raise HTTPException(
+            status_code=400, detail=f"Assignee not found: {assignee_id}")
     assignee_role = (assignee.get("role") or "").lower()
     if assignee_role not in allowed_assignee_roles:
         raise HTTPException(
@@ -19664,19 +20389,25 @@ async def create_task(
     return {"success": True, "task": task}
 
 # IMPORTANT: Specific routes MUST be before /{task_id} dynamic route!
+
+
 @fastapi_app.get("/api/tasks/active")
 async def active_tasks():
     """Active tasks - MUST be before /{task_id}"""
-    cursor = db.tasks.find({"status": {"$ne": "completed"}}, {'_id': 0}).limit(100)
+    cursor = db.tasks.find({"status": {"$ne": "completed"}}, {
+                           '_id': 0}).limit(100)
     items = await cursor.to_list(length=100)
     return {"success": True, "data": items}
+
 
 @fastapi_app.get("/api/tasks/queue")
 async def task_queue():
     """Task queue - MUST be before /{task_id}"""
-    cursor = db.tasks.find({"status": "pending"}, {'_id': 0}).sort('dueDate', 1).limit(50)
+    cursor = db.tasks.find({"status": "pending"}, {
+                           '_id': 0}).sort('dueDate', 1).limit(50)
     items = await cursor.to_list(length=50)
     return {"success": True, "data": items}
+
 
 @fastapi_app.get("/api/tasks/stats")
 async def task_stats():
@@ -19691,6 +20422,7 @@ async def task_stats():
         }
     }
 
+
 @fastapi_app.get("/api/tasks/{task_id}")
 async def get_task(task_id: str):
     """Get task by ID - MUST be after specific routes"""
@@ -19698,6 +20430,7 @@ async def get_task(task_id: str):
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return {"success": True, "data": task}
+
 
 @fastapi_app.delete("/api/tasks/{task_id}")
 async def delete_task(task_id: str, current_user: Dict[str, Any] = Depends(require_user)):
@@ -19718,7 +20451,8 @@ async def delete_task(task_id: str, current_user: Dict[str, Any] = Depends(requi
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
         if task.get("createdBy") != me:
-            raise HTTPException(status_code=403, detail="Team leads can only delete tasks they created")
+            raise HTTPException(
+                status_code=403, detail="Team leads can only delete tasks they created")
     await db.tasks.delete_one({"$or": [{"id": task_id}, {"taskId": task_id}]})
     return {"success": True}
 
@@ -19746,7 +20480,8 @@ async def start_task(
     role = (current_user.get("role") or "").lower()
     me = current_user.get("id") or current_user.get("managerId")
     if role not in ("admin", "master_admin", "owner") and task.get("assigneeId") != me and task.get("createdBy") != me:
-        raise HTTPException(status_code=403, detail="Only the assignee, creator, or an admin can start this task")
+        raise HTTPException(
+            status_code=403, detail="Only the assignee, creator, or an admin can start this task")
 
     res = await db.tasks.update_one(
         {"$or": [{"id": task_id}, {"taskId": task_id}]},
@@ -19776,7 +20511,8 @@ async def complete_task(
     role = (current_user.get("role") or "").lower()
     me = current_user.get("id") or current_user.get("managerId")
     if role not in ("admin", "master_admin", "owner") and task.get("assigneeId") != me and task.get("createdBy") != me:
-        raise HTTPException(status_code=403, detail="Only the assignee, creator, or an admin can complete this task")
+        raise HTTPException(
+            status_code=403, detail="Only the assignee, creator, or an admin can complete this task")
 
     update = {
         "status": "completed",
@@ -19797,6 +20533,7 @@ async def complete_task(
 # LEADS EXTENDED ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
 
+
 @fastapi_app.get("/api/leads/{lead_id}")
 async def get_lead(lead_id: str):
     """Get lead"""
@@ -19804,6 +20541,7 @@ async def get_lead(lead_id: str):
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return {"success": True, "data": lead}
+
 
 @fastapi_app.post("/api/leads")
 async def create_lead(data: Dict[str, Any] = Body(...)):
@@ -19819,7 +20557,7 @@ async def create_lead(data: Dict[str, Any] = Body(...)):
     fail to JSON-serialize the returned dict and respond 500.
     """
     first = (data.get("firstName") or "").strip()
-    last  = (data.get("lastName") or "").strip()
+    last = (data.get("lastName") or "").strip()
     legacy_name = (data.get("name") or "").strip()
     if not first and not last and legacy_name:
         parts = legacy_name.split(maxsplit=1)
@@ -19864,18 +20602,21 @@ async def create_lead(data: Dict[str, Any] = Body(...)):
         logger.debug("[create_lead] notify failed: %s", _e)
     return {"success": True, "lead": lead, "data": lead}
 
+
 @fastapi_app.put("/api/leads/{lead_id}")
 async def update_lead(lead_id: str, data: Dict[str, Any] = Body(...), current_user: Dict[str, Any] = Depends(require_user)):
     """Update lead — recomputes ``name`` if firstName/lastName changed."""
     # Snapshot before for Block 7.1 change history
     _before_lead = await db.leads.find_one({"id": lead_id}, {"_id": 0}) or {}
-    patch = {k: v for k, v in data.items() if k not in ("_id", "id", "created_at")}
+    patch = {k: v for k, v in data.items() if k not in (
+        "_id", "id", "created_at")}
     # keep ``name`` in sync when firstName/lastName arrives
     if "firstName" in patch or "lastName" in patch:
         existing = await db.leads.find_one({"id": lead_id}, {"_id": 0}) or {}
         first = patch.get("firstName", existing.get("firstName") or "")
-        last  = patch.get("lastName",  existing.get("lastName") or "")
-        patch["name"] = f"{(first or '').strip()} {(last or '').strip()}".strip() or existing.get("name")
+        last = patch.get("lastName",  existing.get("lastName") or "")
+        patch["name"] = f"{(first or '').strip()} {(last or '').strip()}".strip(
+        ) or existing.get("name")
     if "value" in patch and "budgetUsd" not in patch and "budgetEur" not in patch:
         try:
             patch["budgetEur"] = float(patch["value"] or 0)
@@ -19908,6 +20649,7 @@ async def update_lead(lead_id: str, data: Dict[str, Any] = Body(...), current_us
         pass
 
     return {"success": True, "lead": lead, "data": lead}
+
 
 @fastapi_app.delete("/api/leads/{lead_id}")
 async def delete_lead(lead_id: str):
@@ -19950,9 +20692,10 @@ async def convert_lead_to_customer(lead_id: str, request: Request, data: Dict[st
 
     # Build override-aware customer payload.
     first = (data.get("firstName") or lead.get("firstName") or "").strip()
-    last  = (data.get("lastName")  or lead.get("lastName")  or "").strip()
-    email = (data.get("email")     or lead.get("email")     or "").strip().lower() or None
-    phone = data.get("phone")      or lead.get("phone")
+    last = (data.get("lastName") or lead.get("lastName") or "").strip()
+    email = (data.get("email") or lead.get(
+        "email") or "").strip().lower() or None
+    phone = data.get("phone") or lead.get("phone")
     full_name = f"{first} {last}".strip() or lead.get("name") or "(no name)"
 
     # Reuse existing customer when contact info matches (avoid duplicates).
@@ -20032,7 +20775,8 @@ async def convert_lead_to_customer(lead_id: str, request: Request, data: Dict[st
         except ValueError:
             invite_payload = None
         except Exception as _inv_err:
-            logger.warning(f"[lead.convert] invite dispatch failed for {customer.get('id')}: {_inv_err}")
+            logger.warning(
+                f"[lead.convert] invite dispatch failed for {customer.get('id')}: {_inv_err}")
 
     result = {
         "success":   True,
@@ -20043,6 +20787,7 @@ async def convert_lead_to_customer(lead_id: str, request: Request, data: Dict[st
     if invite_payload:
         result["invite"] = invite_payload
     return result
+
 
 @fastapi_app.post("/api/leads/from-vin")
 async def create_lead_from_vin(data: Dict[str, Any] = Body(...)):
@@ -20069,6 +20814,7 @@ async def create_lead_from_vin(data: Dict[str, Any] = Body(...)):
 # payload returning both ``data`` and ``customer``). The earlier shadowed
 # duplicate was removed to silence the FastAPI Duplicate Operation ID warning.
 
+
 @fastapi_app.post("/api/customers")
 async def create_customer(
     request: Request,
@@ -20088,7 +20834,7 @@ async def create_customer(
         customer is assigned to that manager (self-ownership).
     """
     first = (data.get("firstName") or "").strip()
-    last  = (data.get("lastName") or "").strip()
+    last = (data.get("lastName") or "").strip()
     legacy_name = (data.get("name") or "").strip()
     if not first and not last and legacy_name:
         parts = legacy_name.split(maxsplit=1)
@@ -20104,7 +20850,8 @@ async def create_customer(
     if explicit_mid and role not in {"owner", "master_admin", "admin", "team_lead"}:
         # Managers cannot assign customers to other managers
         explicit_mid = None
-    manager_id = explicit_mid or (current_user.get("id") if role == "manager" else None)
+    manager_id = explicit_mid or (current_user.get(
+        "id") if role == "manager" else None)
 
     # Country (direction) + Wishes (Customer-Card spec, 2026-06-10) ────────
     #   • country   — enum value in {USA, Korea, Bulgaria, Other}; default
@@ -20117,7 +20864,9 @@ async def create_customer(
     _country_raw = (data.get("country") or "").strip() or None
     if _country_raw and _country_raw not in _allowed_countries:
         _country_raw = "Other"
-    _wishes_in = data.get("wishes") if isinstance(data.get("wishes"), dict) else {}
+    _wishes_in = data.get("wishes") if isinstance(
+        data.get("wishes"), dict) else {}
+
     def _f(v):
         try:
             return float(v) if v not in (None, "") else 0.0
@@ -20161,7 +20910,8 @@ async def create_customer(
         from app.services.file_manager import ensure_system_folders as _ensure_sys_folders
         await _ensure_sys_folders(customer["id"], created_by=current_user.get("id"))
     except Exception as _folder_err:  # never block customer creation on folder seed failure
-        logger.warning(f"[customers.create] failed to seed system folders for {customer['id']}: {_folder_err}")
+        logger.warning(
+            f"[customers.create] failed to seed system folders for {customer['id']}: {_folder_err}")
 
     # ── Cross-cutting onboarding — optional 30-day invite ────────────────
     # When staff create a client with just an email, they can fire an invite
@@ -20174,7 +20924,8 @@ async def create_customer(
         except ValueError:
             invite_payload = None
         except Exception as _inv_err:  # never block customer creation on invite failure
-            logger.warning(f"[customers.create] invite dispatch failed for {customer['id']}: {_inv_err}")
+            logger.warning(
+                f"[customers.create] invite dispatch failed for {customer['id']}: {_inv_err}")
 
     resp = {"success": True, "customer": customer, "data": customer}
     if invite_payload:
@@ -20211,7 +20962,8 @@ async def _issue_customer_invite(
     email = (customer.get("email") or "").strip().lower()
     if not email:
         raise ValueError("customer_has_no_email")
-    cid = customer.get("id") or customer.get("customerId") or customer.get("user_id")
+    cid = customer.get("id") or customer.get(
+        "customerId") or customer.get("user_id")
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(days=_CUSTOMER_INVITE_TTL_DAYS)
     token = secrets.token_urlsafe(32)
@@ -20273,7 +21025,8 @@ async def _issue_customer_invite(
         email_sent = bool(res.get("ok"))
         email_mode = res.get("mode", "dry_run")
     except Exception as exc:
-        logger.warning("[customer-invite] email dispatch failed for %s: %s", email, exc)
+        logger.warning(
+            "[customer-invite] email dispatch failed for %s: %s", email, exc)
 
     logger.info("[customer-invite] issued for cid=%s email=%s mode=%s link=%s",
                 cid, email, email_mode, invite_link)
@@ -20335,9 +21088,11 @@ async def staff_set_customer_password(
     if not _can_user_see_customer(current_user, cust):
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    new_password = (data.get("password") or data.get("newPassword") or "").strip()
+    new_password = (data.get("password") or data.get(
+        "newPassword") or "").strip()
     if len(new_password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+        raise HTTPException(
+            status_code=400, detail="Password must be at least 6 characters")
 
     now = datetime.now(timezone.utc)
     await db.customers.update_one({"id": customer_id}, {"$set": {
@@ -20385,13 +21140,15 @@ async def get_customer_account(
         exp_s = exp.isoformat() if isinstance(exp, datetime) else exp
         is_expired = False
         try:
-            _exp = exp if isinstance(exp, datetime) else datetime.fromisoformat(str(exp))
+            _exp = exp if isinstance(
+                exp, datetime) else datetime.fromisoformat(str(exp))
             if _exp.tzinfo is None:
                 _exp = _exp.replace(tzinfo=timezone.utc)
             is_expired = _exp < datetime.now(timezone.utc)
         except Exception:
             is_expired = False
-        pending_info = {"expires_at": exp_s, "email": pending.get("email"), "expired": is_expired}
+        pending_info = {"expires_at": exp_s,
+                        "email": pending.get("email"), "expired": is_expired}
 
     if has_password:
         state = "active"
@@ -20454,11 +21211,13 @@ async def accept_customer_invite(data: Dict[str, Any] = Body(...)):
     if not token:
         raise HTTPException(status_code=400, detail="Token required")
     if len(new_password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+        raise HTTPException(
+            status_code=400, detail="Password must be at least 6 characters")
 
     row = await db.customer_invites.find_one({"token": token})
     if not row or row.get("status") != "pending" or row.get("used_at"):
-        raise HTTPException(status_code=400, detail="Invalid or already-used invitation")
+        raise HTTPException(
+            status_code=400, detail="Invalid or already-used invitation")
     exp = row.get("expires_at")
     if isinstance(exp, str):
         try:
@@ -20477,7 +21236,8 @@ async def accept_customer_invite(data: Dict[str, Any] = Body(...)):
         raise HTTPException(status_code=404, detail="Customer not found")
 
     now = datetime.now(timezone.utc)
-    keep_status = cust.get("status") if cust.get("status") not in (None, "") else "active"
+    keep_status = cust.get("status") if cust.get(
+        "status") not in (None, "") else "active"
     await db.customers.update_one({"id": cid}, {"$set": {
         "password": _legacy_sha256(new_password),
         "password_updated_at": now.isoformat(),
@@ -20536,7 +21296,8 @@ async def update_customer(
                 )
             # Check open next-action (task OR meeting)
             open_task = await db.tasks.find_one(
-                {"customerId": customer_id, "status": {"$nin": ["completed", "cancelled"]}},
+                {"customerId": customer_id, "status": {
+                    "$nin": ["completed", "cancelled"]}},
                 {"_id": 0, "id": 1},
             )
             scheduled_meeting = await db.meetings.find_one(
@@ -20549,12 +21310,14 @@ async def update_customer(
                     detail="customer_close_blocked_no_next_action: An open task or scheduled meeting (next action) is required to close this customer.",
                 )
 
-    patch = {k: v for k, v in data.items() if k not in ("_id", "id", "created_at", "managerId", "managerId_updated_at")}
+    patch = {k: v for k, v in data.items() if k not in (
+        "_id", "id", "created_at", "managerId", "managerId_updated_at")}
     if "firstName" in patch or "lastName" in patch:
         existing = await db.customers.find_one({"id": customer_id}, {"_id": 0}) or {}
         first = patch.get("firstName", existing.get("firstName") or "")
-        last  = patch.get("lastName",  existing.get("lastName") or "")
-        patch["name"] = f"{(first or '').strip()} {(last or '').strip()}".strip() or existing.get("name")
+        last = patch.get("lastName",  existing.get("lastName") or "")
+        patch["name"] = f"{(first or '').strip()} {(last or '').strip()}".strip(
+        ) or existing.get("name")
 
     # ── Country (direction) sanitiser ──────────────────────────────────────
     if "country" in patch:
@@ -20603,6 +21366,7 @@ async def update_customer(
 
     return {"success": True, "customer": customer, "data": customer}
 
+
 @fastapi_app.delete("/api/customers/{customer_id}")
 async def delete_customer(
     customer_id: str,
@@ -20624,7 +21388,8 @@ async def delete_customer(
     try:
         await db.customer_invites.update_many(
             {"customerId": customer_id, "status": "pending"},
-            {"$set": {"status": "revoked", "revoked_at": datetime.now(timezone.utc)}},
+            {"$set": {"status": "revoked",
+                      "revoked_at": datetime.now(timezone.utc)}},
         )
         await db.customer_sessions.delete_many(
             {"$or": [{"customerId": customer_id}, {"user_id": customer_id}]}
@@ -20632,6 +21397,7 @@ async def delete_customer(
     except Exception:
         pass
     return {"success": True, "deleted": result.deleted_count}
+
 
 @fastapi_app.get("/api/customers/{customer_id}")
 async def get_customer(
@@ -20649,6 +21415,7 @@ async def get_customer(
     if not _can_user_see_customer(current_user, cust):
         raise HTTPException(status_code=403, detail="Forbidden")
     return {"success": True, "data": cust, "customer": cust}
+
 
 @fastapi_app.get("/api/customers/{customer_id}/360")
 async def get_customer_360(
@@ -20685,7 +21452,8 @@ async def get_customer_360(
     if cust.get("phone"):
         or_clauses.append({"phone": cust["phone"]})
     ident_filter = {"$or": or_clauses}
-    by_cid = {"$or": [{"customer_id": customer_id}, {"customerId": customer_id}]}
+    by_cid = {"$or": [{"customer_id": customer_id},
+                      {"customerId": customer_id}]}
 
     async def _safe(coro, default=None):
         try:
@@ -20695,10 +21463,14 @@ async def get_customer_360(
 
     # ── Pull collections in parallel (single round-trip)
     deals, leads, quotes, deposits = await asyncio.gather(
-        _safe(db.deals.find(ident_filter, {"_id": 0}).sort("created_at", -1).to_list(length=200)),
-        _safe(db.leads.find(ident_filter, {"_id": 0}).sort("created_at", -1).to_list(length=200)),
-        _safe(db.quotes.find(ident_filter, {"_id": 0}).sort("created_at", -1).to_list(length=200)),
-        _safe(db.legal_deposits.find(by_cid, {"_id": 0}).sort("created_at", -1).to_list(length=100)),
+        _safe(db.deals.find(ident_filter, {"_id": 0}).sort(
+            "created_at", -1).to_list(length=200)),
+        _safe(db.leads.find(ident_filter, {"_id": 0}).sort(
+            "created_at", -1).to_list(length=200)),
+        _safe(db.quotes.find(ident_filter, {"_id": 0}).sort(
+            "created_at", -1).to_list(length=200)),
+        _safe(db.legal_deposits.find(by_cid, {"_id": 0}).sort(
+            "created_at", -1).to_list(length=100)),
     )
 
     # ── Aggregate summary ──
@@ -20758,7 +21530,8 @@ async def get_customer_360(
         key=lambda d: _norm_dt(d.get("created_at")) or "9999",
     )
     first_lead = sorted_leads_asc[0] if sorted_leads_asc else None
-    first_lead_at = _norm_dt(first_lead.get("created_at")) if first_lead else None
+    first_lead_at = _norm_dt(first_lead.get(
+        "created_at")) if first_lead else None
     cust_created = _norm_dt(cust.get("created_at"))
     candidates = [d for d in (first_lead_at, cust_created) if d]
     first_request_at = min(candidates) if candidates else None
@@ -20910,14 +21683,16 @@ async def upload_customer_document(
     if not _can_user_see_customer(current_user, cust):
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    name  = (payload.get("name") or "document").strip()
+    name = (payload.get("name") or "document").strip()
     dtype = (payload.get("type") or "other").strip()
-    mime  = (payload.get("mime") or "application/octet-stream").strip()
-    url   = payload.get("file_url") or payload.get("data_url") or ""
+    mime = (payload.get("mime") or "application/octet-stream").strip()
+    url = payload.get("file_url") or payload.get("data_url") or ""
     if not url:
-        raise HTTPException(status_code=400, detail="file_url or data_url is required")
+        raise HTTPException(
+            status_code=400, detail="file_url or data_url is required")
     if isinstance(url, str) and url.startswith("data:") and len(url) > 8 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Data URL exceeds 8 MB cap")
+        raise HTTPException(
+            status_code=413, detail="Data URL exceeds 8 MB cap")
 
     doc = {
         "id":           str(uuid.uuid4()),
@@ -20961,6 +21736,7 @@ async def delete_customer_document(
 async def _customer_360_replaced():
     pass
 
+
 @fastapi_app.get("/api/customers/{customer_id}/timeline-legacy")
 async def get_customer_timeline_legacy(
     customer_id: str,
@@ -20985,7 +21761,8 @@ async def get_customer_timeline_legacy(
     events: List[Dict[str, Any]] = []
     try:
         async for d in db.deals.find(
-            {"$or": [{"customerId": customer_id}, {"customer_id": customer_id}]},
+            {"$or": [{"customerId": customer_id},
+                     {"customer_id": customer_id}]},
             {"_id": 0},
         ).sort("created_at", -1).limit(limit):
             events.append({
@@ -20999,7 +21776,8 @@ async def get_customer_timeline_legacy(
         pass
     try:
         match = {"customerId": customer_id}
-        if cust.get("email"): match = {"$or": [match, {"email": cust["email"]}]}
+        if cust.get("email"):
+            match = {"$or": [match, {"email": cust["email"]}]}
         async for ld in db.leads.find(match, {"_id": 0}).sort("created_at", -1).limit(limit):
             events.append({
                 "type": "lead",
@@ -21017,6 +21795,7 @@ async def get_customer_timeline_legacy(
 # DEALS EXTENDED ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
 
+
 @fastapi_app.get("/api/deals/stats")
 async def deal_stats():
     """Deal statistics — literal route, MUST stay above ``/api/deals/{deal_id}``."""
@@ -21029,6 +21808,7 @@ async def deal_stats():
             "inProgress": await db.deals.count_documents({"status": {"$nin": ["won", "lost"]}})
         }
     }
+
 
 @fastapi_app.get("/api/deals/{deal_id}")
 async def get_deal(deal_id: str):
@@ -21048,24 +21828,26 @@ async def get_deal(deal_id: str):
             # Opportunistic backfill so subsequent listings work.
             try:
                 await db.deals.update_one(
-                    {"_id": _id, "$or": [{"id": {"$exists": False}}, {"id": None}, {"id": ""}]},
+                    {"_id": _id, "$or": [
+                        {"id": {"$exists": False}}, {"id": None}, {"id": ""}]},
                     {"$set": {"id": str(_id)}},
                 )
             except Exception:
                 pass
     return {"success": True, "data": deal}
 
+
 @fastapi_app.post("/api/deals")
 async def create_deal(data: Dict[str, Any] = Body(...)):
     """
     Create deal
-    
+
     Auto-creates shipment if stage = 'shipping'
     """
     now = datetime.now(timezone.utc)
-    
+
     deal_id = f"deal_{int(now.timestamp())}_{str(uuid.uuid4())[:8]}"
-    
+
     # Wave 6 audit fix: write BOTH `_id` and `id` so the document is
     # selectable in the frontend pipeline picker (which keys off `id`).
     # If caller already provided `id` or `_id`, respect it.
@@ -21081,7 +21863,7 @@ async def create_deal(data: Dict[str, Any] = Body(...)):
         "created_at": now,
         "updated_at": now
     }
-    
+
     await db.deals.insert_one(deal)
 
     # ─── Wave 6: derive + persist pipeline_stage on insert ───────────────
@@ -21113,7 +21895,7 @@ async def create_deal(data: Dict[str, Any] = Body(...)):
         )
     except Exception as _w6e:
         logger.warning(f"[wave6] deal_created hook failed: {_w6e}")
-    
+
     # 🔥 AUTO-CREATE SHIPMENT if stage = 'shipping'
     if data.get('stage') == 'shipping' or data.get('status') == 'shipping':
         try:
@@ -21127,15 +21909,15 @@ async def create_deal(data: Dict[str, Any] = Body(...)):
                 "eta": data.get("expected_delivery"),
                 "trackingActive": False
             }
-            
+
             # Create shipment via endpoint logic
             shipment_response = await create_shipment(shipment_data)
-            
+
             logger.info(f"[DEAL] Auto-created shipment for deal {deal_id}")
-            
+
         except Exception as e:
             logger.error(f"[DEAL] Failed to auto-create shipment: {e}")
-    
+
     return {"success": True, "deal": serialize_doc(deal)}
 
 
@@ -21175,6 +21957,7 @@ async def update_deal(deal_id: str, data: Dict[str, Any] = Body(...), current_us
 
 # ═══════════════════════════════════════════════════════════════════
 
+
 @fastapi_app.post("/api/analytics/track")
 async def analytics_track(request: Request):
     """Track analytics event - tolerant to any payload"""
@@ -21191,6 +21974,7 @@ async def analytics_track(request: Request):
     await db.analytics_events.insert_one(event)
     return {"success": True}
 
+
 @fastapi_app.post("/api/analytics/link-session")
 async def analytics_link_session(data: Dict[str, Any] = Body(...)):
     """Link analytics session"""
@@ -21200,12 +21984,14 @@ async def analytics_link_session(data: Dict[str, Any] = Body(...)):
 # CALLS ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
 
+
 @fastapi_app.get("/api/calls")
 async def list_calls(limit: int = 50):
     """List calls"""
     cursor = db.calls.find({}, {'_id': 0}).sort('created_at', -1).limit(limit)
     items = await cursor.to_list(length=limit)
     return {"success": True, "data": items}
+
 
 @fastapi_app.get("/api/calls/{call_id}")
 async def get_call(call_id: str):
@@ -21214,6 +22000,7 @@ async def get_call(call_id: str):
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     return {"success": True, "data": call}
+
 
 @fastapi_app.post("/api/calls")
 async def create_call(data: Dict[str, Any] = Body(...)):
@@ -21239,17 +22026,19 @@ async def create_call(data: Dict[str, Any] = Body(...)):
 # CARFAX/VIN PRICE ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
 
+
 @fastapi_app.get("/api/carfax/{vin}")
 async def carfax_report(vin: str):
     """Get Carfax report stub"""
     return {"success": True, "vin": vin.upper(), "available": False, "message": "Carfax integration pending"}
+
 
 @fastapi_app.get("/api/vin-price/{vin}")
 async def vin_price(vin: str):
     """Get VIN price estimate"""
     vehicle = await db.vin_data.find_one({"vin": vin.upper()}, {'_id': 0})
     estimated_price = vehicle.get("price", 15000) if vehicle else 15000
-    
+
     return {
         "success": True,
         "vin": vin.upper(),
@@ -21262,12 +22051,14 @@ async def vin_price(vin: str):
 # DOCUMENTS ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
 
+
 @fastapi_app.get("/api/documents")
 async def list_documents(limit: int = 50):
     """List documents"""
     cursor = db.documents.find({}, {'_id': 0}).limit(limit)
     items = await cursor.to_list(length=limit)
     return {"success": True, "data": items}
+
 
 @fastapi_app.get("/api/documents/{document_id}")
 async def get_document(document_id: str):
@@ -21276,6 +22067,7 @@ async def get_document(document_id: str):
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     return {"success": True, "data": doc}
+
 
 @fastapi_app.post("/api/documents")
 async def create_document(data: Dict[str, Any] = Body(...)):
@@ -21296,6 +22088,7 @@ async def create_document(data: Dict[str, Any] = Body(...)):
     doc.pop("_id", None)
     return {"success": True, "document": doc}
 
+
 @fastapi_app.get("/api/documents/queue/pending-verification")
 async def documents_pending_verification():
     """Documents pending verification"""
@@ -21307,6 +22100,7 @@ async def documents_pending_verification():
 # ROUTING ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
 
+
 @fastapi_app.get("/api/routing/queue/status")
 async def routing_queue_status():
     """Real routing queue snapshot from leads."""
@@ -21314,17 +22108,20 @@ async def routing_queue_status():
     status = await _re.routing_queue_status(db)
     return {"success": True, "status": status}
 
+
 @fastapi_app.get("/api/routing/rules")
 async def routing_rules():
     """Real, DB-backed routing rules (seeded on first read)."""
     from app.services import rules_engine as _re
     return await _re.list_routing_rules(db)
 
+
 @fastapi_app.post("/api/routing/rules")
 async def create_routing_rule(data: Dict[str, Any] = Body(...)):
     from app.services import rules_engine as _re
     doc = await _re.create_routing_rule(db, data)
     return {"success": True, "id": doc["id"], "data": doc}
+
 
 @fastapi_app.put("/api/routing/rules/{rule_id}")
 async def update_routing_rule_put(rule_id: str, data: Dict[str, Any] = Body(...)):
@@ -21334,6 +22131,7 @@ async def update_routing_rule_put(rule_id: str, data: Dict[str, Any] = Body(...)
         raise HTTPException(404, "Routing rule not found")
     return {"success": True, "data": doc}
 
+
 @fastapi_app.patch("/api/routing/rules/{rule_id}")
 async def update_routing_rule_patch(rule_id: str, data: Dict[str, Any] = Body(...)):
     from app.services import rules_engine as _re
@@ -21342,6 +22140,7 @@ async def update_routing_rule_patch(rule_id: str, data: Dict[str, Any] = Body(..
         raise HTTPException(404, "Routing rule not found")
     return {"success": True, "data": doc}
 
+
 @fastapi_app.delete("/api/routing/rules/{rule_id}")
 async def delete_routing_rule(rule_id: str):
     from app.services import rules_engine as _re
@@ -21349,6 +22148,7 @@ async def delete_routing_rule(rule_id: str):
     if not ok:
         raise HTTPException(404, "Routing rule not found")
     return {"success": True}
+
 
 @fastapi_app.patch("/api/routing/rules/{rule_id}/toggle")
 async def toggle_routing_rule(rule_id: str, data: Dict[str, Any] = Body(default={})):
@@ -21362,17 +22162,20 @@ async def toggle_routing_rule(rule_id: str, data: Dict[str, Any] = Body(default=
 # SCORING ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
 
+
 @fastapi_app.get("/api/scoring/rules")
 async def scoring_rules():
     """Real, DB-backed scoring rules (seeded on first read)."""
     from app.services import rules_engine as _re
     return await _re.list_scoring_rules(db)
 
+
 @fastapi_app.post("/api/scoring/rules")
 async def create_scoring_rule(data: Dict[str, Any] = Body(...)):
     from app.services import rules_engine as _re
     doc = await _re.create_scoring_rule(db, data)
     return {"success": True, "code": doc["code"], "data": doc}
+
 
 @fastapi_app.put("/api/scoring/rules/{rule_code}")
 async def update_scoring_rule_put(rule_code: str, data: Dict[str, Any] = Body(...)):
@@ -21382,6 +22185,7 @@ async def update_scoring_rule_put(rule_code: str, data: Dict[str, Any] = Body(..
         raise HTTPException(404, "Scoring rule not found")
     return {"success": True, "data": doc}
 
+
 @fastapi_app.patch("/api/scoring/rules/{rule_code}")
 async def update_scoring_rule_patch(rule_code: str, data: Dict[str, Any] = Body(...)):
     from app.services import rules_engine as _re
@@ -21390,6 +22194,7 @@ async def update_scoring_rule_patch(rule_code: str, data: Dict[str, Any] = Body(
         raise HTTPException(404, "Scoring rule not found")
     return {"success": True, "data": doc}
 
+
 @fastapi_app.delete("/api/scoring/rules/{rule_code}")
 async def delete_scoring_rule(rule_code: str):
     from app.services import rules_engine as _re
@@ -21397,6 +22202,7 @@ async def delete_scoring_rule(rule_code: str):
     if not ok:
         raise HTTPException(404, "Scoring rule not found")
     return {"success": True}
+
 
 @fastapi_app.patch("/api/scoring/rules/{rule_code}/toggle")
 async def toggle_scoring_rule(rule_code: str, data: Dict[str, Any] = Body(default={})):
@@ -21410,6 +22216,7 @@ async def toggle_scoring_rule(rule_code: str, data: Dict[str, Any] = Body(defaul
 # INTENT ENDPOINTS (extended)
 # ═══════════════════════════════════════════════════════════════════
 
+
 @fastapi_app.get("/api/intent/me")
 async def my_intent(current_user: Dict[str, Any] = Depends(require_user)):
     """Real buyer-intent score computed from the user's engagement signals
@@ -21417,7 +22224,8 @@ async def my_intent(current_user: Dict[str, Any] = Depends(require_user)):
     uid = current_user.get("id") or current_user.get("sub")
     cid = current_user.get("customerId") or uid
     ids = [x for x in {uid, cid} if x]
-    q = {"$or": [{"userId": {"$in": ids}}, {"customerId": {"$in": ids}}]} if ids else {"_id": None}
+    q = {"$or": [{"userId": {"$in": ids}}, {
+        "customerId": {"$in": ids}}]} if ids else {"_id": None}
     try:
         favs = await db.favorites.count_documents(q)
     except Exception:
@@ -21440,8 +22248,6 @@ async def my_intent(current_user: Dict[str, Any] = Depends(require_user)):
 # ═══════════════════════════════════════════════════════════════════
 # PAYMENTS ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
-
-
 
 
 # ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═# ═
@@ -21757,7 +22563,8 @@ async def stripe_webhook(request: Request):
     except Exception:
         logger.exception("[stripe-webhook] get_stripe_config failed")
 
-    secret_key = (cfg.get("secretKey") or os.environ.get("STRIPE_API_KEY", "")).strip()
+    secret_key = (cfg.get("secretKey") or os.environ.get(
+        "STRIPE_API_KEY", "")).strip()
     # MULTI-DOMAIN support: a single backend (sharing one DB) can serve several
     # public domains at once (e.g. bibicars.org AND bibicars.bg). Each Stripe
     # webhook endpoint has its OWN signing secret, so we collect ALL configured
@@ -21770,7 +22577,8 @@ async def stripe_webhook(request: Request):
         _wh_candidates.append(cfg["webhookSecret"].strip())
     _extra = cfg.get("webhookSecrets")
     if isinstance(_extra, (list, tuple)):
-        _wh_candidates.extend(s.strip() for s in _extra if isinstance(s, str) and s.strip())
+        _wh_candidates.extend(s.strip()
+                              for s in _extra if isinstance(s, str) and s.strip())
     _env_wh = os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip()
     if _env_wh:
         _wh_candidates.append(_env_wh)
@@ -21812,7 +22620,8 @@ async def stripe_webhook(request: Request):
         else:
             # Without a configured secret we still parse the JSON (test mode).
             # We log the warning so it's obvious in production to set the secret.
-            logger.warning("[stripe-webhook] no webhook_secret configured — running unverified")
+            logger.warning(
+                "[stripe-webhook] no webhook_secret configured — running unverified")
             event = _json.loads(body.decode("utf-8") or "{}")
     except Exception as ex:
         logger.exception("[stripe-webhook] payload parse failed")
@@ -21823,7 +22632,8 @@ async def stripe_webhook(request: Request):
     obj = ((event or {}).get("data") or {}).get("object") or {}
 
     if not event_id or not event_type:
-        logger.warning("[stripe-webhook] event has no id or type — ack and skip")
+        logger.warning(
+            "[stripe-webhook] event has no id or type — ack and skip")
         return {"received": True, "ignored": "no_event_metadata"}
 
     # ── Idempotency check ─────────────────────────────────────────────────
@@ -21845,7 +22655,8 @@ async def stripe_webhook(request: Request):
         # DuplicateKeyError → already processed
         ex_name = type(ex).__name__
         if "DuplicateKey" in ex_name or "duplicate key" in str(ex).lower():
-            logger.info("[stripe-webhook] duplicate event_id=%s — idempotent skip", event_id)
+            logger.info(
+                "[stripe-webhook] duplicate event_id=%s — idempotent skip", event_id)
             return {"received": True, "type": event_type, "idempotent": True}
         logger.exception("[stripe-webhook] webhook_events insert failed")
         # Continue processing — it's better to risk a duplicate than to drop the event
@@ -21876,7 +22687,8 @@ async def stripe_webhook(request: Request):
         "charge.refund.updated",
     )
 
-    cabinet_result: Dict[str, Any] = {"skipped": True, "reason": "irrelevant_event"}
+    cabinet_result: Dict[str, Any] = {
+        "skipped": True, "reason": "irrelevant_event"}
     legacy_ok = True
     cabinet_ok = True
 
@@ -21895,7 +22707,8 @@ async def stripe_webhook(request: Request):
                 )
                 pi_dict = pi.to_dict() if hasattr(pi, "to_dict") else dict(pi)
             except Exception:
-                logger.exception("[stripe-webhook] failed to refresh PI on refund")
+                logger.exception(
+                    "[stripe-webhook] failed to refresh PI on refund")
                 pi_dict = obj
         else:
             pi_dict = obj
@@ -21905,14 +22718,16 @@ async def stripe_webhook(request: Request):
             await _record_payment_from_stripe(pi_dict, event_type)
         except Exception:
             legacy_ok = False
-            logger.exception("[stripe-webhook] _record_payment_from_stripe failed")
+            logger.exception(
+                "[stripe-webhook] _record_payment_from_stripe failed")
 
         # 2) Cabinet-source payments (new flow)
         try:
             cabinet_result = await _confirm_cabinet_payment(pi_dict, event_type)
         except Exception:
             cabinet_ok = False
-            logger.exception("[stripe-webhook] _confirm_cabinet_payment failed")
+            logger.exception(
+                "[stripe-webhook] _confirm_cabinet_payment failed")
 
     # ── Mark event as processed ───────────────────────────────────────────
     try:
@@ -21953,10 +22768,11 @@ async def _ensure_webhook_events_index():
     """Idempotency relies on a UNIQUE index on webhook_events.event_id."""
     try:
         await db.webhook_events.create_index("event_id", unique=True, name="uniq_event_id")
-        logger.info("[stripe-webhook] webhook_events.event_id unique index ensured")
+        logger.info(
+            "[stripe-webhook] webhook_events.event_id unique index ensured")
     except Exception:
-        logger.exception("[stripe-webhook] failed to ensure webhook_events index")
-
+        logger.exception(
+            "[stripe-webhook] failed to ensure webhook_events index")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -21978,21 +22794,29 @@ DEFAULT_SERVICES = [
      "description_bg": "Предпродажен оглед, снимки и видео",
      "category": "import",  "default_price": 200,  "currency": "USD", "default_qty": 1,
      "workflow": [
-        {"key": "schedule",     "label": "Заплановано",  "label_en": "Scheduled",  "label_bg": "Планирано"},
-        {"key": "in_progress",  "label": "На огляді",    "label_en": "In progress","label_bg": "В процес"},
-        {"key": "report_ready", "label": "Звіт готовий", "label_en": "Report ready","label_bg": "Отчетът е готов"},
+         {"key": "schedule",     "label": "Заплановано",
+             "label_en": "Scheduled",  "label_bg": "Планирано"},
+         {"key": "in_progress",  "label": "На огляді",
+             "label_en": "In progress", "label_bg": "В процес"},
+         {"key": "report_ready", "label": "Звіт готовий",
+             "label_en": "Report ready", "label_bg": "Отчетът е готов"},
      ]},
     {"id": "svc_delivery",      "code": "delivery",      "name": "Доставка авто",             "name_en": "Vehicle delivery",         "name_bg": "Доставка на автомобила",
      "description":    "Морська + автомобільна доставка до клієнта",
      "description_en": "Sea + road delivery to the client",
      "description_bg": "Морска + автомобилна доставка до клиента",
-     "category": "logistics","default_price": 1200, "currency": "USD", "default_qty": 1,
+     "category": "logistics", "default_price": 1200, "currency": "USD", "default_qty": 1,
      "workflow": [
-        {"key": "ports_booking", "label": "Бронювання портів", "label_en": "Port booking",   "label_bg": "Резервация на пристанища"},
-        {"key": "loading",       "label": "Завантажено",       "label_en": "Loaded",         "label_bg": "Натоварено"},
-        {"key": "in_transit",    "label": "У дорозі",          "label_en": "In transit",     "label_bg": "В транзит"},
-        {"key": "customs",       "label": "Митниця",           "label_en": "Customs",        "label_bg": "Митница"},
-        {"key": "delivered",     "label": "Доставлено",        "label_en": "Delivered",      "label_bg": "Доставено"},
+         {"key": "ports_booking", "label": "Бронювання портів",
+             "label_en": "Port booking",   "label_bg": "Резервация на пристанища"},
+         {"key": "loading",       "label": "Завантажено",
+          "label_en": "Loaded",         "label_bg": "Натоварено"},
+         {"key": "in_transit",    "label": "У дорозі",
+          "label_en": "In transit",     "label_bg": "В транзит"},
+         {"key": "customs",       "label": "Митниця",
+          "label_en": "Customs",        "label_bg": "Митница"},
+         {"key": "delivered",     "label": "Доставлено",
+          "label_en": "Delivered",      "label_bg": "Доставено"},
      ]},
     {"id": "svc_certification", "code": "certification", "name": "Сертифікація / реєстрація", "name_en": "Certification & registration", "name_bg": "Сертификация и регистрация",
      "description":    "Документообіг, сертифікати, реєстрація",
@@ -22000,9 +22824,12 @@ DEFAULT_SERVICES = [
      "description_bg": "Документооборот, сертификати, регистрация",
      "category": "docs",    "default_price": 350,  "currency": "USD", "default_qty": 1,
      "workflow": [
-        {"key": "docs_collection", "label": "Збір документів", "label_en": "Document collection", "label_bg": "Събиране на документи"},
-        {"key": "submission",      "label": "Подача",          "label_en": "Submission",          "label_bg": "Подаване"},
-        {"key": "approved",        "label": "Затверджено",     "label_en": "Approved",            "label_bg": "Одобрено"},
+         {"key": "docs_collection", "label": "Збір документів",
+             "label_en": "Document collection", "label_bg": "Събиране на документи"},
+         {"key": "submission",      "label": "Подача",
+          "label_en": "Submission",          "label_bg": "Подаване"},
+         {"key": "approved",        "label": "Затверджено",
+          "label_en": "Approved",            "label_bg": "Одобрено"},
      ]},
     {"id": "svc_detailing",     "code": "detailing",     "name": "Передпродажна підготовка",  "name_en": "Pre-sale detailing",        "name_bg": "Предпродажна подготовка",
      "description":    "Хімчистка, полірування",
@@ -22010,19 +22837,25 @@ DEFAULT_SERVICES = [
      "description_bg": "Химическо чистене, полиране",
      "category": "custom",  "default_price": 250,  "currency": "USD", "default_qty": 1,
      "workflow": [
-        {"key": "scheduled",   "label": "Заплановано", "label_en": "Scheduled",   "label_bg": "Планирано"},
-        {"key": "in_progress", "label": "В роботі",    "label_en": "In progress", "label_bg": "В процес"},
-        {"key": "ready",       "label": "Готово",      "label_en": "Ready",       "label_bg": "Готово"},
+         {"key": "scheduled",   "label": "Заплановано",
+             "label_en": "Scheduled",   "label_bg": "Планирано"},
+         {"key": "in_progress", "label": "В роботі",
+          "label_en": "In progress", "label_bg": "В процес"},
+         {"key": "ready",       "label": "Готово",
+          "label_en": "Ready",       "label_bg": "Готово"},
      ]},
     {"id": "svc_storage",       "code": "storage",       "name": "Зберігання на складі",      "name_en": "Storage",                   "name_bg": "Складиране",
      "description":    "Зберігання у захищеному паркінгу",
      "description_en": "Storage in a secure parking facility",
      "description_bg": "Съхранение на охраняем паркинг",
-     "category": "logistics","default_price": 50,   "currency": "USD", "default_qty": 1,
+     "category": "logistics", "default_price": 50,   "currency": "USD", "default_qty": 1,
      "workflow": [
-        {"key": "checked_in", "label": "Прийнято",      "label_en": "Checked in",  "label_bg": "Приет"},
-        {"key": "stored",     "label": "На зберіганні", "label_en": "Stored",      "label_bg": "Съхранен"},
-        {"key": "released",   "label": "Видано",        "label_en": "Released",    "label_bg": "Освободен"},
+         {"key": "checked_in", "label": "Прийнято",
+             "label_en": "Checked in",  "label_bg": "Приет"},
+         {"key": "stored",     "label": "На зберіганні",
+          "label_en": "Stored",      "label_bg": "Съхранен"},
+         {"key": "released",   "label": "Видано",
+          "label_en": "Released",    "label_bg": "Освободен"},
      ]},
 ]
 
@@ -22045,7 +22878,8 @@ async def _ensure_services_seed() -> None:
         if existing == 0:
             now = datetime.now(timezone.utc).isoformat()
             for s in DEFAULT_SERVICES:
-                doc = {**s, "is_active": True, "created_at": now, "created_by": "system_seed"}
+                doc = {**s, "is_active": True, "created_at": now,
+                       "created_by": "system_seed"}
                 await repo.create(doc)
             return
         # Existing collection: backfill translations on seed-managed records
@@ -22060,12 +22894,14 @@ async def _ensure_services_seed() -> None:
                 if not doc.get(fld) and seed.get(fld):
                     updates[fld] = seed[fld]
             # Workflow per-language labels backfill (match by `key`)
-            seed_wf = {w["key"]: w for w in (seed.get("workflow") or []) if isinstance(w, dict)}
+            seed_wf = {w["key"]: w for w in (
+                seed.get("workflow") or []) if isinstance(w, dict)}
             new_wf = []
             wf_changed = False
             for step in (doc.get("workflow") or []):
                 if not isinstance(step, dict):
-                    new_wf.append(step); continue
+                    new_wf.append(step)
+                    continue
                 k = step.get("key")
                 seed_step = seed_wf.get(k) if k else None
                 merged = dict(step)
@@ -22151,7 +22987,6 @@ async def public_workflow_templates():
 from app.utils.money import _round_money  # noqa: F401  -- compat re-export
 
 
-
 @fastapi_app.post("/api/manager/invoices", dependencies=[Depends(require_manager_or_admin)])
 async def manager_create_invoice(data: Dict[str, Any] = Body(...), user: dict = Depends(require_manager_or_admin)):
     """Manager creates an invoice with multiple service line-items.
@@ -22166,7 +23001,8 @@ async def manager_create_invoice(data: Dict[str, Any] = Body(...), user: dict = 
       ]
     }
     """
-    customer_id = (data.get("customerId") or data.get("customer_id") or "").strip()
+    customer_id = (data.get("customerId") or data.get(
+        "customer_id") or "").strip()
     if not customer_id:
         raise HTTPException(400, "customerId is required")
 
@@ -22197,7 +23033,8 @@ async def manager_create_invoice(data: Dict[str, Any] = Body(...), user: dict = 
         name = (raw.get("name") or (svc or {}).get("name") or "").strip()
         if not name:
             continue
-        price = _round_money(raw.get("price") if raw.get("price") is not None else (svc or {}).get("default_price", 0))
+        price = _round_money(raw.get("price") if raw.get(
+            "price") is not None else (svc or {}).get("default_price", 0))
         qty = int(raw.get("qty") or (svc or {}).get("default_qty") or 1)
         line_total = _round_money(price * qty)
         total += line_total
@@ -22261,8 +23098,10 @@ async def manager_create_invoice(data: Dict[str, Any] = Body(...), user: dict = 
 @fastapi_app.get("/api/manager/invoices/my", dependencies=[Depends(require_manager_or_admin)])
 async def manager_list_my_invoices(user: dict = Depends(require_manager_or_admin), limit: int = 100):
     role = (user.get("role") or "").lower()
-    q = {} if role in ("master_admin", "owner", "admin", "team_lead") else {"managerId": user.get("id")}
-    cursor = db.invoices.find(q, {"_id": 0}).sort("created_at", -1).limit(int(limit))
+    q = {} if role in ("master_admin", "owner", "admin", "team_lead") else {
+        "managerId": user.get("id")}
+    cursor = db.invoices.find(q, {"_id": 0}).sort(
+        "created_at", -1).limit(int(limit))
     items = await cursor.to_list(length=int(limit))
     return {"success": True, "items": items}
 
@@ -22287,7 +23126,8 @@ async def invoice_send(invoice_id: str, user: dict = Depends(require_manager_or_
     new_status = "sent" if inv.get("status") in (None, "draft") else "pending"
     await db.invoices.update_one(
         {"id": invoice_id},
-        {"$set": {"status": new_status, "sentAt": datetime.now(timezone.utc).isoformat()}},
+        {"$set": {"status": new_status, "sentAt": datetime.now(
+            timezone.utc).isoformat()}},
     )
     fresh = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     try:
@@ -22318,7 +23158,8 @@ async def invoice_cancel(invoice_id: str, user: dict = Depends(require_manager_o
         raise HTTPException(400, "Cannot cancel a paid invoice")
     await db.invoices.update_one(
         {"id": invoice_id},
-        {"$set": {"status": "cancelled", "cancelledAt": datetime.now(timezone.utc).isoformat()}},
+        {"$set": {"status": "cancelled",
+                  "cancelledAt": datetime.now(timezone.utc).isoformat()}},
     )
     fresh = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     return {"success": True, "invoice": fresh}
@@ -22372,7 +23213,8 @@ async def invoice_mark_paid(invoice_id: str, data: Dict[str, Any] = Body(default
 # ORDERS  (workflow created automatically when invoice is paid)
 # ═══════════════════════════════════════════════════════════════════
 
-ORDER_OVERALL_STATUSES = ["pending", "in_progress", "waiting_docs", "in_delivery", "completed", "cancelled", "on_hold"]
+ORDER_OVERALL_STATUSES = ["pending", "in_progress", "waiting_docs",
+                          "in_delivery", "completed", "cancelled", "on_hold"]
 
 
 # Phase 5.5 / C (2026-05-19) — order-creation orchestration retired
@@ -22420,7 +23262,8 @@ async def team_list_orders(user: dict = Depends(require_manager_or_admin), statu
         query["managerId"] = manager_id
     if status:
         query["status"] = status
-    cursor = db.orders.find(query, {"_id": 0}).sort("created_at", -1).limit(int(limit))
+    cursor = db.orders.find(query, {"_id": 0}).sort(
+        "created_at", -1).limit(int(limit))
     items = await cursor.to_list(length=int(limit))
     return {"success": True, "items": items}
 
@@ -22428,8 +23271,10 @@ async def team_list_orders(user: dict = Depends(require_manager_or_admin), statu
 @fastapi_app.get("/api/manager/orders", dependencies=[Depends(require_manager_or_admin)])
 async def manager_list_orders(user: dict = Depends(require_manager_or_admin), limit: int = 100):
     role = (user.get("role") or "").lower()
-    query = {} if role in ("master_admin", "owner", "admin", "team_lead") else {"managerId": user.get("id")}
-    cursor = db.orders.find(query, {"_id": 0}).sort("created_at", -1).limit(int(limit))
+    query = {} if role in ("master_admin", "owner", "admin", "team_lead") else {
+        "managerId": user.get("id")}
+    cursor = db.orders.find(query, {"_id": 0}).sort(
+        "created_at", -1).limit(int(limit))
     items = await cursor.to_list(length=int(limit))
     return {"success": True, "items": items}
 
@@ -22478,7 +23323,8 @@ async def update_order_step(order_id: str, step_id: str, data: Dict[str, Any] = 
     overall = _recalc_order_status(steps)
     await db.orders.update_one(
         {"id": order_id},
-        {"$set": {"steps": steps, "status": overall, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        {"$set": {"steps": steps, "status": overall,
+                  "updated_at": datetime.now(timezone.utc).isoformat()}},
     )
 
     # Live notify the customer cabinet
@@ -22504,7 +23350,8 @@ async def update_order_step(order_id: str, step_id: str, data: Dict[str, Any] = 
             manager = None
             if fresh.get("managerId"):
                 manager = await db.users.find_one({"id": fresh.get("managerId")}, {"_id": 0})
-            manager = manager or {"id": fresh.get("managerId"), "email": fresh.get("managerEmail")}
+            manager = manager or {"id": fresh.get(
+                "managerId"), "email": fresh.get("managerEmail")}
             await _notif.emit(_notif.EVENT_ORDER_FINISHED, {
                 "invoice": inv, "order": fresh, "customer": customer, "manager": manager,
             })
@@ -22537,10 +23384,10 @@ async def customer_orders(
     customer_id: str,
     _auth: Dict[str, Any] = Depends(_authorize_customer_cabinet_access),
 ):
-    cursor = db.orders.find({"customerId": customer_id}, {"_id": 0}).sort("created_at", -1).limit(50)
+    cursor = db.orders.find({"customerId": customer_id}, {
+                            "_id": 0}).sort("created_at", -1).limit(50)
     items = await cursor.to_list(length=50)
     return {"success": True, "items": items}
-
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -22552,7 +23399,8 @@ def _ps_service_or_503():
     try:
         import provider_stats as _ps
         if _ps.service is None:
-            raise HTTPException(503, "Provider stats engine not yet initialised")
+            raise HTTPException(
+                503, "Provider stats engine not yet initialised")
         return _ps
     except HTTPException:
         raise
@@ -22615,7 +23463,8 @@ async def source_health():
             score = p.get("score")
             status = "unknown"
             if isinstance(score, (int, float)):
-                status = "healthy" if score >= 70 else ("degraded" if score >= 40 else "down")
+                status = "healthy" if score >= 70 else (
+                    "degraded" if score >= 40 else "down")
             name = (p.get("provider_id") or p.get("providerId") or p.get("id")
                     or p.get("name") or p.get("manager_id") or p.get("managerId"))
             if not name:
@@ -22650,6 +23499,7 @@ async def source_health():
 
 # admin_predictive_leads moved to app/routers/admin_predictive_leads.py (Wave 2B/Batch 11)
 
+
 @fastapi_app.get("/api/login-approval/pending")
 async def login_approval_pending():
     """Real pending login-approval requests from db.login_approvals."""
@@ -22659,11 +23509,13 @@ async def login_approval_pending():
     except Exception:
         return {"success": True, "data": [], "total": 0}
 
+
 @fastapi_app.post("/api/login-approval/{approval_id}")
 async def process_login_approval(approval_id: str, data: Dict[str, Any] = Body(...)):
     """Approve / reject a pending login request (persisted)."""
     decision = (data.get("decision") or data.get("action") or "").lower()
-    new_status = "approved" if decision in ("approve", "approved", "allow") else "rejected"
+    new_status = "approved" if decision in (
+        "approve", "approved", "allow") else "rejected"
     res = await db.login_approvals.update_one(
         {"id": approval_id},
         {"$set": {"status": new_status, "decided_at": datetime.now(timezone.utc).isoformat(),
@@ -22672,6 +23524,7 @@ async def process_login_approval(approval_id: str, data: Dict[str, Any] = Body(.
     if res.matched_count == 0:
         raise HTTPException(404, "Login approval request not found")
     return {"success": True, "status": new_status}
+
 
 @fastapi_app.get("/api/manager-ai/lead/{lead_id}")
 async def manager_ai_lead(lead_id: str):
@@ -22699,6 +23552,7 @@ async def manager_ai_lead(lead_id: str):
         "recommendations": recs,
     }}
 
+
 @fastapi_app.get("/api/manager-ai/user/{user_id}")
 async def manager_ai_user(user_id: str):
     """Rule-based manager performance insights computed from real deals."""
@@ -22707,16 +23561,20 @@ async def manager_ai_user(user_id: str):
     won = await db.deals.count_documents({**mq, "stage": {"$in": ["closed_won", "delivered"]}})
     open_deals = await db.deals.count_documents({**mq, "stage": {"$nin": ["closed_won", "delivered", "cancelled", "closed_lost", "refunded", "lost", "closed"]}})
     win_rate = round(won / total, 3) if total else 0
-    perf = "no_data" if total == 0 else ("strong" if win_rate >= 0.4 else ("average" if win_rate >= 0.2 else "needs_attention"))
+    perf = "no_data" if total == 0 else ("strong" if win_rate >= 0.4 else (
+        "average" if win_rate >= 0.2 else "needs_attention"))
     suggestions: List[str] = []
     if total and win_rate < 0.2:
-        suggestions.append("Win-rate below 20% — review qualification & follow-up cadence")
+        suggestions.append(
+            "Win-rate below 20% — review qualification & follow-up cadence")
     if open_deals > 8:
-        suggestions.append(f"{open_deals} open deals — risk of overload, consider rebalancing")
+        suggestions.append(
+            f"{open_deals} open deals — risk of overload, consider rebalancing")
     return {"success": True, "insights": {
         "performance": perf, "totalDeals": total, "wonDeals": won,
         "openDeals": open_deals, "winRate": win_rate, "suggestions": suggestions,
     }}
+
 
 @fastapi_app.get("/api/deal-engine/evaluate")
 async def deal_engine_evaluate(vin: Optional[str] = None, price: Optional[int] = None):
@@ -22740,7 +23598,8 @@ async def deal_engine_evaluate(vin: Optional[str] = None, price: Optional[int] =
                 {"$group": {"_id": None, "avg": {"$avg": "$price"}, "n": {"$sum": 1}}},
             ]).to_list(length=1)
             if agg:
-                avg = agg[0]["avg"]; comp_count = agg[0]["n"]
+                avg = agg[0]["avg"]
+                comp_count = agg[0]["n"]
                 if avg and price > avg * 1.25:
                     risks.append("Price ~25% above market average")
                     recommendation = "overpriced"
@@ -22765,10 +23624,12 @@ class CarfastCookieImport(BaseModel):
     userAgent: Optional[str] = None
     sessionId: Optional[str] = None
 
+
 class CarfastParseRequest(BaseModel):
     url: Optional[str] = None
     vin: Optional[str] = None
     sessionId: Optional[str] = None
+
 
 @fastapi_app.get("/api/carfast/session/status")
 async def carfast_session_status():
@@ -22777,7 +23638,7 @@ async def carfast_session_status():
     Returns whether we have valid cookies for parsing
     """
     status = carfast_cookie_store.get_status()
-    
+
     # Get best session details
     best = carfast_cookie_store.get_best_session()
     if best:
@@ -22789,8 +23650,9 @@ async def carfast_session_status():
             "failCount": best.fail_count,
             "ageMinutes": round((datetime.now(timezone.utc).timestamp() - best.imported_at) / 60, 1)
         }
-    
+
     return status
+
 
 @fastapi_app.post("/api/carfast/session/import")
 async def carfast_session_import(data: CarfastCookieImport):
@@ -22799,17 +23661,17 @@ async def carfast_session_import(data: CarfastCookieImport):
     Extension collects cf_clearance and other cookies and sends them here
     """
     session_id = data.sessionId or f"ext_{datetime.now(timezone.utc).timestamp()}"
-    
+
     session = carfast_cookie_store.import_cookies(
         session_id=session_id,
         cookies=data.cookies,
         user_agent=data.userAgent or ""
     )
-    
+
     # Log important cookies
     cookie_names = [c.name for c in session.cookies]
     logger.info(f"[CARFAST] Imported cookies: {cookie_names}")
-    
+
     # Save to MongoDB for persistence
     if db is not None:
         await db.carfast_sessions.update_one(
@@ -22825,7 +23687,7 @@ async def carfast_session_import(data: CarfastCookieImport):
             },
             upsert=True
         )
-    
+
     return {
         "success": True,
         "sessionId": session_id,
@@ -22834,10 +23696,12 @@ async def carfast_session_import(data: CarfastCookieImport):
         "message": "Cookies imported successfully"
     }
 
+
 @fastapi_app.post("/api/carfast/session/cookies")
 async def carfast_session_cookies(data: CarfastCookieImport):
     """Alias for import - for compatibility"""
     return await carfast_session_import(data)
+
 
 @fastapi_app.post("/api/carfast/parse")
 async def carfast_parse(request: CarfastParseRequest):
@@ -22849,17 +23713,17 @@ async def carfast_parse(request: CarfastParseRequest):
     url = request.url
     if not url and request.vin:
         url = f"https://carfast.express/auction/lots/{request.vin}"
-    
+
     if not url:
         return {"success": False, "error": "URL or VIN required"}
-    
+
     # Validate URL
     if not url.startswith("https://carfast.express"):
         return {"success": False, "error": "Invalid URL - must be carfast.express"}
-    
+
     # Parse using Playwright - real browser, no cookie bullshit
     result = await playwright_parser.parse_url(url)
-    
+
     # If successful, save to VIN data
     if result.get("success") and result.get("data", {}).get("vin"):
         vin = result["data"]["vin"]
@@ -22876,24 +23740,27 @@ async def carfast_parse(request: CarfastParseRequest):
             },
             upsert=True
         )
-    
+
     return result
 
 # Legacy cookie-based endpoint (fallback)
+
+
 @fastapi_app.post("/api/carfast/parse-cookies")
 async def carfast_parse_cookies(request: CarfastParseRequest):
     """Parse using cookies (legacy, less reliable)"""
     url = request.url
     if not url and request.vin:
         url = f"https://carfast.express/auction/lots/{request.vin}"
-    
+
     if not url:
         return {"success": False, "error": "URL or VIN required"}
-    
+
     if not url.startswith("https://carfast.express"):
         return {"success": False, "error": "Invalid URL - must be carfast.express"}
-    
+
     return await carfast_parser.parse_url(url, request.sessionId)
+
 
 @fastapi_app.get("/api/carfast/sessions")
 async def carfast_sessions_list():
@@ -22913,12 +23780,13 @@ async def carfast_sessions_list():
             "importedAt": datetime.fromtimestamp(s.imported_at, tz=timezone.utc).isoformat(),
             "lastUsed": datetime.fromtimestamp(s.last_used, tz=timezone.utc).isoformat(),
         })
-    
+
     return {
         "success": True,
         "sessions": sessions,
         "status": carfast_cookie_store.get_status()
     }
+
 
 @fastapi_app.post("/api/carfast/session/refresh")
 async def carfast_session_refresh():
@@ -22931,12 +23799,13 @@ async def carfast_session_refresh():
         "message": "Please refresh Carfast session",
         "timestamp": datetime.now(timezone.utc).isoformat()
     })
-    
+
     return {"success": True, "message": "Refresh request broadcasted"}
 
 # ═══════════════════════════════════════════════════════════════════
 # CARFAST INGEST - Receive parsed data from extension
 # ═══════════════════════════════════════════════════════════════════
+
 
 class CarfastIngestData(BaseModel):
     url: str
@@ -22953,17 +23822,19 @@ class CarfastIngestData(BaseModel):
     timestamp: Optional[str] = None
     source: Optional[str] = "carfast_extension"
 
+
 @fastapi_app.post("/api/carfast/ingest")
 async def carfast_ingest(data: CarfastIngestData):
     """
     Receive parsed vehicle data from extension
     Extension parses DOM on carfast.express and sends data here
     """
-    logger.info(f"[CARFAST-INGEST] Received data: VIN={data.vin}, URL={data.url[:50]}...")
-    
+    logger.info(
+        f"[CARFAST-INGEST] Received data: VIN={data.vin}, URL={data.url[:50]}...")
+
     if not data.vin:
         return {"success": False, "error": "No VIN in data"}
-    
+
     # Prepare document
     doc = {
         "vin": data.vin,
@@ -22971,7 +23842,7 @@ async def carfast_ingest(data: CarfastIngestData):
         "source": "carfast_extension",
         "ingested_at": datetime.now(timezone.utc),
     }
-    
+
     if data.title:
         doc["title"] = data.title
     if data.price:
@@ -22989,7 +23860,7 @@ async def carfast_ingest(data: CarfastIngestData):
         doc["damage"] = data.damage
     if data.images:
         doc["images"] = data.images[:10]  # Max 10 images
-    
+
     # Save to MongoDB
     try:
         result = await db.carfast_vehicles.update_one(
@@ -23000,11 +23871,12 @@ async def carfast_ingest(data: CarfastIngestData):
             },
             upsert=True
         )
-        
+
         is_new = result.upserted_id is not None
-        
-        logger.info(f"[CARFAST-INGEST] {'Created' if is_new else 'Updated'} VIN: {data.vin}")
-        
+
+        logger.info(
+            f"[CARFAST-INGEST] {'Created' if is_new else 'Updated'} VIN: {data.vin}")
+
         return {
             "success": True,
             "vin": data.vin,
@@ -23015,6 +23887,7 @@ async def carfast_ingest(data: CarfastIngestData):
         logger.error(f"[CARFAST-INGEST] Error: {e}")
         return {"success": False, "error": str(e)}
 
+
 @fastapi_app.get("/api/carfast/vehicles")
 async def carfast_vehicles_list(limit: int = 50, skip: int = 0):
     """List ingested vehicles from Carfast"""
@@ -23022,9 +23895,9 @@ async def carfast_vehicles_list(limit: int = 50, skip: int = 0):
         {},
         {"_id": 0}
     ).sort("ingested_at", -1).skip(skip).limit(limit).to_list(limit)
-    
+
     total = await db.carfast_vehicles.count_documents({})
-    
+
     return {
         "success": True,
         "vehicles": vehicles,
@@ -23033,19 +23906,21 @@ async def carfast_vehicles_list(limit: int = 50, skip: int = 0):
         "skip": skip
     }
 
+
 @fastapi_app.get("/api/carfast/vehicle/{vin}")
 async def carfast_vehicle_get(vin: str):
     """Get single vehicle by VIN"""
     vehicle = await db.carfast_vehicles.find_one({"vin": vin}, {"_id": 0})
-    
+
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found")
-    
+
     return {"success": True, "vehicle": vehicle}
 
 # ═══════════════════════════════════════════════════════════════════
 # AUTOASTAT INGEST - Receive parsed data from extension
 # ═══════════════════════════════════════════════════════════════════
+
 
 class AutoAstatIngestData(BaseModel):
     url: str
@@ -23072,23 +23947,25 @@ class AutoAstatIngestData(BaseModel):
     timestamp: Optional[str] = None
     source: Optional[str] = "autoastat"
 
+
 @fastapi_app.post("/api/autoastat/ingest")
 async def autoastat_ingest(data: AutoAstatIngestData):
     """
     Receive parsed vehicle data from AutoAstat extension
     """
-    logger.info(f"[AUTOASTAT] Received: VIN={data.vin}, URL={data.url[:50] if data.url else 'N/A'}...")
-    
+    logger.info(
+        f"[AUTOASTAT] Received: VIN={data.vin}, URL={data.url[:50] if data.url else 'N/A'}...")
+
     if not data.vin and not data.lot_number:
         return {"success": False, "error": "No VIN or lot_number in data"}
-    
+
     # Prepare document
     doc = {
         "url": data.url,
         "source": "autoastat",
         "ingested_at": datetime.now(timezone.utc),
     }
-    
+
     # Add all fields if present
     if data.vin:
         doc["vin"] = data.vin
@@ -23127,12 +24004,13 @@ async def autoastat_ingest(data: AutoAstatIngestData):
         doc["keys"] = data.keys
     if data.auction_source:
         doc["auction_source"] = data.auction_source
-    
+
     # Save to MongoDB
     try:
         # Use VIN as primary key if available, otherwise lot_number
-        filter_key = {"vin": data.vin} if data.vin else {"lot_number": data.lot_number, "source": "autoastat"}
-        
+        filter_key = {"vin": data.vin} if data.vin else {
+            "lot_number": data.lot_number, "source": "autoastat"}
+
         result = await db.autoastat_vehicles.update_one(
             filter_key,
             {
@@ -23141,11 +24019,12 @@ async def autoastat_ingest(data: AutoAstatIngestData):
             },
             upsert=True
         )
-        
+
         is_new = result.upserted_id is not None
-        
-        logger.info(f"[AUTOASTAT] {'Created' if is_new else 'Updated'}: VIN={data.vin}, Lot={data.lot_number}")
-        
+
+        logger.info(
+            f"[AUTOASTAT] {'Created' if is_new else 'Updated'}: VIN={data.vin}, Lot={data.lot_number}")
+
         return {
             "success": True,
             "vin": data.vin,
@@ -23157,6 +24036,7 @@ async def autoastat_ingest(data: AutoAstatIngestData):
         logger.error(f"[AUTOASTAT] Error: {e}")
         return {"success": False, "error": str(e)}
 
+
 @fastapi_app.get("/api/autoastat/vehicles")
 async def autoastat_vehicles_list(limit: int = 50, skip: int = 0):
     """List vehicles from AutoAstat"""
@@ -23164,9 +24044,9 @@ async def autoastat_vehicles_list(limit: int = 50, skip: int = 0):
         {},
         {"_id": 0}
     ).sort("ingested_at", -1).skip(skip).limit(limit).to_list(limit)
-    
+
     total = await db.autoastat_vehicles.count_documents({})
-    
+
     return {
         "success": True,
         "vehicles": vehicles,
@@ -23175,19 +24055,21 @@ async def autoastat_vehicles_list(limit: int = 50, skip: int = 0):
         "skip": skip
     }
 
+
 @fastapi_app.get("/api/autoastat/vehicle/{vin}")
 async def autoastat_vehicle_get(vin: str):
     """Get single vehicle by VIN from AutoAstat"""
     vehicle = await db.autoastat_vehicles.find_one({"vin": vin}, {"_id": 0})
-    
+
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found")
-    
+
     return {"success": True, "vehicle": vehicle}
 
 # ═══════════════════════════════════════════════════════════════════
 # BID.CARS INGEST
 # ═══════════════════════════════════════════════════════════════════
+
 
 class BidCarsIngestData(BaseModel):
     url: str
@@ -23214,48 +24096,53 @@ class BidCarsIngestData(BaseModel):
     timestamp: Optional[str] = None
     source: Optional[str] = "bidcars"
 
+
 @fastapi_app.post("/api/bidcars/ingest")
 async def bidcars_ingest(data: BidCarsIngestData):
     """Receive parsed data from Bid.Cars extension"""
     logger.info(f"[BIDCARS] Received: VIN={data.vin}, Lot={data.lot_number}")
-    
+
     if not data.vin and not data.lot_number:
         return {"success": False, "error": "No VIN or lot_number"}
-    
+
     doc = {
         "url": data.url,
         "source": "bidcars",
         "ingested_at": datetime.now(timezone.utc),
     }
-    
+
     fields = ['vin', 'title', 'price', 'odometer', 'odometer_unit', 'year', 'lot_number',
               'location', 'primary_damage', 'secondary_damage', 'sale_date', 'engine',
               'transmission', 'drive', 'fuel', 'color', 'keys', 'title_type', 'auction_source']
-    
+
     for f in fields:
         val = getattr(data, f, None)
         if val:
             doc[f] = val
-    
+
     if data.images:
         doc["images"] = data.images[:25]
-    
+
     try:
-        filter_key = {"vin": data.vin} if data.vin else {"lot_number": data.lot_number, "source": "bidcars"}
-        
+        filter_key = {"vin": data.vin} if data.vin else {
+            "lot_number": data.lot_number, "source": "bidcars"}
+
         result = await db.bidcars_vehicles.update_one(
             filter_key,
-            {"$set": doc, "$setOnInsert": {"created_at": datetime.now(timezone.utc)}},
+            {"$set": doc, "$setOnInsert": {
+                "created_at": datetime.now(timezone.utc)}},
             upsert=True
         )
-        
+
         is_new = result.upserted_id is not None
-        logger.info(f"[BIDCARS] {'Created' if is_new else 'Updated'}: VIN={data.vin}")
-        
+        logger.info(
+            f"[BIDCARS] {'Created' if is_new else 'Updated'}: VIN={data.vin}")
+
         return {"success": True, "vin": data.vin, "lot_number": data.lot_number, "isNew": is_new}
     except Exception as e:
         logger.error(f"[BIDCARS] Error: {e}")
         return {"success": False, "error": str(e)}
+
 
 @fastapi_app.get("/api/bidcars/vehicles")
 async def bidcars_vehicles_list(limit: int = 50, skip: int = 0):
@@ -23263,6 +24150,7 @@ async def bidcars_vehicles_list(limit: int = 50, skip: int = 0):
     vehicles = await db.bidcars_vehicles.find({}, {"_id": 0}).sort("ingested_at", -1).skip(skip).limit(limit).to_list(limit)
     total = await db.bidcars_vehicles.count_documents({})
     return {"success": True, "vehicles": vehicles, "total": total}
+
 
 @fastapi_app.get("/api/bidcars/vehicle/{vin}")
 async def bidcars_vehicle_get(vin: str):
@@ -23276,6 +24164,7 @@ async def bidcars_vehicle_get(vin: str):
 # BID.CARS VIN SEARCH - Backend searches bid.cars by VIN
 # ═══════════════════════════════════════════════════════════════════
 
+
 @fastapi_app.get("/api/bidcars/search/{vin}")
 async def bidcars_search_vin(vin: str):
     """
@@ -23283,12 +24172,12 @@ async def bidcars_search_vin(vin: str):
     Returns cached data or URL for extension to search
     """
     vin = vin.upper().strip()
-    
+
     if len(vin) != 17:
         return {"success": False, "error": "Invalid VIN - must be 17 characters"}
-    
+
     logger.info(f"[BIDCARS-SEARCH] Searching for VIN: {vin}")
-    
+
     # Check cache first
     cached = await db.bidcars_vehicles.find_one({"vin": vin}, {"_id": 0})
     if cached:
@@ -23296,20 +24185,24 @@ async def bidcars_search_vin(vin: str):
             ingested = cached["ingested_at"]
             if ingested.tzinfo is None:
                 ingested = ingested.replace(tzinfo=timezone.utc)
-            age_hours = (datetime.now(timezone.utc) - ingested).total_seconds() / 3600
+            age_hours = (datetime.now(timezone.utc) -
+                         ingested).total_seconds() / 3600
             if age_hours < 24:
-                logger.info(f"[BIDCARS-SEARCH] Returning cached data for {vin}")
+                logger.info(
+                    f"[BIDCARS-SEARCH] Returning cached data for {vin}")
                 # Convert datetime to string for JSON
                 cached_copy = dict(cached)
                 if "ingested_at" in cached_copy:
-                    cached_copy["ingested_at"] = cached_copy["ingested_at"].isoformat() if hasattr(cached_copy["ingested_at"], 'isoformat') else str(cached_copy["ingested_at"])
+                    cached_copy["ingested_at"] = cached_copy["ingested_at"].isoformat() if hasattr(
+                        cached_copy["ingested_at"], 'isoformat') else str(cached_copy["ingested_at"])
                 if "created_at" in cached_copy:
-                    cached_copy["created_at"] = cached_copy["created_at"].isoformat() if hasattr(cached_copy["created_at"], 'isoformat') else str(cached_copy["created_at"])
+                    cached_copy["created_at"] = cached_copy["created_at"].isoformat() if hasattr(
+                        cached_copy["created_at"], 'isoformat') else str(cached_copy["created_at"])
                 return {"success": True, "vehicle": cached_copy, "source": "cache"}
-    
+
     # No cache - return search URL for extension/frontend to use
     search_url = f"https://bid.cars/en/search/?q={vin}"
-    
+
     return {
         "success": False,
         "error": "Not in cache",
@@ -23319,69 +24212,70 @@ async def bidcars_search_vin(vin: str):
         "message": "Please open the search URL in browser with extension to fetch data"
     }
 
+
 async def search_bidcars_playwright(vin: str) -> Dict[str, Any]:
     """Search bid.cars using Playwright"""
     import os
     os.environ['PLAYWRIGHT_BROWSERS_PATH'] = '/pw-browsers'
-    
+
     from playwright.async_api import async_playwright
-    
+
     search_url = f"https://bid.cars/en/search/?q={vin}"
     logger.info(f"[BIDCARS-PW] Opening: {search_url}")
-    
+
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=True,
             args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
                   '--disable-blink-features=AutomationControlled']
         )
-        
+
         context = await browser.new_context(
             user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             viewport={'width': 1920, 'height': 1080},
             locale='en-US'
         )
-        
+
         await context.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
             window.chrome = {runtime: {}};
         """)
-        
+
         page = await context.new_page()
-        
+
         try:
             # Go to search page
             await page.goto(search_url, wait_until='domcontentloaded', timeout=60000)
             await page.wait_for_timeout(5000)
-            
+
             content = await page.content()
-            
+
             # Check for Cloudflare
             if "Just a moment" in content or "Checking your browser" in content:
                 logger.info("[BIDCARS-PW] Cloudflare challenge, waiting...")
                 await page.wait_for_timeout(10000)
                 content = await page.content()
-            
+
             # Check if still blocked
             if "Just a moment" in content:
                 await browser.close()
                 return {"success": False, "error": "Cloudflare blocked access"}
-            
+
             # Log page content for debugging
             page_title = await page.title()
             logger.info(f"[BIDCARS-PW] Page title: {page_title}")
             logger.info(f"[BIDCARS-PW] Content length: {len(content)} chars")
-            
+
             # Save HTML for debugging
             with open('/tmp/bidcars_debug.html', 'w') as f:
                 f.write(content)
             logger.info("[BIDCARS-PW] Saved HTML to /tmp/bidcars_debug.html")
-            
+
             # Check for no results message
             if "No results" in content or "not found" in content.lower() or "no vehicles" in content.lower():
                 await browser.close()
                 return {"success": False, "error": "No vehicles found for this VIN on bid.cars"}
-            
+
             # Parse search results or vehicle page
             # Phase 6.1.B (2026-05-20) — deprecation cleanup: r-prefix the
             # JS-payload string literal so Python doesn't emit
@@ -23454,19 +24348,20 @@ async def search_bidcars_playwright(vin: str) -> Dict[str, Any]:
                 
                 return data;
             }""")
-            
+
             await browser.close()
-            
+
             if vehicle.get("hasResults"):
                 del vehicle["hasResults"]
                 return {"success": True, "vehicle": vehicle}
             else:
                 return {"success": False, "error": "No results found for this VIN"}
-                
+
         except Exception as e:
             await browser.close()
             logger.error(f"[BIDCARS-PW] Error: {e}")
             return {"success": False, "error": str(e)}
+
 
 @fastapi_app.delete("/api/carfast/session/{session_id}")
 async def carfast_session_delete(session_id: str):
@@ -23475,6 +24370,7 @@ async def carfast_session_delete(session_id: str):
         del carfast_cookie_store.sessions[session_id]
         return {"success": True, "message": "Session deleted"}
     return {"success": False, "error": "Session not found"}
+
 
 @fastapi_app.post("/api/carfast/session/clear-expired")
 async def carfast_clear_expired():
@@ -23485,8 +24381,7 @@ async def carfast_clear_expired():
 # ═══════════════════════════════════════════════════════════════════
 # EXTENSION DOWNLOAD
 # ═══════════════════════════════════════════════════════════════════
-from fastapi.responses import FileResponse
-import os as os_module
+
 
 @fastapi_app.get("/api/extension/download")
 async def download_extension():
@@ -23497,10 +24392,21 @@ async def download_extension():
     """
     import io
     import zipfile
-    ext_dir = "/app/backend/chrome_extension"
+    from pathlib import Path
 
-    if not os_module.path.isdir(ext_dir):
-        raise HTTPException(status_code=404, detail="Extension source folder not found")
+    server_dir = Path(__file__).resolve().parent
+    candidate_dirs = [
+        server_dir / "chrome_extension",            # backend/chrome_extension when server.py is in backend/
+        server_dir.parent / "chrome_extension",     # /app/chrome_extension fallback
+        Path("/app/backend/chrome_extension"),       # legacy hardcoded path
+        Path("/app/chrome_extension"),               # Railway root-at-backend layout
+    ]
+    ext_dir_path = next((p for p in candidate_dirs if p.is_dir()), None)
+
+    if ext_dir_path is None:
+        raise HTTPException(
+            status_code=404, detail="Extension source folder not found")
+    ext_dir = str(ext_dir_path)
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -23525,6 +24431,7 @@ async def download_extension():
             "Cache-Control": "no-store",
         },
     )
+
 
 @fastapi_app.get("/api/extension/info")
 async def extension_info(authorization: Optional[str] = Header(default=None)):
@@ -23563,7 +24470,8 @@ async def extension_info(authorization: Optional[str] = Header(default=None)):
                 is_staff = True
         except Exception:
             is_staff = False
-    masked = (f"{hmac_secret[:4]}…{hmac_secret[-4:]}" if len(hmac_secret) >= 8 else "••••") if hmac_secret else ""
+    masked = (f"{hmac_secret[:4]}…{hmac_secret[-4:]}" if len(hmac_secret)
+              >= 8 else "••••") if hmac_secret else ""
 
     return {
         "name": "BIBI Cars Parser",
@@ -23623,25 +24531,6 @@ async def extension_info(authorization: Optional[str] = Header(default=None)):
 # /api/ext/health is read-only and unprotected so the admin panel can
 # poll it without provisioning extension keys.
 # ═══════════════════════════════════════════════════════════════════
-from multisource_resolver import (
-    enqueue_extension_job as _ms_enqueue,
-    take_pending_jobs as _ms_take_jobs,
-    push_extension_result as _ms_push,
-    wait_for_extension_results as _ms_wait,
-    extension_lookup as _ms_extension_lookup,
-    extension_lookup_gated as _ms_extension_lookup_gated,
-    auctionauto_lookup as _ms_auctionauto,
-    auctionauto_lookup_gated as _ms_auctionauto_gated,
-    get_health_snapshot as _ms_health,
-    EXTENSION_SOURCES as _EXT_SOURCES,
-    register_client as _ms_register_client,
-    client_heartbeat as _ms_client_heartbeat,
-    get_clients as _ms_get_clients,
-    has_online_client_for as _ms_has_online,
-    cache_observation as _ms_cache_obs,
-    lookup_observation as _ms_lookup_obs,
-    degraded_sources as _ms_degraded,
-)
 
 
 @fastapi_app.post("/api/ext/lookup")
@@ -23700,7 +24589,8 @@ async def ext_push(payload: dict, _hmac=Depends(require_extension_hmac)):
     rid = (payload or {}).get("request_id", "").strip()
     src = (payload or {}).get("source", "").strip()
     if not rid or not src:
-        raise HTTPException(status_code=400, detail="request_id and source required")
+        raise HTTPException(
+            status_code=400, detail="request_id and source required")
     ok = await _ms_push(rid, payload)
     return {"ok": bool(ok)}
 
@@ -23794,7 +24684,8 @@ async def ext_observation(payload: dict, _hmac=Depends(require_extension_hmac)):
     src = (payload or {}).get("source", "").strip()
     vin = (payload or {}).get("vin", "").strip().upper()
     if not src or len(vin) != 17:
-        raise HTTPException(status_code=400, detail="source and 17-char vin required")
+        raise HTTPException(
+            status_code=400, detail="source and 17-char vin required")
     return _ms_cache_obs(payload)
 
 
@@ -23876,15 +24767,20 @@ async def control_overview(_admin: Dict[str, Any] = Depends(require_admin)):
 
     # ── Extension layer aggregate ─────────────────────────────────────────
     ext_caps = ["poctra", "carsfromwest", "autoauctionhistory", "salvagebid"]
-    ext_layer_calls = sum(int((sources.get(s) or {}).get("calls") or 0) for s in ext_caps)
-    ext_layer_hits = sum(int((sources.get(s) or {}).get("hits") or 0) for s in ext_caps)
-    ext_layer_errs = sum(int((sources.get(s) or {}).get("errors") or 0) for s in ext_caps)
+    ext_layer_calls = sum(
+        int((sources.get(s) or {}).get("calls") or 0) for s in ext_caps)
+    ext_layer_hits = sum(int((sources.get(s) or {}).get("hits") or 0)
+                         for s in ext_caps)
+    ext_layer_errs = sum(
+        int((sources.get(s) or {}).get("errors") or 0) for s in ext_caps)
     ext_layer_p50 = max(
-        (int((sources.get(s) or {}).get("latency_p50_ms") or 0) for s in ext_caps),
+        (int((sources.get(s) or {}).get("latency_p50_ms") or 0)
+         for s in ext_caps),
         default=0,
     )
     ext_layer_p95 = max(
-        (int((sources.get(s) or {}).get("latency_p95_ms") or 0) for s in ext_caps),
+        (int((sources.get(s) or {}).get("latency_p95_ms") or 0)
+         for s in ext_caps),
         default=0,
     )
     ext_clients_online = clients_payload["online"]
@@ -23914,19 +24810,21 @@ async def control_overview(_admin: Dict[str, Any] = Depends(require_admin)):
         "hits": int(bm_search.get("total_success") or 0)
                 + int(bm_page.get("total_success") or 0),
         "errors": int(bm_search.get("total_failures") or 0)
-                  + int(bm_page.get("total_failures") or 0),
+        + int(bm_page.get("total_failures") or 0),
         "latency_p50_ms": int(bm_search.get("latency_p50_ms") or 0),
         "latency_p95_ms": int(bm_search.get("latency_p95_ms") or 0),
         "hit_ratio": round(
             (int(bm_search.get("total_success") or 0)
              + int(bm_page.get("total_success") or 0))
             / max(1, int(bm_search.get("total_calls") or 0)
-                     + int(bm_page.get("total_calls") or 0)),
+                  + int(bm_page.get("total_calls") or 0)),
             3,
         ),
         "status": "down" if bm_open else status_for(
-            int(bm_search.get("total_calls") or 0) + int(bm_page.get("total_calls") or 0),
-            int(bm_search.get("total_failures") or 0) + int(bm_page.get("total_failures") or 0),
+            int(bm_search.get("total_calls") or 0) +
+            int(bm_page.get("total_calls") or 0),
+            int(bm_search.get("total_failures") or 0) +
+            int(bm_page.get("total_failures") or 0),
             True, False, False,
         ),
         "circuit_open": bm_open,
@@ -23969,7 +24867,8 @@ async def control_overview(_admin: Dict[str, Any] = Depends(require_admin)):
     aa_status = (
         "down" if aa.get("circuit_open") else
         "drift" if aa.get("drifting") else
-        status_for(int(aa.get("calls") or 0), int(aa.get("errors") or 0), True, False, False)
+        status_for(int(aa.get("calls") or 0), int(
+            aa.get("errors") or 0), True, False, False)
     )
     rows.append({
         "key": "auctionauto",
@@ -23995,7 +24894,7 @@ async def control_overview(_admin: Dict[str, Any] = Depends(require_admin)):
         "latency_p50_ms": ext_layer_p50,
         "latency_p95_ms": ext_layer_p95,
         "hit_ratio": round(ext_layer_hits / max(1, ext_layer_calls), 3)
-                     if ext_layer_calls else 0.0,
+        if ext_layer_calls else 0.0,
         "status": (
             "down" if ext_clients_online == 0
             else status_for(ext_layer_calls, ext_layer_errs, True, False, False)
@@ -24014,7 +24913,8 @@ async def control_overview(_admin: Dict[str, Any] = Depends(require_admin)):
     primary_keys = {"bitmotors", "westmotors", "lemon", "auctionauto"}
     primary_rows = [r for r in rows if r["key"] in primary_keys]
     # "available" = functional (idle just means ready-but-unused, NOT broken).
-    primary_available = [r for r in primary_rows if r["status"] in ("ok", "idle", "warn", "drift")]
+    primary_available = [r for r in primary_rows if r["status"] in (
+        "ok", "idle", "warn", "drift")]
     primary_serving = [r for r in primary_rows if r["status"] == "ok"]
     primary_down = [r for r in primary_rows if r["status"] == "down"]
     ext_down = (ext_clients_online == 0)
@@ -24032,11 +24932,12 @@ async def control_overview(_admin: Dict[str, Any] = Depends(require_admin)):
         if r["status"] == "down":
             alerts.append(f"{r['label']} is down")
         elif r["status"] == "drift":
-            alerts.append(f"{r['label']} is drifting (parser may be returning bad data)")
+            alerts.append(
+                f"{r['label']} is drifting (parser may be returning bad data)")
         elif r["status"] == "warn":
             alerts.append(
                 f"{r['label']} has elevated error rate "
-                f"({int((r['errors']/max(r['calls'],1))*100)}%)"
+                f"({int((r['errors']/max(r['calls'], 1))*100)}%)"
             )
     for d in health.get("drifting_sources") or []:
         alerts.append(f"Source '{d}' silent drift detected")
@@ -24074,8 +24975,10 @@ async def control_overview(_admin: Dict[str, Any] = Depends(require_admin)):
     aggregate_calls = sum(r["calls"] for r in rows)
     aggregate_hits = sum(r["hits"] for r in rows)
     aggregate_errors = sum(r["errors"] for r in rows)
-    nonzero_p50 = [r["latency_p50_ms"] for r in rows if r["latency_p50_ms"] > 0]
-    nonzero_p95 = [r["latency_p95_ms"] for r in rows if r["latency_p95_ms"] > 0]
+    nonzero_p50 = [r["latency_p50_ms"]
+                   for r in rows if r["latency_p50_ms"] > 0]
+    nonzero_p95 = [r["latency_p95_ms"]
+                   for r in rows if r["latency_p95_ms"] > 0]
     perf = {
         "p50_ms": int(sum(nonzero_p50) / len(nonzero_p50)) if nonzero_p50 else 0,
         "p95_ms": int(max(nonzero_p95)) if nonzero_p95 else 0,
@@ -24100,8 +25003,10 @@ async def control_overview(_admin: Dict[str, Any] = Depends(require_admin)):
                 + ", ".join(r["label"] for r in primary_down) + ")"
             )
         if ext_down:
-            reason_parts.append("Extension layer offline (CF-protected sources)")
-        warn_rows = [r for r in primary_rows if r["status"] in ("warn", "drift")]
+            reason_parts.append(
+                "Extension layer offline (CF-protected sources)")
+        warn_rows = [r for r in primary_rows if r["status"]
+                     in ("warn", "drift")]
         if warn_rows:
             reason_parts.append(
                 f"{len(warn_rows)} source(s) elevated error rate"
@@ -24177,7 +25082,8 @@ async def control_debug_probe(payload: dict):
     try:
         from vin_service import get_car_by_vin
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"resolver unavailable: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"resolver unavailable: {e}")
 
     t0 = time.time()
     res = await get_car_by_vin(q)
@@ -24192,7 +25098,7 @@ async def control_debug_probe(payload: dict):
         "make": (res.get("data") or {}).get("make"),
         "model": (res.get("data") or {}).get("model"),
         "image_count": (res.get("data") or {}).get("image_count")
-                       or len((res.get("data") or {}).get("images") or []),
+        or len((res.get("data") or {}).get("images") or []),
     }
 
 
@@ -24244,7 +25150,8 @@ async def ops_test_alert(payload: dict = Body(default={})):
     before a real incident occurs."""
     from ops_guardian import emit_alert
     title = (payload or {}).get("title") or "ops test alert"
-    message = (payload or {}).get("message") or "Synthetic alert from /test-alert."
+    message = (payload or {}).get(
+        "message") or "Synthetic alert from /test-alert."
     severity = (payload or {}).get("severity") or "info"
     sent = await emit_alert(
         severity=severity,
@@ -24272,15 +25179,18 @@ class JobStatus(str, Enum):
     FAILED = "failed"
     RETRY = "retry"
 
+
 class JobSource(str, Enum):
     COPART = "copart"
     IAAI = "iaai"
     CARFAST = "carfast"
 
+
 # In-memory job queue (for MVP, use Redis/RabbitMQ for production)
 scrape_jobs: Dict[str, Dict] = {}
 scrape_queue: List[str] = []
 is_worker_running = False
+
 
 class ScrapeJobRequest(BaseModel):
     url: Optional[str] = None
@@ -24289,11 +25199,12 @@ class ScrapeJobRequest(BaseModel):
     source: Optional[str] = None
     priority: int = 1
 
+
 @fastapi_app.post("/api/scrape/job")
 async def create_scrape_job(request: ScrapeJobRequest):
     """Create a new scrape job"""
     job_id = str(uuid.uuid4())[:8]
-    
+
     # Detect source from URL
     source = request.source
     if not source and request.url:
@@ -24303,7 +25214,7 @@ async def create_scrape_job(request: ScrapeJobRequest):
             source = JobSource.IAAI
         elif "carfast" in request.url:
             source = JobSource.CARFAST
-    
+
     # Build URL if only VIN/lot provided
     url = request.url
     if not url and request.lot_number:
@@ -24311,10 +25222,10 @@ async def create_scrape_job(request: ScrapeJobRequest):
             url = f"https://www.copart.com/lot/{request.lot_number}"
         elif source == JobSource.IAAI:
             url = f"https://www.iaai.com/VehicleDetail/{request.lot_number}"
-    
+
     if not url:
         return {"success": False, "error": "URL or lot_number required"}
-    
+
     job = {
         "id": job_id,
         "url": url,
@@ -24329,15 +25240,15 @@ async def create_scrape_job(request: ScrapeJobRequest):
         "result": None,
         "error": None
     }
-    
+
     scrape_jobs[job_id] = job
     scrape_queue.append(job_id)
-    
+
     # Start worker if not running
     asyncio.create_task(process_scrape_queue())
-    
+
     logger.info(f"[SCRAPE] Job created: {job_id} - {url}")
-    
+
     return {
         "success": True,
         "jobId": job_id,
@@ -24345,29 +25256,31 @@ async def create_scrape_job(request: ScrapeJobRequest):
         "message": "Job queued for processing"
     }
 
+
 @fastapi_app.get("/api/scrape/job/{job_id}")
 async def get_scrape_job(job_id: str):
     """Get job status and result"""
     if job_id not in scrape_jobs:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     job = scrape_jobs[job_id]
     return {
         "success": True,
         "job": job
     }
 
+
 @fastapi_app.get("/api/scrape/jobs")
 async def list_scrape_jobs(status: Optional[str] = None, limit: int = 50):
     """List all scrape jobs"""
     jobs = list(scrape_jobs.values())
-    
+
     if status:
         jobs = [j for j in jobs if j["status"] == status]
-    
+
     # Sort by created_at desc
     jobs.sort(key=lambda x: x["created_at"], reverse=True)
-    
+
     return {
         "success": True,
         "jobs": jobs[:limit],
@@ -24375,57 +25288,60 @@ async def list_scrape_jobs(status: Optional[str] = None, limit: int = 50):
         "queue_length": len(scrape_queue)
     }
 
+
 @fastapi_app.delete("/api/scrape/job/{job_id}")
 async def cancel_scrape_job(job_id: str):
     """Cancel a pending job"""
     if job_id not in scrape_jobs:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     job = scrape_jobs[job_id]
     if job["status"] == JobStatus.PENDING:
         job["status"] = JobStatus.FAILED
         job["error"] = "Cancelled by user"
         if job_id in scrape_queue:
             scrape_queue.remove(job_id)
-    
+
     return {"success": True, "message": "Job cancelled"}
 
 # ═══════════════════════════════════════════════════════════════════
 # PLAYWRIGHT WORKER
 # ═══════════════════════════════════════════════════════════════════
 
+
 async def scrape_with_playwright(url: str, source: str) -> Dict[str, Any]:
     """Scrape URL using Playwright"""
     import os
     os.environ['PLAYWRIGHT_BROWSERS_PATH'] = '/pw-browsers'
-    
+
     from playwright.async_api import async_playwright
-    
+
     logger.info(f"[SCRAPE-PW] Starting: {url}")
-    
+
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=True,
-            args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+            args=['--no-sandbox', '--disable-setuid-sandbox',
+                  '--disable-dev-shm-usage']
         )
-        
+
         context = await browser.new_context(
             user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             viewport={'width': 1920, 'height': 1080}
         )
-        
+
         # Inject stealth
         await context.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
             window.chrome = {runtime: {}};
         """)
-        
+
         page = await context.new_page()
-        
+
         try:
             response = await page.goto(url, wait_until='domcontentloaded', timeout=45000)
             await page.wait_for_timeout(3000)
-            
+
             # Check for blocks
             content = await page.content()
             if response.status == 403 or "Just a moment" in content:
@@ -24433,7 +25349,7 @@ async def scrape_with_playwright(url: str, source: str) -> Dict[str, Any]:
                 # Wait and retry
                 await page.wait_for_timeout(5000)
                 content = await page.content()
-            
+
             # Parse based on source
             if source == JobSource.COPART or "copart" in url:
                 data = await parse_copart_page(page)
@@ -24441,18 +25357,19 @@ async def scrape_with_playwright(url: str, source: str) -> Dict[str, Any]:
                 data = await parse_iaai_page(page)
             else:
                 data = await parse_generic_page(page)
-            
+
             data["url"] = url
             data["scraped_at"] = datetime.now(timezone.utc).isoformat()
             data["method"] = "playwright"
-            
+
             await browser.close()
             return {"success": True, "data": data}
-            
+
         except Exception as e:
             await browser.close()
             logger.error(f"[SCRAPE-PW] Error: {e}")
             return {"success": False, "error": str(e)}
+
 
 async def parse_copart_page(page) -> Dict:
     """Parse Copart lot page"""
@@ -24524,6 +25441,7 @@ async def parse_copart_page(page) -> Dict:
         };
     }""")
 
+
 async def parse_iaai_page(page) -> Dict:
     """Parse IAAI vehicle page"""
     # Phase 6.1.B (2026-05-20) — r-prefix for JS-payload escape cleanup.
@@ -24569,6 +25487,7 @@ async def parse_iaai_page(page) -> Dict:
         };
     }""")
 
+
 async def parse_generic_page(page) -> Dict:
     """Parse generic vehicle page"""
     return await page.evaluate("""() => {
@@ -24586,43 +25505,46 @@ async def parse_generic_page(page) -> Dict:
 # QUEUE PROCESSOR
 # ═══════════════════════════════════════════════════════════════════
 
+
 async def process_scrape_queue():
     """Process jobs from queue"""
     global is_worker_running
-    
+
     if is_worker_running:
         return
-    
+
     is_worker_running = True
     logger.info("[SCRAPE] Worker started")
-    
+
     try:
         while scrape_queue:
             job_id = scrape_queue.pop(0)
-            
+
             if job_id not in scrape_jobs:
                 continue
-            
+
             job = scrape_jobs[job_id]
-            
+
             if job["status"] != JobStatus.PENDING and job["status"] != JobStatus.RETRY:
                 continue
-            
+
             job["status"] = JobStatus.PROCESSING
             job["attempts"] += 1
             job["processing_started"] = datetime.now(timezone.utc).isoformat()
-            
-            logger.info(f"[SCRAPE] Processing job {job_id} (attempt {job['attempts']})")
-            
+
+            logger.info(
+                f"[SCRAPE] Processing job {job_id} (attempt {job['attempts']})")
+
             try:
                 # Try Playwright
                 result = await scrape_with_playwright(job["url"], job["source"])
-                
+
                 if result["success"]:
                     job["status"] = JobStatus.COMPLETED
                     job["result"] = result["data"]
-                    job["completed_at"] = datetime.now(timezone.utc).isoformat()
-                    
+                    job["completed_at"] = datetime.now(
+                        timezone.utc).isoformat()
+
                     # Save to DB
                     if result["data"].get("vin"):
                         await db.scraped_vehicles.update_one(
@@ -24636,14 +25558,15 @@ async def process_scrape_queue():
                             },
                             upsert=True
                         )
-                    
-                    logger.info(f"[SCRAPE] Job {job_id} completed - VIN: {result['data'].get('vin')}")
+
+                    logger.info(
+                        f"[SCRAPE] Job {job_id} completed - VIN: {result['data'].get('vin')}")
                 else:
                     raise Exception(result.get("error", "Unknown error"))
-                    
+
             except Exception as e:
                 logger.error(f"[SCRAPE] Job {job_id} failed: {e}")
-                
+
                 if job["attempts"] < job["max_attempts"]:
                     job["status"] = JobStatus.RETRY
                     job["error"] = str(e)
@@ -24653,19 +25576,20 @@ async def process_scrape_queue():
                     job["status"] = JobStatus.FAILED
                     job["error"] = str(e)
                     job["failed_at"] = datetime.now(timezone.utc).isoformat()
-            
+
             # Rate limit
             await asyncio.sleep(2)
-    
+
     finally:
         is_worker_running = False
         logger.info("[SCRAPE] Worker stopped")
+
 
 @fastapi_app.get("/api/scrape/stats")
 async def scrape_stats():
     """Get scraping statistics"""
     jobs = list(scrape_jobs.values())
-    
+
     return {
         "total_jobs": len(jobs),
         "pending": len([j for j in jobs if j["status"] == JobStatus.PENDING]),
@@ -24677,6 +25601,7 @@ async def scrape_stats():
         "worker_running": is_worker_running
     }
 
+
 @fastapi_app.get("/api/scraped/vehicles")
 async def list_scraped_vehicles(limit: int = 50, skip: int = 0):
     """List vehicles scraped by backend"""
@@ -24684,9 +25609,9 @@ async def list_scraped_vehicles(limit: int = 50, skip: int = 0):
         {},
         {"_id": 0}
     ).sort("scraped_at", -1).skip(skip).limit(limit).to_list(limit)
-    
+
     total = await db.scraped_vehicles.count_documents({})
-    
+
     return {
         "success": True,
         "vehicles": vehicles,
@@ -24697,8 +25622,10 @@ async def list_scraped_vehicles(limit: int = 50, skip: int = 0):
 # BID.CARS HTML SCRAPER API
 # ═══════════════════════════════════════════════════════════════════
 
+
 class BidCarsParseRequest(BaseModel):
     url: str
+
 
 class BidCarsSearchRequest(BaseModel):
     make: str = "All"
@@ -24707,6 +25634,7 @@ class BidCarsSearchRequest(BaseModel):
     year_to: Optional[int] = None
     vehicle_type: str = "Automobile"
     page: int = 1
+
 
 @fastapi_app.post("/api/bidcars/parse")
 async def bidcars_parse_lot(request: BidCarsParseRequest):
@@ -24719,20 +25647,21 @@ async def bidcars_parse_lot(request: BidCarsParseRequest):
     try:
         async with BidCarsParser() as parser:
             data = await parser.get_lot(request.url)
-            
+
             if data:
                 # Optionally save to database
                 data["_source"] = "bidcars"
                 data["_parsed_url"] = request.url
-                
+
                 # Save/update in MongoDB
                 if data.get("vin"):
                     await db.bidcars_vehicles.update_one(
                         {"vin": data["vin"]},
-                        {"$set": data, "$setOnInsert": {"first_seen": datetime.now(timezone.utc).isoformat()}},
+                        {"$set": data, "$setOnInsert": {
+                            "first_seen": datetime.now(timezone.utc).isoformat()}},
                         upsert=True
                     )
-                
+
                 return {
                     "success": True,
                     "data": data
@@ -24748,6 +25677,7 @@ async def bidcars_parse_lot(request: BidCarsParseRequest):
             "success": False,
             "error": str(e)
         }
+
 
 @fastapi_app.post("/api/bidcars/search")
 async def bidcars_search(request: BidCarsSearchRequest):
@@ -24767,7 +25697,7 @@ async def bidcars_search(request: BidCarsSearchRequest):
                 vehicle_type=request.vehicle_type,
                 page=request.page
             )
-            
+
             return {
                 "success": True,
                 "count": len(results),
@@ -24780,6 +25710,7 @@ async def bidcars_search(request: BidCarsSearchRequest):
             "error": str(e)
         }
 
+
 @fastapi_app.get("/api/bidcars/browse/{make}")
 async def bidcars_browse_make(make: str, page: int = 1):
     if not BIDCARS_AVAILABLE:
@@ -24787,7 +25718,7 @@ async def bidcars_browse_make(make: str, page: int = 1):
     try:
         async with BidCarsParser() as parser:
             results = await parser.browse_make(make, page=page)
-            
+
             return {
                 "success": True,
                 "make": make,
@@ -24802,6 +25733,7 @@ async def bidcars_browse_make(make: str, page: int = 1):
             "error": str(e)
         }
 
+
 @fastapi_app.get("/api/bidcars/homepage")
 async def bidcars_homepage():
     if not BIDCARS_AVAILABLE:
@@ -24809,9 +25741,9 @@ async def bidcars_homepage():
     try:
         async with BidCarsParser() as parser:
             sections = await parser.get_homepage_lots()
-            
+
             total = sum(len(lots) for lots in sections.values())
-            
+
             return {
                 "success": True,
                 "sections_count": len(sections),
@@ -24825,6 +25757,7 @@ async def bidcars_homepage():
             "error": str(e)
         }
 
+
 @fastapi_app.get("/api/bidcars/vehicles")
 async def bidcars_list_vehicles(limit: int = 50, skip: int = 0):
     """
@@ -24834,14 +25767,15 @@ async def bidcars_list_vehicles(limit: int = 50, skip: int = 0):
         {},
         {"_id": 0}
     ).sort("parsed_at", -1).skip(skip).limit(limit).to_list(limit)
-    
+
     total = await db.bidcars_vehicles.count_documents({})
-    
+
     return {
         "success": True,
         "vehicles": vehicles,
         "total": total
     }
+
 
 @fastapi_app.post("/api/bidcars/batch")
 async def bidcars_batch_parse(urls: List[str] = Body(...)):
@@ -24850,7 +25784,7 @@ async def bidcars_batch_parse(urls: List[str] = Body(...)):
     Example: POST /api/bidcars/batch ["url1", "url2", ...]
     """
     results = []
-    
+
     async with BidCarsParser() as parser:
         for url in urls[:20]:  # Limit to 20 URLs per batch
             try:
@@ -24860,18 +25794,20 @@ async def bidcars_batch_parse(urls: List[str] = Body(...)):
                     if data.get("vin"):
                         await db.bidcars_vehicles.update_one(
                             {"vin": data["vin"]},
-                            {"$set": data, "$setOnInsert": {"first_seen": datetime.now(timezone.utc).isoformat()}},
+                            {"$set": data, "$setOnInsert": {
+                                "first_seen": datetime.now(timezone.utc).isoformat()}},
                             upsert=True
                         )
                     results.append({"url": url, "success": True, "data": data})
                 else:
-                    results.append({"url": url, "success": False, "error": "Parse failed"})
+                    results.append(
+                        {"url": url, "success": False, "error": "Parse failed"})
             except Exception as e:
                 results.append({"url": url, "success": False, "error": str(e)})
-            
+
             # Small delay between requests
             await asyncio.sleep(0.5)
-    
+
     return {
         "success": True,
         "total": len(results),
@@ -24895,11 +25831,13 @@ except Exception as _e:
 # Cookie Proxy будет использовать db напрямую
 bidcars_proxy = None
 
+
 def get_bidcars_proxy():
     global bidcars_proxy
     if bidcars_proxy is None and BidCarsCookieProxy is not None:
         bidcars_proxy = BidCarsCookieProxy(db)
     return bidcars_proxy
+
 
 @fastapi_app.post("/api/bidcars/session/import")
 async def bidcars_import_session(data: Dict[str, Any] = Body(...)):
@@ -24909,24 +25847,26 @@ async def bidcars_import_session(data: Dict[str, Any] = Body(...)):
     """
     cookies = data.get("cookies", [])
     user_agent = data.get("userAgent")
-    
+
     if not cookies:
         return {"success": False, "error": "No cookies provided"}
-    
+
     result = await get_bidcars_proxy().import_cookies(cookies, user_agent)
     return result
+
 
 @fastapi_app.get("/api/bidcars/session/status")
 async def bidcars_session_status():
     """Check if cookie session is active and valid"""
     status = await get_bidcars_proxy().get_session_status()
-    
+
     if not status.get("active"):
         # Use the configured public site URL (env: PUBLIC_SITE_URL) so the
         # instruction stays valid across redeploys / different environments.
         # Falls back to "<your website URL>" placeholder so the operator sees
         # exactly what needs to be filled in.
-        base = (os.environ.get("PUBLIC_SITE_URL") or "<your website URL>").rstrip("/")
+        base = (os.environ.get("PUBLIC_SITE_URL")
+                or "<your website URL>").rstrip("/")
         status["import_instruction"] = f"""
 Чтобы активировать автоматический парсинг bid.cars:
 
@@ -24948,8 +25888,9 @@ fetch('{base}/api/bidcars/session/import', {{
 
 После этого парсинг будет работать автоматически!
 """
-    
+
     return status
+
 
 @fastapi_app.post("/api/bidcars/session/test")
 async def bidcars_test_session():
@@ -24957,19 +25898,20 @@ async def bidcars_test_session():
     result = await get_bidcars_proxy().test_session()
     return result
 
+
 @fastapi_app.post("/api/bidcars/proxy/parse", dependencies=[Depends(require_admin)])
 async def bidcars_proxy_parse(data: Dict[str, Any] = Body(...)):
     """
     Parse bid.cars URL using saved cookies - INSTANT, no Playwright
     """
     url = data.get("url", "")
-    
+
     if "bid.cars" not in url:
         return {"success": False, "error": "Only bid.cars URLs are supported"}
-    
+
     proxy = get_bidcars_proxy()
     result = await proxy.parse_and_save(url)
-    
+
     if result.get("success") and result.get("data"):
         # Also update VIN search cache
         vehicle = result["data"]
@@ -24996,30 +25938,32 @@ async def bidcars_proxy_parse(data: Dict[str, Any] = Body(...)):
             "parse_method": "cookie_proxy",
             "confidence": 0.99
         }
-    
+
     return result
 
 # Update main search endpoint to use cookie proxy first
+
+
 @fastapi_app.post("/api/v2/search-by-url")
 async def vin_search_by_url_v2(data: Dict[str, Any] = Body(...)):
     """
     Search by bid.cars URL - tries Cookie Proxy first (instant), then Playwright (slow)
     """
     start_time = time.time()
-    
+
     url = data.get("url", "")
-    
+
     if "bid.cars" not in url.lower():
         return {"success": False, "error": "Only bid.cars URLs are supported"}
-    
+
     # 1. Try Cookie Proxy first (instant if session active)
     proxy = get_bidcars_proxy()
     session_status = await proxy.get_session_status()
-    
+
     if session_status.get("active"):
         logger.info("[VIN-SEARCH] Using Cookie Proxy for bid.cars")
         result = await proxy.parse_and_save(url)
-        
+
         if result.get("success") and result.get("data"):
             vehicle = result["data"]
             return {
@@ -25049,25 +25993,27 @@ async def vin_search_by_url_v2(data: Dict[str, Any] = Body(...)):
                 "cached": False,
                 "parse_method": "cookie_proxy"
             }
-    
+
     # 2. Fallback to Playwright (slow, may timeout)
-    logger.info("[VIN-SEARCH] Cookie Proxy not available, trying Playwright...")
+    logger.info(
+        "[VIN-SEARCH] Cookie Proxy not available, trying Playwright...")
     try:
         from bidcars_parser import BidCarsParser
-        
+
         async with BidCarsParser() as parser:
             result = await parser.get_lot(url)
-            
+
             if result and result.get("vin"):
                 result["_source"] = "bidcars"
                 result["_parsed_url"] = url
-                
+
                 await db.bidcars_vehicles.update_one(
                     {"vin": result["vin"]},
-                    {"$set": result, "$setOnInsert": {"first_seen": datetime.now(timezone.utc).isoformat()}},
+                    {"$set": result, "$setOnInsert": {
+                        "first_seen": datetime.now(timezone.utc).isoformat()}},
                     upsert=True
                 )
-                
+
                 return {
                     "success": True,
                     "vin": result.get("vin"),
@@ -25097,9 +26043,9 @@ async def vin_search_by_url_v2(data: Dict[str, Any] = Body(...)):
                 }
     except Exception as e:
         logger.error(f"[VIN-SEARCH] Playwright parse failed: {e}")
-    
+
     return {
-        "success": False, 
+        "success": False,
         "error": "Failed to parse. Import cookies via Chrome Extension for instant parsing.",
         "need_cookies": not session_status.get("active")
     }
@@ -25158,10 +26104,10 @@ async def copart_import_session(data: Dict[str, Any] = Body(...)):
     """
     cookies_list = data.get("cookies", [])
     user_agent = data.get("userAgent", "")
-    
+
     if not cookies_list:
         return {"success": False, "error": "No cookies provided"}
-    
+
     # Store cookies as key-value dict
     cookie_dict = {}
     for c in cookies_list:
@@ -25169,10 +26115,10 @@ async def copart_import_session(data: Dict[str, Any] = Body(...)):
         value = c.get("value", "")
         if name and value:
             cookie_dict[name] = value
-    
+
     if not cookie_dict:
         return {"success": False, "error": "No valid cookies found"}
-    
+
     now = datetime.now(timezone.utc)
     copart_session["cookies"] = cookie_dict
     copart_session["user_agent"] = user_agent
@@ -25181,7 +26127,7 @@ async def copart_import_session(data: Dict[str, Any] = Body(...)):
     copart_session["requests_count"] = 0
     copart_session["success_count"] = 0
     copart_session["fail_count"] = 0
-    
+
     # Also persist to DB
     await db.copart_sessions.update_one(
         {"_id": "active_session"},
@@ -25194,13 +26140,14 @@ async def copart_import_session(data: Dict[str, Any] = Body(...)):
         }},
         upsert=True,
     )
-    
+
     # Key cookies for Copart auth
     key_cookies = ["G2JSESSIONID", "COPARTMEMBER", "coaboression"]
     found_keys = [k for k in key_cookies if k in cookie_dict]
-    
-    logger.info(f"[COPART] Session imported: {len(cookie_dict)} cookies, key cookies: {found_keys}")
-    
+
+    logger.info(
+        f"[COPART] Session imported: {len(cookie_dict)} cookies, key cookies: {found_keys}")
+
     return {
         "success": True,
         "cookies_stored": len(cookie_dict),
@@ -25220,7 +26167,7 @@ async def copart_session_status():
             copart_session["cookies"] = stored["cookies"]
             copart_session["user_agent"] = stored.get("user_agent", "")
             copart_session["imported_at"] = stored.get("imported_at")
-    
+
     active = copart_session_active()
     return {
         "active": active,
@@ -25230,8 +26177,8 @@ async def copart_session_status():
         "requests_count": copart_session["requests_count"],
         "success_count": copart_session["success_count"],
         "fail_count": copart_session["fail_count"],
-        "message": "Session active. Ready to fetch Copart data." if active 
-            else "No session. Open Copart in browser, login, then sync cookies via Extension.",
+        "message": "Session active. Ready to fetch Copart data." if active
+        else "No session. Open Copart in browser, login, then sync cookies via Extension.",
     }
 
 
@@ -25239,7 +26186,7 @@ async def _copart_fetch(url: str, method: str = "GET", data: str = None) -> Opti
     """Internal: make HTTP request to Copart using stored cookies"""
     if not copart_session_active():
         return None
-    
+
     headers = {
         **COPART_HEADERS,
         "User-Agent": copart_session["user_agent"] or "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
@@ -25248,20 +26195,21 @@ async def _copart_fetch(url: str, method: str = "GET", data: str = None) -> Opti
         "Referer": "https://www.copart.com/",
         "Origin": "https://www.copart.com",
     }
-    
+
     copart_session["requests_count"] += 1
     copart_session["last_used"] = datetime.now(timezone.utc)
-    
+
     try:
         async with httpx.AsyncClient(timeout=20, follow_redirects=False) as client:
             if method == "POST":
                 resp = await client.post(url, content=data, headers=headers)
             else:
                 resp = await client.get(url, headers=headers)
-            
+
             # Log response for debugging
-            logger.info(f"[COPART] {method} {url} → {resp.status_code} ({len(resp.content)} bytes)")
-            
+            logger.info(
+                f"[COPART] {method} {url} → {resp.status_code} ({len(resp.content)} bytes)")
+
             if resp.status_code == 200:
                 # Check if response is JSON
                 content_type = resp.headers.get("content-type", "")
@@ -25271,11 +26219,13 @@ async def _copart_fetch(url: str, method: str = "GET", data: str = None) -> Opti
                     return result
                 else:
                     # Not JSON - might be HTML (Cloudflare challenge or login page)
-                    logger.warning(f"[COPART] Non-JSON response: {content_type}, first 200 chars: {resp.text[:200]}")
+                    logger.warning(
+                        f"[COPART] Non-JSON response: {content_type}, first 200 chars: {resp.text[:200]}")
                     copart_session["fail_count"] += 1
                     return {"error": "Non-JSON response (possibly Cloudflare/login page)", "content_type": content_type}
             elif resp.status_code in [301, 302, 303, 307, 308]:
-                logger.warning(f"[COPART] Redirect {resp.status_code} to {resp.headers.get('location')}")
+                logger.warning(
+                    f"[COPART] Redirect {resp.status_code} to {resp.headers.get('location')}")
                 copart_session["fail_count"] += 1
                 return {"error": f"Redirect {resp.status_code} - session may be expired", "status": resp.status_code}
             else:
@@ -25293,24 +26243,27 @@ def _parse_copart_lot(lot_data: Dict, images_data: Dict = None) -> Dict:
     lot = lot_data.get("lotDetails", {})
     if not lot:
         return {}
-    
+
     images_list = images_data or lot_data.get("imagesList", {})
-    full_images = [img["url"] for img in images_list.get("FULL_IMAGE", []) if "url" in img]
-    thumb_images = [img["url"] for img in images_list.get("THUMBNAIL_IMAGE", []) if "url" in img]
-    
+    full_images = [img["url"]
+                   for img in images_list.get("FULL_IMAGE", []) if "url" in img]
+    thumb_images = [img["url"] for img in images_list.get(
+        "THUMBNAIL_IMAGE", []) if "url" in img]
+
     # VIN parsing - может быть частичным (с звездочками)
     vin_raw = lot.get("fv")
     vin_partial = False
     if vin_raw and "*" in vin_raw:
         vin_partial = True
-    
+
     # Odometer parsing
     orr = lot.get("orr", "")
     odometer = None
     odometer_unit = "mi"
     odometer_status = None
     if orr:
-        num_match = re.sub(r'[^\d]', '', orr.split('(')[0] if '(' in orr else orr)
+        num_match = re.sub(r'[^\d]', '', orr.split(
+            '(')[0] if '(' in orr else orr)
         odometer = int(num_match) if num_match else None
         odometer_unit = "km" if "km" in orr.lower() else "mi"
         if "NOT ACTUAL" in orr.upper():
@@ -25319,15 +26272,16 @@ def _parse_copart_lot(lot_data: Dict, images_data: Dict = None) -> Dict:
             odometer_status = "ACTUAL"
         elif "EXEMPT" in orr.upper():
             odometer_status = "EXEMPT"
-    
+
     # Sale date
     sale_date = None
     if lot.get("ad"):
         try:
-            sale_date = datetime.fromtimestamp(lot["ad"] / 1000, tz=timezone.utc).isoformat()
+            sale_date = datetime.fromtimestamp(
+                lot["ad"] / 1000, tz=timezone.utc).isoformat()
         except:
             pass
-    
+
     return {
         "vin": vin_raw,
         "vin_partial": vin_partial,  # NEW: флаг для частичного VIN
@@ -25381,7 +26335,7 @@ async def copart_lookup(data: Dict[str, Any] = Body(...)):
     """
     lot_number = data.get("lot_number") or data.get("lotNumber")
     vin = data.get("vin")
-    
+
     if not copart_session_active():
         # Try restore from DB
         stored = await db.copart_sessions.find_one({"_id": "active_session"})
@@ -25395,36 +26349,40 @@ async def copart_lookup(data: Dict[str, Any] = Body(...)):
                 "error": "session_expired",
                 "message": "No active Copart session. Open Copart in browser, login, sync cookies via Extension."
             }
-    
+
     start_time = time.time()
-    
+
     # Strategy 1: Direct lot lookup by lot number
     if lot_number:
         url = f"https://www.copart.com/public/data/lotdetails/solr/lotImages/{lot_number}"
         result = await _copart_fetch(url)
-        
+
         if result and not result.get("error") and result.get("data"):
-            vehicle = _parse_copart_lot(result["data"], result["data"].get("imagesList"))
-            
+            vehicle = _parse_copart_lot(
+                result["data"], result["data"].get("imagesList"))
+
             if vehicle.get("vin") or vehicle.get("lot_number"):
                 # Save to DB
                 vehicle["fetched_at"] = datetime.now(timezone.utc)
-                vehicle["response_time_ms"] = int((time.time() - start_time) * 1000)
-                
+                vehicle["response_time_ms"] = int(
+                    (time.time() - start_time) * 1000)
+
                 await db.copart_vehicles.update_one(
                     {"lot_number": str(lot_number)},
-                    {"$set": vehicle, "$setOnInsert": {"created_at": datetime.now(timezone.utc)}},
+                    {"$set": vehicle, "$setOnInsert": {
+                        "created_at": datetime.now(timezone.utc)}},
                     upsert=True,
                 )
-                
-                logger.info(f"[COPART] Lookup lot={lot_number} vin={vehicle.get('vin')} {vehicle.get('title')}")
+
+                logger.info(
+                    f"[COPART] Lookup lot={lot_number} vin={vehicle.get('vin')} {vehicle.get('title')}")
                 return {
                     "success": True,
                     "vehicle": vehicle,
                     "response_time_ms": int((time.time() - start_time) * 1000),
                     "source": "copart_live",
                 }
-        
+
         # Check if session expired
         if result and result.get("status") in [401, 403, 302]:
             return {
@@ -25432,9 +26390,9 @@ async def copart_lookup(data: Dict[str, Any] = Body(...)):
                 "error": "session_expired",
                 "message": "Copart session expired. Please re-login and sync cookies."
             }
-        
+
         return {"success": False, "error": f"Lot {lot_number} not found or session issue", "raw": result}
-    
+
     # Strategy 2: Search by VIN
     if vin:
         search_payload = (
@@ -25444,36 +26402,40 @@ async def copart_lookup(data: Dict[str, Any] = Body(...)):
             f"&page=0&size=20&start=0&draw=1&columns%5B0%5D%5Bdata%5D=0"
             f"&watchListOnly=false&freeFormSearch=true"
         )
-        
+
         url = "https://www.copart.com/public/vehicleFinder/search"
         result = await _copart_fetch(url, method="POST", data=search_payload)
-        
+
         if result and not result.get("error"):
             results_data = result.get("data", {}).get("results", {})
             content = results_data.get("content", [])
             total = results_data.get("totalElements", 0)
-            
+
             if content:
                 # Get the first match and fetch full details
                 first_lot = content[0]
                 first_lot_number = first_lot.get("ln")
-                
+
                 if first_lot_number:
                     detail_url = f"https://www.copart.com/public/data/lotdetails/solr/lotImages/{first_lot_number}"
                     detail_result = await _copart_fetch(detail_url)
-                    
+
                     if detail_result and detail_result.get("data"):
-                        vehicle = _parse_copart_lot(detail_result["data"], detail_result["data"].get("imagesList"))
+                        vehicle = _parse_copart_lot(
+                            detail_result["data"], detail_result["data"].get("imagesList"))
                         vehicle["fetched_at"] = datetime.now(timezone.utc)
-                        vehicle["response_time_ms"] = int((time.time() - start_time) * 1000)
-                        
+                        vehicle["response_time_ms"] = int(
+                            (time.time() - start_time) * 1000)
+
                         await db.copart_vehicles.update_one(
                             {"lot_number": str(first_lot_number)},
-                            {"$set": vehicle, "$setOnInsert": {"created_at": datetime.now(timezone.utc)}},
+                            {"$set": vehicle, "$setOnInsert": {
+                                "created_at": datetime.now(timezone.utc)}},
                             upsert=True,
                         )
-                        
-                        logger.info(f"[COPART] VIN search vin={vin} → lot={first_lot_number} {vehicle.get('title')}")
+
+                        logger.info(
+                            f"[COPART] VIN search vin={vin} → lot={first_lot_number} {vehicle.get('title')}")
                         return {
                             "success": True,
                             "vehicle": vehicle,
@@ -25481,14 +26443,14 @@ async def copart_lookup(data: Dict[str, Any] = Body(...)):
                             "response_time_ms": int((time.time() - start_time) * 1000),
                             "source": "copart_live",
                         }
-            
+
             return {"success": False, "error": f"VIN {vin} not found on Copart", "total_results": total}
-        
+
         if result and result.get("status") in [401, 403, 302]:
             return {"success": False, "error": "session_expired", "message": "Copart session expired."}
-        
+
         return {"success": False, "error": "Search failed", "raw": result}
-    
+
     return {"success": False, "error": "Provide lot_number or vin"}
 
 
@@ -25504,12 +26466,12 @@ async def copart_vehicles(limit: int = 50, skip: int = 0, search: str = ""):
             {"make": {"$regex": search, "$options": "i"}},
             {"model": {"$regex": search, "$options": "i"}},
         ]
-    
+
     total = await db.copart_vehicles.count_documents(query)
     vehicles = await db.copart_vehicles.find(
         query, {"_id": 0}
     ).sort("fetched_at", -1).skip(skip).limit(limit).to_list(length=limit)
-    
+
     return {"success": True, "total": total, "items": vehicles, "has_more": total > skip + limit}
 
 
@@ -25520,7 +26482,7 @@ async def copart_stats():
     with_vin = await db.copart_vehicles.count_documents({"vin": {"$exists": True, "$ne": None}})
     with_images = await db.copart_vehicles.count_documents({"images": {"$exists": True, "$ne": []}})
     latest = await db.copart_vehicles.find_one({}, {"_id": 0, "lot_number": 1, "title": 1, "fetched_at": 1}, sort=[("fetched_at", -1)])
-    
+
     return {
         "success": True,
         "session_active": copart_session_active(),
@@ -25542,15 +26504,16 @@ async def copart_vehicle_detail(lot_number: str):
     vehicle = await db.copart_vehicles.find_one({"lot_number": lot_number}, {"_id": 0})
     if vehicle:
         return {"success": True, "vehicle": vehicle, "source": "cache"}
-    
+
     # Try live fetch
     if copart_session_active():
         url = f"https://www.copart.com/public/data/lotdetails/solr/lotImages/{lot_number}"
         result = await _copart_fetch(url)
         if result and result.get("data"):
-            vehicle = _parse_copart_lot(result["data"], result["data"].get("imagesList"))
+            vehicle = _parse_copart_lot(
+                result["data"], result["data"].get("imagesList"))
             return {"success": True, "vehicle": vehicle, "source": "live"}
-    
+
     return {"success": False, "error": "Vehicle not found"}
 
 
@@ -25570,13 +26533,13 @@ async def copart_debug_cookies(data: Dict[str, Any] = Body(...)):
     logger.info(f"  hasG2Session: {data.get('hasG2Session', False)}")
     logger.info(f"  Cookie names: {data.get('cookieNames', [])}")
     logger.info(f"  Domains: {data.get('domains', [])}")
-    
+
     # Store in DB for analysis
     await db.copart_debug.insert_one({
         **data,
         "timestamp": datetime.now(timezone.utc),
     })
-    
+
     return {
         "success": True,
         "message": "Debug data received",
@@ -25584,7 +26547,7 @@ async def copart_debug_cookies(data: Dict[str, Any] = Body(...)):
             "cf_clearance_present": data.get('hasCfClearance', False),
             "session_valid": data.get('hasCfClearance') and data.get('hasG2Session'),
             "recommendation": (
-                "Cookie proxy should work" if data.get('hasCfClearance') 
+                "Cookie proxy should work" if data.get('hasCfClearance')
                 else "cf_clearance missing - Cloudflare challenge not passed"
             )
         }
@@ -25596,19 +26559,21 @@ async def copart_ingest_lot(data: Dict[str, Any] = Body(...)):
     """
     Copart DOM Ingestion - receive parsed lot data from extension
     """
-    logger.info(f"[COPART INGEST] Received lot data: {data.get('lotNumber')} / {data.get('vin')}")
-    
+    logger.info(
+        f"[COPART INGEST] Received lot data: {data.get('lotNumber')} / {data.get('vin')}")
+
     # Validate required fields
     if not data.get('lotNumber') and not data.get('vin'):
-        raise HTTPException(status_code=400, detail="lotNumber or vin is required")
-    
+        raise HTTPException(
+            status_code=400, detail="lotNumber or vin is required")
+
     # Dedupe key
     match_filter = {}
     if data.get('lotNumber'):
         match_filter = {"source": "copart", "lotNumber": data.get('lotNumber')}
     elif data.get('vin'):
         match_filter = {"source": "copart", "vin": data.get('vin')}
-    
+
     # Upsert to database
     result = await db.copart_lots.update_one(
         match_filter,
@@ -25651,7 +26616,7 @@ async def copart_ingest_lot(data: Dict[str, Any] = Body(...)):
         },
         upsert=True
     )
-    
+
     # Get the document ID
     if result.upserted_id:
         doc_id = str(result.upserted_id)
@@ -25661,7 +26626,7 @@ async def copart_ingest_lot(data: Dict[str, Any] = Body(...)):
         doc = await db.copart_lots.find_one(match_filter)
         doc_id = str(doc["_id"]) if doc else None
         logger.info(f"[COPART INGEST] Updated existing lot: {doc_id}")
-    
+
     return {
         "ok": True,
         "id": doc_id,
@@ -25681,19 +26646,20 @@ async def get_copart_lots(
 ):
     """Get parsed Copart lots from database"""
     filter_query = {"source": "copart"}
-    
+
     if search:
         filter_query["$or"] = [
             {"vin": {"$regex": search, "$options": "i"}},
             {"lotNumber": {"$regex": search, "$options": "i"}},
             {"title": {"$regex": search, "$options": "i"}},
         ]
-    
-    cursor = db.copart_lots.find(filter_query).sort("createdAt", -1).skip(skip).limit(limit)
+
+    cursor = db.copart_lots.find(filter_query).sort(
+        "createdAt", -1).skip(skip).limit(limit)
     lots = await cursor.to_list(length=limit)
-    
+
     total = await db.copart_lots.count_documents(filter_query)
-    
+
     return {
         "lots": [serialize_doc(lot) for lot in lots],
         "total": total,
@@ -25721,6 +26687,7 @@ agent_heartbeat_store = {
     "isAlive": False
 }
 
+
 def normalize_vin(vin: str) -> Dict[str, Any]:
     """
     Normalize VIN for partial VIN support
@@ -25728,17 +26695,17 @@ def normalize_vin(vin: str) -> Dict[str, Any]:
     - Full VIN: 17 characters (e.g., 1HGBH41JXMN109186)
     - Partial VIN: < 17 characters (e.g., 5N1AR2MM3FC - 11 chars)
     - Partial with wildcards: contains * (e.g., 5UXTA6C08M9******)
-    
+
     Returns: { vinRaw, vinClean, vinPartial }
     """
     vin_raw = vin.strip().upper()
     vin_clean = vin_raw.replace("*", "")
-    
+
     # Partial VIN if:
     # 1. Contains * wildcard
     # 2. Less than 17 characters (natural partial VIN from Copart)
     vin_partial = "*" in vin_raw or len(vin_clean) < 17
-    
+
     return {
         "vinRaw": vin_raw,
         "vinClean": vin_clean,
@@ -25754,24 +26721,26 @@ async def create_vin_search(data: Dict[str, Any] = Body(...)):
     Returns: { searchId, status }
     """
     vin = data.get("vin", "").strip()
-    
+
     if not vin:
         raise HTTPException(status_code=400, detail="VIN is required")
-    
+
     # Normalize VIN (supports partial VIN with *)
     normalized = normalize_vin(vin)
-    
+
     # Validate length
     if len(normalized["vinClean"]) < 6:
-        raise HTTPException(status_code=400, detail="VIN должен содержать минимум 6 символов")
-    
+        raise HTTPException(
+            status_code=400, detail="VIN должен содержать минимум 6 символов")
+
     if len(normalized["vinClean"]) > 17:
-        raise HTTPException(status_code=400, detail="VIN не может превышать 17 символов")
-    
+        raise HTTPException(
+            status_code=400, detail="VIN не может превышать 17 символов")
+
     # Create search request
     search_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
-    
+
     search_doc = {
         "_id": search_id,
         "vin": normalized["vinRaw"],
@@ -25784,11 +26753,12 @@ async def create_vin_search(data: Dict[str, Any] = Body(...)):
         "updatedAt": now,
         "startedAt": None,
     }
-    
+
     await db.search_requests.insert_one(search_doc)
-    
-    logger.info(f"[VIN SEARCH] Created task {search_id[:8]}... for VIN {normalized['vinRaw']}")
-    
+
+    logger.info(
+        f"[VIN SEARCH] Created task {search_id[:8]}... for VIN {normalized['vinRaw']}")
+
     return {
         "searchId": search_id,
         "status": "PENDING",
@@ -25804,7 +26774,7 @@ async def get_agent_task():
     Returns ONE task or null
     """
     now = datetime.now(timezone.utc)
-    
+
     # Atomically find and update ONE PENDING task to IN_PROGRESS
     result = await db.search_requests.find_one_and_update(
         {"status": "PENDING"},
@@ -25818,15 +26788,15 @@ async def get_agent_task():
         sort=[("createdAt", 1)],  # FIFO
         return_document=True
     )
-    
+
     if not result:
         return {"task": None}
-    
+
     search_id = result["_id"]
     vin = result["vin"]
-    
+
     logger.info(f"[AGENT] Task {search_id[:8]}... reserved for VIN {vin}")
-    
+
     return {
         "task": {
             "searchId": search_id,
@@ -25852,25 +26822,27 @@ async def submit_agent_result(data: Dict[str, Any] = Body(...)):
     status = data.get("status")
     vehicle_data = data.get("vehicleData")
     error_message = data.get("errorMessage")
-    
+
     if not search_id or not status:
-        raise HTTPException(status_code=400, detail="searchId and status are required")
-    
+        raise HTTPException(
+            status_code=400, detail="searchId and status are required")
+
     if status not in ["FOUND", "NOT_FOUND", "FAILED"]:
         raise HTTPException(status_code=400, detail="Invalid status")
-    
+
     now = datetime.now(timezone.utc)
     vehicle_id = None
-    
+
     # If FOUND, upsert vehicle data to copart_lots
     if status == "FOUND" and vehicle_data:
         # Use existing ingest logic
         match_filter = {}
         if vehicle_data.get('lotNumber'):
-            match_filter = {"source": "copart", "lotNumber": vehicle_data.get('lotNumber')}
+            match_filter = {"source": "copart",
+                            "lotNumber": vehicle_data.get('lotNumber')}
         elif vehicle_data.get('vin'):
             match_filter = {"source": "copart", "vin": vehicle_data.get('vin')}
-        
+
         if match_filter:
             result = await db.copart_lots.update_one(
                 match_filter,
@@ -25913,33 +26885,34 @@ async def submit_agent_result(data: Dict[str, Any] = Body(...)):
                 },
                 upsert=True
             )
-            
+
             # Get vehicle_id
             if result.upserted_id:
                 vehicle_id = str(result.upserted_id)
             else:
                 doc = await db.copart_lots.find_one(match_filter)
                 vehicle_id = str(doc["_id"]) if doc else None
-    
+
     # Update search_request
     update_data = {
         "status": status,
         "updatedAt": now
     }
-    
+
     if vehicle_id:
         update_data["vehicleId"] = vehicle_id
-    
+
     if error_message:
         update_data["errorMessage"] = error_message
-    
+
     await db.search_requests.update_one(
         {"_id": search_id},
         {"$set": update_data}
     )
-    
-    logger.info(f"[AGENT] Result for {search_id[:8]}... → {status} (vehicleId: {vehicle_id})")
-    
+
+    logger.info(
+        f"[AGENT] Result for {search_id[:8]}... → {status} (vehicleId: {vehicle_id})")
+
     return {
         "ok": True,
         "searchId": search_id,
@@ -25955,10 +26928,10 @@ async def get_search_status(search_id: str):
     Returns: { searchId, status, vin, vehicleData?, errorMessage? }
     """
     search = await db.search_requests.find_one({"_id": search_id})
-    
+
     if not search:
         raise HTTPException(status_code=404, detail="Search request not found")
-    
+
     response = {
         "searchId": search_id,
         "status": search["status"],
@@ -25967,7 +26940,7 @@ async def get_search_status(search_id: str):
         "createdAt": search["createdAt"].isoformat(),
         "updatedAt": search["updatedAt"].isoformat(),
     }
-    
+
     # If FOUND, include vehicle data
     if search["status"] == "FOUND" and search.get("vehicleId"):
         from bson import ObjectId
@@ -25980,11 +26953,11 @@ async def get_search_status(search_id: str):
                 response["vehicleData"] = vehicle
         except Exception as e:
             logger.warning(f"Failed to load vehicle data: {e}")
-    
+
     # If FAILED, include error message
     if search.get("errorMessage"):
         response["errorMessage"] = search["errorMessage"]
-    
+
     return response
 
 
@@ -25996,14 +26969,14 @@ async def agent_heartbeat(data: Dict[str, Any] = Body(...)):
     """
     now = datetime.now(timezone.utc)
     agent_id = data.get("agentId", "default")
-    
+
     # Update in-memory store
     agent_heartbeat_store["lastHeartbeat"] = now
     agent_heartbeat_store["agentId"] = agent_id
     agent_heartbeat_store["isAlive"] = True
-    
+
     logger.debug(f"[AGENT] Heartbeat from {agent_id}")
-    
+
     return {"ok": True, "timestamp": now.isoformat()}
 
 
@@ -26014,19 +26987,19 @@ async def check_agent_status():
     Returns: { alive: bool, lastHeartbeat?: datetime, staleSeconds?: int }
     """
     last_heartbeat = agent_heartbeat_store.get("lastHeartbeat")
-    
+
     if not last_heartbeat:
         return {
             "alive": False,
             "message": "Агент никогда не подключался"
         }
-    
+
     now = datetime.now(timezone.utc)
     stale_seconds = (now - last_heartbeat).total_seconds()
-    
+
     # Consider alive if heartbeat within last 30 seconds
     is_alive = stale_seconds < 30
-    
+
     return {
         "alive": is_alive,
         "lastHeartbeat": last_heartbeat.isoformat(),
@@ -26044,10 +27017,10 @@ async def requeue_stuck_tasks():
     while True:
         try:
             await asyncio.sleep(10)  # Run every 10 seconds
-            
+
             now = datetime.now(timezone.utc)
             timeout_threshold = now - timedelta(seconds=30)
-            
+
             # Find stuck tasks
             result = await db.search_requests.update_many(
                 {
@@ -26062,10 +27035,11 @@ async def requeue_stuck_tasks():
                     }
                 }
             )
-            
+
             if result.modified_count > 0:
-                logger.warning(f"[REQUEUE] Reset {result.modified_count} stuck tasks to PENDING")
-                
+                logger.warning(
+                    f"[REQUEUE] Reset {result.modified_count} stuck tasks to PENDING")
+
         except Exception as e:
             logger.error(f"[REQUEUE] Error: {e}")
 
@@ -26155,18 +27129,21 @@ async def get_my_favorites(authorization: Optional[str] = Header(None)):
         vin = (r.get("vin") or "").upper()
         live = await _vin_card_for_favorite(vin) if vin else {}
         # Strip None values from live so they don't overwrite snapshot/row
-        live_clean = {k: v for k, v in (live or {}).items() if v not in (None, "", [])}
+        live_clean = {k: v for k, v in (
+            live or {}).items() if v not in (None, "", [])}
         snapshot = r.get("snapshot") or {}
         # Priority: live (fresh) > snapshot (saved at favorite-time) > row (legacy)
         merged: Dict[str, Any] = {}
-        merged.update({k: v for k, v in r.items() if k not in ("_id", "snapshot") and v not in (None, "")})
+        merged.update({k: v for k, v in r.items() if k not in (
+            "_id", "snapshot") and v not in (None, "")})
         for k, v in snapshot.items():
             if v not in (None, ""):
                 merged[k] = v
         merged.update(live_clean)
         # Computed title fallback
         if not merged.get("title"):
-            parts = [merged.get("year"), merged.get("make"), merged.get("model"), merged.get("trim")]
+            parts = [merged.get("year"), merged.get(
+                "make"), merged.get("model"), merged.get("trim")]
             ttl = " ".join(str(p) for p in parts if p)
             if ttl.strip():
                 merged["title"] = ttl.strip()
@@ -26192,7 +27169,8 @@ async def add_favorite(
     customer = await require_customer(authorization)
     customer_id = customer.get("customerId") or customer.get("id")
 
-    raw_vin = (data.get("vin") or data.get("vehicleId") or "").strip().upper().replace(" ", "").replace("-", "")
+    raw_vin = (data.get("vin") or data.get("vehicleId")
+               or "").strip().upper().replace(" ", "").replace("-", "")
     if not raw_vin:
         raise HTTPException(status_code=400, detail="vin is required")
 
@@ -26255,7 +27233,8 @@ async def check_favorite(vin: str, authorization: Optional[str] = Header(None)):
     customer_id = customer.get("customerId") or customer.get("id")
     raw_vin = vin.strip().upper().replace(" ", "").replace("-", "")
     fav = await db.favorites.find_one(
-        {"$or": [{"customerId": customer_id}, {"userId": customer_id}], "vin": raw_vin},
+        {"$or": [{"customerId": customer_id}, {
+            "userId": customer_id}], "vin": raw_vin},
         {"_id": 0, "id": 1, "createdAt": 1},
     )
     return {"success": True, "isFavorite": bool(fav), "authenticated": True}
@@ -26270,7 +27249,8 @@ async def remove_favorite(vehicle_id: str, authorization: Optional[str] = Header
     res = await db.favorites.delete_one({
         "$and": [
             {"$or": [{"customerId": customer_id}, {"userId": customer_id}]},
-            {"$or": [{"vin": raw}, {"id": vehicle_id}, {"vehicleId": vehicle_id}, {"vehicleId": raw}]},
+            {"$or": [{"vin": raw}, {"id": vehicle_id}, {
+                "vehicleId": vehicle_id}, {"vehicleId": raw}]},
         ]
     })
     return {"success": bool(res.deleted_count), "deleted": res.deleted_count}
@@ -26328,10 +27308,12 @@ async def add_to_compare(
     customer = await require_customer(authorization)
     customer_id = customer.get("customerId") or customer.get("id")
 
-    raw_vin = (data.get("vin") or data.get("vehicleId") or "").strip().upper().replace(" ", "").replace("-", "")
+    raw_vin = (data.get("vin") or data.get("vehicleId")
+               or "").strip().upper().replace(" ", "").replace("-", "")
     veh_id = data.get("vehicleId") or raw_vin
     if not raw_vin and not veh_id:
-        raise HTTPException(status_code=400, detail="vin or vehicleId required")
+        raise HTTPException(
+            status_code=400, detail="vin or vehicleId required")
 
     snapshot = data.get("snapshot") or {}
     # Pull useful fields from the top-level payload too so the client can pass
@@ -26516,7 +27498,8 @@ async def resolve_compare(authorization: Optional[str] = Header(None)):
 
         # Computed title fallback
         if not merged.get("title"):
-            parts = [merged.get("year"), merged.get("make"), merged.get("model"), merged.get("trim")]
+            parts = [merged.get("year"), merged.get(
+                "make"), merged.get("model"), merged.get("trim")]
             ttl = " ".join(str(p) for p in parts if p)
             if ttl.strip():
                 merged["title"] = ttl.strip()
@@ -26524,7 +27507,8 @@ async def resolve_compare(authorization: Optional[str] = Header(None)):
         # Build a friendly composite location if we only have city/state
         if not merged.get("location") and (merged.get("locationCity") or merged.get("locationState")):
             merged["location"] = ", ".join(
-                [p for p in (merged.get("locationCity"), merged.get("locationState")) if p]
+                [p for p in (merged.get("locationCity"),
+                             merged.get("locationState")) if p]
             )
 
         # Normalize timestamps
@@ -26559,8 +27543,6 @@ async def resolve_compare(authorization: Optional[str] = Header(None)):
 #
 # Indexes ensured at module-load time below. Collection is created lazily.
 # =============================================================================
-
-import secrets as _secrets_share  # local alias, separate from other secrets imports
 
 
 def _short_share_id() -> str:
@@ -26606,7 +27588,8 @@ async def create_share(
         channel = "copy"
 
     customer = await _resolve_bearer(authorization)
-    customer_id = (customer or {}).get("customerId") or (customer or {}).get("id") if customer else None
+    customer_id = (customer or {}).get("customerId") or (
+        customer or {}).get("id") if customer else None
     ip_addr = None
     try:
         if request is not None:
@@ -26685,7 +27668,8 @@ async def list_my_shares(authorization: Optional[str] = Header(None)):
     customer = await require_customer(authorization)
     customer_id = customer.get("customerId") or customer.get("id")
     await _ensure_shares_indexes()
-    cursor = db.shares.find({"createdBy": customer_id}, {"_id": 0}).sort("createdAt", -1).limit(500)
+    cursor = db.shares.find({"createdBy": customer_id}, {
+                            "_id": 0}).sort("createdAt", -1).limit(500)
     rows = await cursor.to_list(length=500)
     out: List[Dict[str, Any]] = []
     base = (os.environ.get("PUBLIC_SITE_URL") or "").rstrip("/")
@@ -26730,9 +27714,6 @@ async def delete_share(share_id: str, authorization: Optional[str] = Header(None
     customer_id = customer.get("customerId") or customer.get("id")
     res = await db.shares.delete_one({"id": share_id, "createdBy": customer_id})
     return {"success": bool(res.deleted_count), "deleted": res.deleted_count}
-
-
-
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -26783,7 +27764,8 @@ async def customer_cabinet_dashboard_real(
         customer = await db.customers.find_one({'id': customer_id}) or {'id': customer_id}
 
         deals = await db.deals.find({'customerId': customer_id}).sort('created_at', -1).limit(20).to_list(20)
-        active_deals = [d for d in deals if d.get('status') not in ('completed', 'cancelled')]
+        active_deals = [d for d in deals if d.get(
+            'status') not in ('completed', 'cancelled')]
 
         # Timeline — merge notifications + shipment events
         notifs = await db.notifications.find({'customerId': customer_id}).sort('createdAt', -1).limit(8).to_list(8)
@@ -26803,9 +27785,11 @@ async def customer_cabinet_dashboard_real(
         if primary:
             st = primary.get('status')
             if st == 'contract_pending':
-                next_action = {'title': 'Підпишіть договір', 'description': 'Договір готовий до підпису', 'urgency': 'high', 'dealId': primary.get('id')}
+                next_action = {'title': 'Підпишіть договір', 'description': 'Договір готовий до підпису',
+                               'urgency': 'high', 'dealId': primary.get('id')}
             elif st in ('deposit_pending', 'payment_pending'):
-                next_action = {'title': 'Очікується оплата', 'description': 'Підтвердіть платіж щоб рухатись далі', 'urgency': 'high', 'dealId': primary.get('id')}
+                next_action = {'title': 'Очікується оплата', 'description': 'Підтвердіть платіж щоб рухатись далі',
+                               'urgency': 'high', 'dealId': primary.get('id')}
 
         # Manager
         manager = None
@@ -26952,7 +27936,8 @@ async def customer_cabinet_profile(
     # statistics for the cabinet profile page
     total_deals = await db.deals.count_documents({'customerId': customer_id})
     completed_deals = await db.deals.count_documents(
-        {'customerId': customer_id, 'status': {'$in': ['delivered', 'completed', 'received']}}
+        {'customerId': customer_id, 'status': {
+            '$in': ['delivered', 'completed', 'received']}}
     )
     total_deposits = await db.deposits.count_documents({'customerId': customer_id})
     total_invoices = await db.invoices.count_documents({'customerId': customer_id})
@@ -27006,12 +27991,14 @@ async def customer_cabinet_profile_update(
     _auth: Dict[str, Any] = Depends(_authorize_customer_cabinet_access),
 ):
     await ensure_customer_record(customer_id)
-    allowed = {k: payload[k] for k in ('firstName', 'lastName', 'phone', 'city', 'telegram', 'avatar') if k in payload}
+    allowed = {k: payload[k] for k in (
+        'firstName', 'lastName', 'phone', 'city', 'telegram', 'avatar') if k in payload}
     if allowed:
         allowed['updatedAt'] = datetime.now(timezone.utc)
         if 'firstName' in allowed or 'lastName' in allowed:
             current = await db.customers.find_one({'id': customer_id}) or {}
-            allowed['name'] = f"{allowed.get('firstName', current.get('firstName',''))} {allowed.get('lastName', current.get('lastName',''))}".strip()
+            allowed['name'] = f"{allowed.get('firstName', current.get('firstName', ''))} {allowed.get('lastName', current.get('lastName', ''))}".strip(
+            )
         await db.customers.update_one({'id': customer_id}, {'$set': allowed})
     c = await db.customers.find_one({'id': customer_id})
     safe_c = serialize_doc(c)
@@ -27305,14 +28292,17 @@ async def fetch_vessel_position_shipsgo(imo: str) -> Optional[Dict[str, Any]]:
                 res = await client.get(url, params={'authCode': key, 'imo': imo})
                 if res.status_code != 200:
                     continue
-                data = res.json() if res.text.strip().startswith('{') or res.text.strip().startswith('[') else None
+                data = res.json() if res.text.strip().startswith(
+                    '{') or res.text.strip().startswith('[') else None
                 if not data:
                     continue
                 item = data[0] if isinstance(data, list) and data else data
                 if not isinstance(item, dict):
                     continue
-                lat = item.get('Latitude') or item.get('LAT') or item.get('Lat')
-                lng = item.get('Longitude') or item.get('LON') or item.get('Lng')
+                lat = item.get('Latitude') or item.get(
+                    'LAT') or item.get('Lat')
+                lng = item.get('Longitude') or item.get(
+                    'LON') or item.get('Lng')
                 if lat is None or lng is None:
                     continue
                 return {
@@ -27392,7 +28382,8 @@ async def tracking_search(q: str = ""):
         vessel = s.get('vessel') or {}
         imo = vessel.get('imo')
         pos = await fetch_vessel_position(imo) if imo else None
-        enriched_shipments.append({**s, 'vesselPosition': serialize_doc(pos) if pos else None})
+        enriched_shipments.append(
+            {**s, 'vesselPosition': serialize_doc(pos) if pos else None})
     return {
         'success': True,
         'query': q,
@@ -27459,7 +28450,8 @@ async def tracking_quick_track(payload: Dict[str, Any] = Body(...)):
         result['imo'] = str(imo_to_fetch)
 
     result['success'] = bool(
-        result.get('internal') or result.get('external') or result.get('vesselPosition')
+        result.get('internal') or result.get(
+            'external') or result.get('vesselPosition')
     )
     return result
 
@@ -27472,7 +28464,8 @@ async def tracking_attach_to_shipment(payload: Dict[str, Any] = Body(...)):
     shipment_id = str(payload.get('shipmentId', '')).strip()
     imo = str(payload.get('imo', '')).strip()
     if not shipment_id or not imo:
-        raise HTTPException(status_code=400, detail='shipmentId and imo required')
+        raise HTTPException(
+            status_code=400, detail='shipmentId and imo required')
 
     vessel = {
         'imo': imo,
@@ -27520,7 +28513,8 @@ async def tracking_providers_configure(payload: Dict[str, Any] = Body(...)):
         {success, updated: {<key>: bool}, configured: {<key>: bool}}
     """
     if tracking_config_service is None:
-        raise HTTPException(status_code=503, detail="tracking service not initialized")
+        raise HTTPException(
+            status_code=503, detail="tracking service not initialized")
 
     # Track which keys were touched by this request (for the 'updated' field)
     touched = {k: bool(str(payload.get(k) or '').strip())
@@ -27563,11 +28557,13 @@ async def tracking_providers_test(payload: Dict[str, Any] = Body(default={})):
                     'https://shipsgo.com/api/v1.2/ContainerService/GetShippingLineList/',
                     params={'authCode': _tc.shipsgo_api_key},
                 )
-                key_valid = validation.status_code == 200 and validation.text.strip().startswith('[')
+                key_valid = validation.status_code == 200 and validation.text.strip(
+                ).startswith('[')
                 # Step 2: attempt actual container info lookup
                 res = await client.get(
                     'https://shipsgo.com/api/v1.2/ContainerService/GetContainerInfo/',
-                    params={'authCode': _tc.shipsgo_api_key, 'requestId': test_container, 'mapPoint': 'true'},
+                    params={'authCode': _tc.shipsgo_api_key,
+                            'requestId': test_container, 'mapPoint': 'true'},
                 )
                 text = (res.text or '')[:200]
                 tracking_ok = res.status_code == 200 and 'Invalid' not in text
@@ -27595,7 +28591,8 @@ async def tracking_providers_test(payload: Dict[str, Any] = Body(default={})):
                     f'https://api.vesselfinder.com/vessels?userkey={_tc.vesselfinder_api_key}&imo={test_imo}'
                 )
                 ok = res.status_code == 200
-                results['vesselfinder'] = {'ok': ok, 'status_code': res.status_code, 'preview': (res.text or '')[:160]}
+                results['vesselfinder'] = {
+                    'ok': ok, 'status_code': res.status_code, 'preview': (res.text or '')[:160]}
         except Exception as e:
             results['vesselfinder'] = {'ok': False, 'error': str(e)[:200]}
     else:
@@ -27615,9 +28612,11 @@ async def tracking_providers_test(payload: Dict[str, Any] = Body(default={})):
                     'preview': (res.text or '')[:160],
                 }
         except Exception as e:
-            results['vesselfinder_fleet'] = {'ok': False, 'error': str(e)[:200]}
+            results['vesselfinder_fleet'] = {
+                'ok': False, 'error': str(e)[:200]}
     else:
-        results['vesselfinder_fleet'] = {'ok': False, 'error': 'not_configured'}
+        results['vesselfinder_fleet'] = {
+            'ok': False, 'error': 'not_configured'}
 
     # ShipsGo Fleet
     if _tc.shipsgo_fleet_key:
@@ -27628,7 +28627,8 @@ async def tracking_providers_test(payload: Dict[str, Any] = Body(default={})):
                     'https://shipsgo.com/api/v1.2/ContainerService/GetShippingLineList/',
                     params={'authCode': _tc.shipsgo_fleet_key},
                 )
-                key_valid = validation.status_code == 200 and validation.text.strip().startswith('[')
+                key_valid = validation.status_code == 200 and validation.text.strip(
+                ).startswith('[')
         except Exception:
             key_valid = False
         pos = await fetch_vessel_position_shipsgo(test_imo)
@@ -27668,11 +28668,6 @@ async def tracking_providers_test(payload: Dict[str, Any] = Body(default={})):
 # (``vesselfinder_scraper``). The other two helpers keep their local
 # underscore aliases — they are pure module-private names used solely
 # by the in-file ``/api/manager/tracking/...`` admin endpoints.
-from vesselfinder_scraper import (
-    route_to_bbox as _vf_route_to_bbox,
-    extract_vessels_from_payload,
-    find_matching_vessel as _vf_find_match,
-)
 
 
 class VFBindVesselRequest(BaseModel):
@@ -27776,7 +28771,8 @@ async def _vf_session_status_payload() -> Dict[str, Any]:
             break
         consec_fails += 1
         if last_fail_reason is None:
-            last_fail_reason = d.get("error") or "VF returned no usable payload"
+            last_fail_reason = d.get(
+                "error") or "VF returned no usable payload"
 
     # ── What is there to track? ──
     active_shipments = await db.shipments.count_documents(
@@ -27889,7 +28885,8 @@ async def vf_vessels_search(bbox: str = "", query: str = ""):
                 {"vessel.name": rx}, {"vessel.mmsi": rx}, {"vessel.imo": rx},
             ]}).limit(20)
             async for s in cur:
-                db_shipments.append(serialize_doc(s) if 'serialize_doc' in globals() else {k: v for k, v in s.items() if k != "_id"})
+                db_shipments.append(serialize_doc(s) if 'serialize_doc' in globals() else {
+                                    k: v for k, v in s.items() if k != "_id"})
         except Exception as e:
             logger.warning(f"[VF] vessels/search db error: {e}")
     return {
@@ -27939,9 +28936,6 @@ async def vf_delete_test_tracking():
     return {"ok": True, "removed": r.deleted_count}
 
 
-
-
-
 @fastapi_app.post("/api/shipments/{shipment_id}/vessel", dependencies=[Depends(require_manager_or_admin)])
 async def bind_vessel_to_shipment(shipment_id: str, payload: VFBindVesselRequest):
     """
@@ -27978,7 +28972,8 @@ async def bind_vessel_to_shipment(shipment_id: str, payload: VFBindVesselRequest
         "imo":   (payload.imo or "").strip() or None,
     }
     if not any([vessel_incoming["mmsi"], vessel_incoming["imo"], vessel_incoming["name"]]):
-        raise HTTPException(status_code=400, detail="At least one of mmsi/imo/name required")
+        raise HTTPException(
+            status_code=400, detail="At least one of mmsi/imo/name required")
 
     now = datetime.now(timezone.utc)
     container_incoming: Optional[Dict[str, Any]] = None
@@ -28013,8 +29008,10 @@ async def bind_vessel_to_shipment(shipment_id: str, payload: VFBindVesselRequest
             (v.get("name") or "").strip().lower(),
         ])
 
-    stage_is_vessel = (cur_idx is not None and stages[cur_idx].get("type") == "vessel")
-    cur_vessel = (stages[cur_idx].get("vessel") if cur_idx is not None else None) or {}
+    stage_is_vessel = (
+        cur_idx is not None and stages[cur_idx].get("type") == "vessel")
+    cur_vessel = (stages[cur_idx].get("vessel")
+                  if cur_idx is not None else None) or {}
     cur_vessel_key = _vessel_key(cur_vessel)
     # "First bind" — stage has no vessel yet. Always merge (no stage split).
     cur_has_vessel = cur_vessel_key != "||"
@@ -28035,12 +29032,14 @@ async def bind_vessel_to_shipment(shipment_id: str, payload: VFBindVesselRequest
     )
     if merge_mode:
         if cur_idx is not None:
-            merged_vessel = {**(cur_vessel or {}), **{k: v for k, v in vessel_incoming.items() if v is not None}}
+            merged_vessel = {**(cur_vessel or {}), **{k: v for k,
+                                                      v in vessel_incoming.items() if v is not None}}
             merged_vessel["boundAt"] = now
             stages[cur_idx]["vessel"] = merged_vessel
             if container_incoming:
                 prev_container = stages[cur_idx].get("container") or {}
-                stages[cur_idx]["container"] = {**prev_container, **container_incoming}
+                stages[cur_idx]["container"] = {
+                    **prev_container, **container_incoming}
             # If the current stage was non-vessel, promote its 'type' to 'vessel'
             # so tracking kicks in.
             if not stage_is_vessel:
@@ -28072,7 +29071,8 @@ async def bind_vessel_to_shipment(shipment_id: str, payload: VFBindVesselRequest
         # new stage's origin (most transshipments happen at a port).
         label = payload.newStageLabel or "Нове судно"
         prev_to = (stages[cur_idx].get("to") if cur_idx is not None else None)
-        prev_to_point = (stages[cur_idx].get("toPoint") if cur_idx is not None else None)
+        prev_to_point = (stages[cur_idx].get("toPoint")
+                         if cur_idx is not None else None)
         dest = shipment.get("destination") or {}
         new_stage = {
             "id":         f"stage_{int(now.timestamp())}_{len(stages)+1}",
@@ -28103,11 +29103,14 @@ async def bind_vessel_to_shipment(shipment_id: str, payload: VFBindVesselRequest
         created_new_stage = True
 
     # Normalize the full stages list so ids/keys are sane.
-    stages = [_normalize_stage(s, i, len(stages)) for i, s in enumerate(stages)]
+    stages = [_normalize_stage(s, i, len(stages))
+              for i, s in enumerate(stages)]
 
     # Keep top-level `vessel` in sync for backwards compat (old UI still reads it).
-    cur_idx_final = next((i for i, s in enumerate(stages) if s.get("id") == current_stage_id), None)
-    top_vessel = (stages[cur_idx_final].get("vessel") if cur_idx_final is not None else None) or vessel_incoming
+    cur_idx_final = next((i for i, s in enumerate(
+        stages) if s.get("id") == current_stage_id), None)
+    top_vessel = (stages[cur_idx_final].get(
+        "vessel") if cur_idx_final is not None else None) or vessel_incoming
     set_ops: Dict[str, Any] = {
         "vessel":          top_vessel,
         "stages":          stages,
@@ -28227,7 +29230,8 @@ async def transfer_vessel_shipment(
     result = await bind_vessel_to_shipment(shipment_id, req)
     await audit(
         "transfer-vessel", user=current_user, resource=f"shipment:{shipment_id}",
-        meta={"mmsi": payload.mmsi, "imo": payload.imo, "name": payload.name, "port": payload.transferPort},
+        meta={"mmsi": payload.mmsi, "imo": payload.imo,
+              "name": payload.name, "port": payload.transferPort},
         request=request,
     )
     return result
@@ -28381,9 +29385,11 @@ class VFHeartbeatRequest(BaseModel):
 class VFJobResult(BaseModel):
     jobId: str
     shipmentId: Optional[str] = None
-    source: Optional[str] = "mp2"          # which VF endpoint produced the payload
+    # which VF endpoint produced the payload
+    source: Optional[str] = "mp2"
     ok: bool = True
-    payload: Optional[Any] = None          # raw VF response body (list, dict, or {"format":"binary-b64","data":"..."})
+    # raw VF response body (list, dict, or {"format":"binary-b64","data":"..."})
+    payload: Optional[Any] = None
     status_code: Optional[int] = None
     contentType: Optional[str] = None      # raw VF content-type header
     contentTypeHint: Optional[str] = None  # "json" | "text" | "binary"
@@ -28427,7 +29433,6 @@ async def vf_extension_download_public():
             "Cache-Control": "no-store",
         },
     )
-
 
 
 @fastapi_app.post("/api/vesselfinder/heartbeat", dependencies=[Depends(require_extension_hmac)])
@@ -28493,7 +29498,8 @@ async def vf_jobs_list(request: Request, response: Response, limit: int = MAX_JO
     # Kill switch: if TRACKING_ENABLED=false, return empty jobs list so the
     # extension just idles without triggering any fetches.
     if not tracking_enabled():
-        logger.info("[VF] jobs list requested while TRACKING_ENABLED=false — returning empty")
+        logger.info(
+            "[VF] jobs list requested while TRACKING_ENABLED=false — returning empty")
         return {
             "ok": True,
             "serverTime": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -28573,7 +29579,8 @@ async def vf_jobs_result(request: Request, response: Response, result: VFJobResu
             await audit("invalid_payload", resource="vf_jobs_result", meta={"reason": "no_shipment_id", "jobId": result.jobId})
         except Exception:
             pass
-        raise HTTPException(status_code=400, detail="Cannot determine shipmentId")
+        raise HTTPException(
+            status_code=400, detail="Cannot determine shipmentId")
 
     shipment = await db.shipments.find_one({"id": shipment_id})
     if not shipment:
@@ -28709,7 +29716,8 @@ async def vf_jobs_result(request: Request, response: Response, result: VFJobResu
         return {"ok": False, "reason": fail_reason, "isHtml": is_html, "payloadSize": len(raw_snippet), "skipped": is_legacy_fallback}
 
     if not match:
-        fail_reason = f"no_match_in_{len(vessels)}_vessels" if vessels else ("html_login_page" if is_html else "empty_payload")
+        fail_reason = f"no_match_in_{len(vessels)}_vessels" if vessels else (
+            "html_login_page" if is_html else "empty_payload")
         # Track VF fetch success separately — if vessels>0 it means VF endpoint
         # works and cookies are valid, just our target isn't in this bbox.
         vf_fetch_ok = len(vessels) > 0 and not is_html
@@ -28738,7 +29746,8 @@ async def vf_jobs_result(request: Request, response: Response, result: VFJobResu
     if not _is_valid_coord(match.get("lat"), match.get("lng")):
         return {"ok": False, "reason": "invalid_coord"}
 
-    key_imo = str(match.get("imo") or target.get("imo") or f"mmsi-{match.get('mmsi') or target.get('mmsi')}")
+    key_imo = str(match.get("imo") or target.get("imo")
+                  or f"mmsi-{match.get('mmsi') or target.get('mmsi')}")
     position_doc = {
         "imo": key_imo,
         "mmsi": match.get("mmsi") or target.get("mmsi"),
@@ -28790,11 +29799,13 @@ async def vf_jobs_result(request: Request, response: Response, result: VFJobResu
                 # Live VF payload is a strong source → base score 0.6 + weight-based bonus
                 base_conf = 0.60
                 bonus = calculate_vessel_confidence(
-                    {"name": match.get("name"), "mmsi": match.get("mmsi"), "imo": match.get("imo")},
+                    {"name": match.get("name"), "mmsi": match.get(
+                        "mmsi"), "imo": match.get("imo")},
                     cur_vessel,
                     route_match=bool(shipment.get("route")),
                 )
-                candidate["confidence"] = round(min(1.0, base_conf + bonus * 0.4), 3)
+                candidate["confidence"] = round(
+                    min(1.0, base_conf + bonus * 0.4), 3)
                 # Phase 3.2 / C-9 — was: detector = _auto_transfer_detector();
                 # td_res = await detector.process_shipment(shipment, candidate)
                 td_res = await identity_runtime.process_transfer(shipment, candidate)
@@ -28819,11 +29830,13 @@ async def vf_jobs_result(request: Request, response: Response, result: VFJobResu
                         kind="vessel_transferred",
                     )
         except Exception as td_exc:
-            logger.warning(f"[VF-JOBS] transfer detector failed (non-fatal): {td_exc}")
+            logger.warning(
+                f"[VF-JOBS] transfer detector failed (non-fatal): {td_exc}")
 
         await update_shipment_position(shipment)
     except Exception as e:
-        logger.exception(f"[VF-JOBS] update_shipment_position failed for {shipment_id}: {e}")
+        logger.exception(
+            f"[VF-JOBS] update_shipment_position failed for {shipment_id}: {e}")
 
     fresh = await db.shipments.find_one({"id": shipment_id})
     return {
@@ -28868,8 +29881,6 @@ async def vf_jobs_result(request: Request, response: Response, result: VFJobResu
 # (Phase 3 — Ringostat domain service will resolve).
 
 
-
-
 # ═══════════════════════════════════════════════════════════════════
 # RINGOSTAT PHASE 2 - MANAGER OUTCOME & DECISION ENGINE
 # ═══════════════════════════════════════════════════════════════════
@@ -28898,20 +29909,22 @@ async def save_manager_call_outcome(
         or (current_user or {}).get("sub")
     )
     if not auth_user_id:
-        raise HTTPException(status_code=401, detail="Authenticated user missing id")
+        raise HTTPException(
+            status_code=401, detail="Authenticated user missing id")
 
     outcome = data.get('outcome')
     outcome_note = data.get('outcome_note')
     callback_at = data.get('callback_at')
 
     if not outcome or not outcome_note:
-        raise HTTPException(status_code=400, detail="Outcome and note required")
+        raise HTTPException(
+            status_code=400, detail="Outcome and note required")
 
     # Find call
     call = await db.ringostat_calls.find_one({"call_id": call_id})
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    
+
     # Update call with outcome
     now = datetime.now(timezone.utc)
     await db.ringostat_calls.update_one(
@@ -28926,14 +29939,14 @@ async def save_manager_call_outcome(
             }
         }
     )
-    
+
     # Decision Engine - Create tasks based on outcome
     lead_id = call.get('lead_id')
     deal_id = call.get('deal_id')
     manager_id = call.get('manager_id')
-    
+
     task_created = None
-    
+
     if outcome == 'interested':
         # Create "Follow up" task
         task = {
@@ -28953,7 +29966,7 @@ async def save_manager_call_outcome(
         }
         await db.tasks.insert_one(task)
         task_created = task
-        
+
         # 🔥 Mark lead as HOT
         if lead_id:
             await db.leads.update_one(
@@ -28967,15 +29980,15 @@ async def save_manager_call_outcome(
                 }
             )
 
-        
         # NOTE (future work): bump lead score via Score Engine here once that
         # subsystem exposes a stable public API. Currently a no-op; the lead
         # status alone communicates the success outcome to downstream KPIs.
-        
+
     elif outcome == 'callback':
         # Create callback task with specific deadline
-        deadline = datetime.fromisoformat(callback_at.replace('Z', '+00:00')) if callback_at else now + timedelta(hours=2)
-        
+        deadline = datetime.fromisoformat(callback_at.replace(
+            'Z', '+00:00')) if callback_at else now + timedelta(hours=2)
+
         task = {
             '_id': str(uuid.uuid4()),
             'title': f'Передзвонити клієнту',
@@ -28993,7 +30006,7 @@ async def save_manager_call_outcome(
         }
         await db.tasks.insert_one(task)
         task_created = task
-        
+
     elif outcome == 'no_answer':
         # Create task через 2 часа
         task = {
@@ -29013,7 +30026,7 @@ async def save_manager_call_outcome(
         }
         await db.tasks.insert_one(task)
         task_created = task
-        
+
     elif outcome == 'vin_request':
         # Create VIN task
         task = {
@@ -29033,11 +30046,11 @@ async def save_manager_call_outcome(
         }
         await db.tasks.insert_one(task)
         task_created = task
-        
+
         # NOTE (future work): auto-trigger the VIN Engine job here once it
         # exposes an idempotent enqueue API. For now the task is created and
         # a human operator picks it up from the task board.
-        
+
     elif outcome == 'delivery_discussion':
         # Create delivery follow-up task
         task = {
@@ -29057,7 +30070,7 @@ async def save_manager_call_outcome(
         }
         await db.tasks.insert_one(task)
         task_created = task
-        
+
     elif outcome == 'ready_deposit':
         # Move deal to next stage
         if deal_id:
@@ -29122,7 +30135,7 @@ async def analyze_call_ai(
 ):
     """
     AI Analysis of call using Whisper (speech-to-text) + GPT-4o mini
-    
+
     Flow:
     1. Get call from DB (with recording_url)
     2. Download audio
@@ -29136,14 +30149,15 @@ async def analyze_call_ai(
         call = await db.ringostat_calls.find_one({'call_id': call_id})
         if not call:
             raise HTTPException(status_code=404, detail="Call not found")
-        
+
         recording_url = call.get('recording_url')
         if not recording_url:
-            raise HTTPException(status_code=400, detail="Recording URL not available yet")
-        
+            raise HTTPException(
+                status_code=400, detail="Recording URL not available yet")
+
         # Get lead context
         lead = await db.leads.find_one({'_id': call.get('lead_id')}) if call.get('lead_id') else None
-        
+
         # Get previous calls for context
         previous_calls = []
         if call.get('lead_id'):
@@ -29152,7 +30166,7 @@ async def analyze_call_ai(
                 '_id': {'$ne': call['_id']}
             }).sort('created_at', -1).limit(5)
             previous_calls = await prev_calls_cursor.to_list(length=5)
-        
+
         # ── Call scoring (heuristic, rule-based) ───────────────────────
         # Lightweight analysis of the call based on duration and prior
         # contact history. No external LLM provider is required.
@@ -29164,7 +30178,7 @@ async def analyze_call_ai(
         # === Heuristic call scoring ===
         if not ai_analysis:
             logger.info("[call-scoring] applying heuristic analysis")
-            
+
             if duration > 120 and prev_count >= 1:
                 intent = "buy"
                 interest_level = 0.85
@@ -29177,20 +30191,20 @@ async def analyze_call_ai(
                 intent = "info"
                 interest_level = 0.4
                 suggested_outcome = "next_step"
-            
+
             ai_analysis = {
                 "call_id": call_id,
-            "transcript": None,  # Will be filled by Whisper
-            "intent": intent,
-            "interest_level": interest_level,
-            "objection": None,
-            "suggested_outcome": suggested_outcome,
-            "confidence": interest_level,
-            "next_action": "Follow up based on interest",
-            "analyzed_at": datetime.now(timezone.utc).isoformat(),
-            "model": "heuristic-v1"
-        }
-        
+                "transcript": None,  # Will be filled by Whisper
+                "intent": intent,
+                "interest_level": interest_level,
+                "objection": None,
+                "suggested_outcome": suggested_outcome,
+                "confidence": interest_level,
+                "next_action": "Follow up based on interest",
+                "analyzed_at": datetime.now(timezone.utc).isoformat(),
+                "model": "heuristic-v1"
+            }
+
         # Save AI analysis to call
         await db.ringostat_calls.update_one(
             {'call_id': call_id},
@@ -29201,13 +30215,13 @@ async def analyze_call_ai(
                 }
             }
         )
-        
+
         return {
             "success": True,
             "call_id": call_id,
             "ai_analysis": ai_analysis
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -29228,18 +30242,18 @@ async def get_call_ai_analysis(
         call = await db.ringostat_calls.find_one({'call_id': call_id})
         if not call:
             raise HTTPException(status_code=404, detail="Call not found")
-        
+
         ai_analysis = call.get('ai_analysis')
         if not ai_analysis:
             # Trigger analysis if not done yet
             return {"success": False, "message": "Analysis not available yet"}
-        
+
         return {
             "success": True,
             "call_id": call_id,
             "ai_analysis": ai_analysis
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -29250,10 +30264,9 @@ async def get_call_ai_analysis(
 # ==================== OUTCOME DECISION ENGINE ====================
 # This function should be defined earlier in the file, near other decision engine logic
 
-# Note: The remaining outcome processing logic (reject, next_step, etc.) 
+# Note: The remaining outcome processing logic (reject, next_step, etc.)
 # should already be defined earlier in the decision engine function.
 # The duplicate code below was removed to fix syntax errors.
-
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -29275,7 +30288,7 @@ async def get_call_ai_analysis(
 #   GET  /api/admin/resolver/exceptions              (legacy alias)
 #   GET  /api/admin/resolver/identity/{shipment_id}  (legacy alias)
 #
-# Wired in via fastapi_app.include_router() near the admin_resolver / 
+# Wired in via fastapi_app.include_router() near the admin_resolver /
 # admin_shipments wiring block above.  Lazy-bridge pattern (_db, _audit,
 # _tracking_enabled, _identity_runtime) per Wave 2B / Batch 12 convention.
 # ═══════════════════════════════════════════════════════════════════════════
@@ -29300,8 +30313,6 @@ async def get_call_ai_analysis(
 # ═══════════════════════════════════════════════════════════════════════════
 
 print("All endpoints loaded successfully")
-
-
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -29442,7 +30453,8 @@ async def _round_robin_pick_manager() -> dict | None:
     if db is None:
         return None
     managers = await db.staff.find(
-        {"role": "manager", "$or": [{"disabled": {"$exists": False}}, {"disabled": False}]}
+        {"role": "manager", "$or": [
+            {"disabled": {"$exists": False}}, {"disabled": False}]}
     ).to_list(200)
     if not managers:
         return None
@@ -29494,7 +30506,8 @@ async def create_public_lead_request(
     # Budget — coerce to float when possible
     budget_value = payload.budget
     try:
-        budget_value = float(budget_value) if budget_value not in (None, "") else None
+        budget_value = float(budget_value) if budget_value not in (
+            None, "") else None
     except Exception:
         budget_value = None
 
@@ -29572,7 +30585,8 @@ async def create_public_lead_request(
             await db.lead_requests.insert_one(doc)
         except Exception as e:
             logger.error(f"[lead_requests] insert failed: {e}")
-            raise HTTPException(status_code=500, detail="Could not persist request")
+            raise HTTPException(
+                status_code=500, detail="Could not persist request")
 
         # Best-effort manager notification (does not fail the request).
         try:
@@ -29622,7 +30636,8 @@ async def list_lead_requests(
         q["manager_id"] = me_id
     elif manager_id:
         q["manager_id"] = manager_id
-    cur = db.lead_requests.find(q).sort("created_at", -1).limit(max(1, min(int(limit or 100), 500)))
+    cur = db.lead_requests.find(q).sort(
+        "created_at", -1).limit(max(1, min(int(limit or 100), 500)))
     items = await cur.to_list(length=max(1, min(int(limit or 100), 500)))
     # Compute SLA breach flag on read
     now = datetime.now(timezone.utc)
@@ -29630,7 +30645,8 @@ async def list_lead_requests(
         d.pop("_id", None)
         try:
             due = d.get("response_due_at")
-            d["sla_breached"] = bool(due and datetime.fromisoformat(due) < now and d.get("status") == "new")
+            d["sla_breached"] = bool(due and datetime.fromisoformat(
+                due) < now and d.get("status") == "new")
         except Exception:
             pass
     total = await db.lead_requests.count_documents(q)
@@ -29666,7 +30682,8 @@ async def lead_request_action(
     if action == "assign":
         target = (payload.get("manager_id") or "").strip()
         if not target:
-            raise HTTPException(status_code=400, detail="manager_id is required")
+            raise HTTPException(
+                status_code=400, detail="manager_id is required")
         mgr = await db.staff.find_one({"$or": [{"id": target}, {"_id": target}]})
         if not mgr:
             raise HTTPException(status_code=404, detail="Manager not found")

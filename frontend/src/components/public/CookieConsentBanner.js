@@ -25,15 +25,15 @@
  *
  * Storage: bibi_cookie_consent = { essential: true, ts }
  */
-import React, { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
-import { X, Check, Cookie, ShieldCheck } from '@phosphor-icons/react';
-import axios from 'axios';
-import { useLang } from '../../i18n';
-import { usePolicyModal } from './PolicyModal';
+import React, { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { X, Check, Cookie, ShieldCheck } from "@phosphor-icons/react";
+import axios from "axios";
+import { useLang } from "../../i18n";
+import { usePolicyModal } from "./PolicyModal";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
-const STORAGE_KEY = 'bibi_cookie_consent';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
+const STORAGE_KEY = "bibi_cookie_consent";
 
 const hasConsent = () => {
   try {
@@ -65,10 +65,10 @@ export default function CookieConsentBanner() {
   // concern; on the focused /cabinet flows it would overlap primary CTAs
   // (e.g. the contract Sign button).
   const isPublicRoute =
-    !pathname.startsWith('/admin') &&
-    !pathname.startsWith('/team') &&
-    !pathname.startsWith('/manager') &&
-    !pathname.startsWith('/cabinet');
+    !pathname.startsWith("/admin") &&
+    !pathname.startsWith("/team") &&
+    !pathname.startsWith("/manager") &&
+    !pathname.startsWith("/cabinet");
 
   useEffect(() => {
     if (!isPublicRoute) return;
@@ -98,27 +98,25 @@ export default function CookieConsentBanner() {
 
   if (!isPublicRoute || !open || !enabled) return null;
 
-  const isBg = lang === 'bg';
+  const isBg = lang === "bg";
 
   /* ─────── i18n strings ─────── */
   const T = isBg
     ? {
-        title: 'Уважаваме вашата поверителност',
-        body:
-          'Използваме само основни бисквитки, за да поддържаме сесията и да защитаваме акаунта ви. Без следящи скриптове, без реклама — само това, което е необходимо за коректната работа на сайта.',
-        accept: 'Приемам',
-        learnMore: 'Научете повече',
-        close: 'Затвори',
-        secure: 'GDPR съвместимо',
+        title: "Уважаваме вашата поверителност",
+        body: "Използваме само основни бисквитки, за да поддържаме сесията и да защитаваме акаунта ви. Без следящи скриптове, без реклама — само това, което е необходимо за коректната работа на сайта.",
+        accept: "Приемам",
+        learnMore: "Научете повече",
+        close: "Затвори",
+        secure: "GDPR съвместимо",
       }
     : {
-        title: 'We value your privacy',
-        body:
-          'We only use essential cookies to keep your session secure and your preferences saved. No tracking pixels, no ad networks — just the minimum needed for BIBI Cars to work properly.',
-        accept: 'Accept',
-        learnMore: 'Learn more',
-        close: 'Close',
-        secure: 'GDPR-compliant',
+        title: "We value your privacy",
+        body: "We only use essential cookies to keep your session secure and your preferences saved. No tracking pixels, no ad networks — just the minimum needed for BIBI Cars to work properly.",
+        accept: "Accept",
+        learnMore: "Learn more",
+        close: "Close",
+        secure: "GDPR-compliant",
       };
 
   /* Backend override (admin-controlled copy). Falls back to localised default. */
@@ -141,9 +139,7 @@ export default function CookieConsentBanner() {
       role="dialog"
       aria-label={title}
     >
-      <div
-        className="relative mx-auto max-w-[1180px] pointer-events-auto rounded-2xl border border-[#27272A] bg-[#0F0F0E]/95 backdrop-blur-md shadow-[0_24px_56px_rgba(0,0,0,0.65)] animate-[bibi-cookie-in_0.4s_cubic-bezier(0.22,1,0.36,1)_both] overflow-hidden"
-      >
+      <div className="relative mx-auto max-w-[1180px] pointer-events-auto rounded-2xl border border-[#27272A] bg-[#0F0F0E]/95 backdrop-blur-md shadow-[0_24px_56px_rgba(0,0,0,0.65)] animate-[bibi-cookie-in_0.4s_cubic-bezier(0.22,1,0.36,1)_both] overflow-hidden">
         {/* Phase B3.1+: removed the amber top accent line + amber outer
             border + amber 1px ambient ring. The banner now sits in a clean
             neutral border so the cookie modal doesn't read as "warning"
@@ -176,7 +172,7 @@ export default function CookieConsentBanner() {
             </p>
             <button
               type="button"
-              onClick={() => openPolicy('cookies')}
+              onClick={() => openPolicy("cookies")}
               className="self-start mt-0.5 text-[12.5px] font-medium text-[#FEAE00] underline underline-offset-[3px] decoration-[#FEAE00]/40 hover:decoration-[#FEAE00] hover:brightness-110 bg-transparent border-0 p-0 cursor-pointer transition-all"
               data-testid="cookie-banner-learn-more"
             >
@@ -245,7 +241,7 @@ export default function CookieConsentBanner() {
           <div className="flex items-center gap-2 mt-0.5">
             <button
               type="button"
-              onClick={() => openPolicy('cookies')}
+              onClick={() => openPolicy("cookies")}
               className="text-[12.5px] font-medium text-[#FEAE00] underline underline-offset-[3px] decoration-[#FEAE00]/40 bg-transparent border-0 p-0 cursor-pointer shrink-0"
               data-testid="cookie-banner-learn-more-mobile"
             >

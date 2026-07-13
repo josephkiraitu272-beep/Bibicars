@@ -15,10 +15,10 @@
  *   - clearUpdate()
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import io from 'socket.io-client';
+import { useState, useEffect, useCallback, useRef } from "react";
+import io from "socket.io-client";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
+const BACKEND_URL = "https://backend-production-ae6d.up.railway.app";
 
 export function useShipmentNotifications() {
   const [isConnected, setIsConnected] = useState(false);
@@ -32,59 +32,60 @@ export function useShipmentNotifications() {
 
   useEffect(() => {
     const token =
-      localStorage.getItem('token') || localStorage.getItem('customerToken');
+      localStorage.getItem("token") || localStorage.getItem("customerToken");
     if (!token) {
       return;
     }
 
     const socket = io(`${BACKEND_URL}/notifications`, {
       query: { token },
-      transports: ['websocket', 'polling'],
+      transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       reconnectionAttempts: Infinity,
     });
 
-    socket.on('connect', () => {
+    socket.on("connect", () => {
       setIsConnected(true);
       setReconnectTimestamp(Date.now());
       // re-subscribe to all shipments we were tracking
       subscribedRef.current.forEach((id) => {
-        socket.emit('subscribe:shipment', { shipmentId: id });
+        socket.emit("subscribe:shipment", { shipmentId: id });
       });
     });
 
-    socket.on('disconnect', () => {
+    socket.on("disconnect", () => {
       setIsConnected(false);
     });
 
-    socket.on('shipment:status_changed', (data) => {
+    socket.on("shipment:status_changed", (data) => {
       setStatusChanged(data);
-      setLastUpdate({ type: 'status', data, timestamp: new Date() });
+      setLastUpdate({ type: "status", data, timestamp: new Date() });
     });
 
-    socket.on('shipment:eta_changed', (data) => {
+    socket.on("shipment:eta_changed", (data) => {
       setEtaChanged(data);
-      setLastUpdate({ type: 'eta', data, timestamp: new Date() });
+      setLastUpdate({ type: "eta", data, timestamp: new Date() });
     });
 
-    socket.on('shipment:arrived', (data) => {
-      setLastUpdate({ type: 'arrived', data, timestamp: new Date() });
+    socket.on("shipment:arrived", (data) => {
+      setLastUpdate({ type: "arrived", data, timestamp: new Date() });
     });
 
     // Live position updates from tracking worker — REAL / INTERPOLATED / SIMULATED
-    socket.on('shipment:update', (data) => {
+    socket.on("shipment:update", (data) => {
       setPositionUpdate(data);
-      setLastUpdate({ type: 'position', data, timestamp: new Date() });
+      setLastUpdate({ type: "position", data, timestamp: new Date() });
       // Phase D — auto transfer notification
-      if (data?.type === 'vessel_transferred') {
+      if (data?.type === "vessel_transferred") {
         try {
-          const toName = data?.to?.name || 'нове судно';
+          const toName = data?.to?.name || "нове судно";
           // eslint-disable-next-line global-require
-          const { toast } = require('sonner');
+          const { toast } = require("sonner");
           toast?.info?.(`🚢 Перевалку виявлено: ${toName}`, {
-            description: 'Контейнер перевантажено — маршрут оновлено автоматично.',
+            description:
+              "Контейнер перевантажено — маршрут оновлено автоматично.",
             duration: 7000,
           });
         } catch {}
@@ -92,24 +93,28 @@ export function useShipmentNotifications() {
     });
 
     // Legacy channel compatibility
-    socket.on('shipment:position_updated', (data) => {
+    socket.on("shipment:position_updated", (data) => {
       const normalized = {
         shipmentId: data.shipmentId,
         currentPosition: data.position || data.currentPosition,
         progress: data.progress,
         location: data.location,
-        type: data.source || 'simulated',
+        type: data.source || "simulated",
       };
       setPositionUpdate(normalized);
-      setLastUpdate({ type: 'position', data: normalized, timestamp: new Date() });
+      setLastUpdate({
+        type: "position",
+        data: normalized,
+        timestamp: new Date(),
+      });
     });
 
-    socket.on('shipment:ready_for_pickup', (data) => {
-      setLastUpdate({ type: 'ready', data, timestamp: new Date() });
+    socket.on("shipment:ready_for_pickup", (data) => {
+      setLastUpdate({ type: "ready", data, timestamp: new Date() });
     });
 
-    socket.on('notification', (data) => {
-      setLastUpdate({ type: 'notification', data, timestamp: new Date() });
+    socket.on("notification", (data) => {
+      setLastUpdate({ type: "notification", data, timestamp: new Date() });
     });
 
     socketRef.current = socket;
@@ -123,7 +128,7 @@ export function useShipmentNotifications() {
     if (!shipmentId) return;
     subscribedRef.current.add(shipmentId);
     if (socketRef.current?.connected) {
-      socketRef.current.emit('subscribe:shipment', { shipmentId });
+      socketRef.current.emit("subscribe:shipment", { shipmentId });
     }
   }, []);
 

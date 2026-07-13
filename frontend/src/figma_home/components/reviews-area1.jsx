@@ -27,7 +27,7 @@ import styles from "./reviews-area1.module.css";
  * is reflected truthfully.
  */
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || "";
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 const FALLBACK_REVIEWS = [
   {
@@ -156,7 +156,9 @@ const ReviewsArea1 = ({ className = "" }) => {
               ...safe,
               items: googleAppliedRef.current
                 ? prev.items
-                : (Array.isArray(reviews.items) ? reviews.items : prev.items),
+                : Array.isArray(reviews.items)
+                  ? reviews.items
+                  : prev.items,
             };
           });
         }
@@ -184,25 +186,36 @@ const ReviewsArea1 = ({ className = "" }) => {
               text_bg: it.text_bg || it.text || "",
             }))
           : [];
-        googleAppliedRef.current = mapped.length > 0
-          || (typeof g.rating === "number" && g.rating > 0)
-          || (typeof g.count === "number" && g.count > 0);
+        googleAppliedRef.current =
+          mapped.length > 0 ||
+          (typeof g.rating === "number" && g.rating > 0) ||
+          (typeof g.count === "number" && g.count > 0);
         setCfg((prev) => ({
           ...prev,
           items: mapped.length > 0 ? mapped : prev.items,
-          google_rating: typeof g.rating === "number" && g.rating > 0 ? g.rating : prev.google_rating,
-          google_reviews_count: typeof g.count === "number" && g.count > 0 ? g.count : prev.google_reviews_count,
+          google_rating:
+            typeof g.rating === "number" && g.rating > 0
+              ? g.rating
+              : prev.google_rating,
+          google_reviews_count:
+            typeof g.count === "number" && g.count > 0
+              ? g.count
+              : prev.google_reviews_count,
           google_reviews_url: g.url || prev.google_reviews_url,
         }));
       } catch {
         /* keep CMS items / fallback */
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // lang updates flow through useLang() context — no manual listeners needed
-  useEffect(() => { /* noop */ }, []);
+  useEffect(() => {
+    /* noop */
+  }, []);
 
   const visibleReviews = useMemo(
     () => (cfg.items || []).filter((r) => r && r.enabled !== false),
@@ -331,17 +344,25 @@ const ReviewsArea1 = ({ className = "" }) => {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  {cfg.google_reviews_count} {lang === "bg" ? "отзива в Google" : "Google reviews"}
+                  {cfg.google_reviews_count}{" "}
+                  {lang === "bg" ? "отзива в Google" : "Google reviews"}
                 </a>
               ) : (
                 <span className={styles.googleReviewsLink}>
-                  {cfg.google_reviews_count} {lang === "bg" ? "отзива в Google" : "Google reviews"}
+                  {cfg.google_reviews_count}{" "}
+                  {lang === "bg" ? "отзива в Google" : "Google reviews"}
                 </span>
               )}
             </div>
           </div>
 
-          {subtitle && <AnimatedHeading as="h1" className={styles.whatCustomersSay} text={subtitle} />}
+          {subtitle && (
+            <AnimatedHeading
+              as="h1"
+              className={styles.whatCustomersSay}
+              text={subtitle}
+            />
+          )}
         </aside>
 
         {visibleReviews.length > 0 && (
@@ -360,7 +381,12 @@ const ReviewsArea1 = ({ className = "" }) => {
           <div className={styles.bigNumberBlock} aria-hidden="true">
             <h1 ref={bigNumberRef} className={styles.bigNumber}>
               {bigNumberInView ? (
-                <RollingNumber target={happyCustomers} span={5} tickMs={700} suffix="+" />
+                <RollingNumber
+                  target={happyCustomers}
+                  span={5}
+                  tickMs={700}
+                  suffix="+"
+                />
               ) : (
                 <span aria-hidden="true">&nbsp;</span>
               )}
@@ -375,9 +401,13 @@ const ReviewsArea1 = ({ className = "" }) => {
                 alt=""
               />
               <h2 className={styles.satisfiedLabel}>
-                <span className={styles.satisfiedYellow}>{lang === "bg" ? "Доволни клиенти" : "Satisfied clients"}</span>
+                <span className={styles.satisfiedYellow}>
+                  {lang === "bg" ? "Доволни клиенти" : "Satisfied clients"}
+                </span>
                 <br />
-                <span className={styles.satisfiedWhite}>{lang === "bg" ? "са наш приоритет" : "are our priority"}</span>
+                <span className={styles.satisfiedWhite}>
+                  {lang === "bg" ? "са наш приоритет" : "are our priority"}
+                </span>
               </h2>
               <img
                 className={styles.bracketRight}
@@ -391,7 +421,9 @@ const ReviewsArea1 = ({ className = "" }) => {
 
           {visibleReviews.length === 0 ? (
             <div className={styles.emptyState}>
-              <p>{lang === "bg" ? "Все още няма отзиви." : "No reviews yet."}</p>
+              <p>
+                {lang === "bg" ? "Все още няма отзиви." : "No reviews yet."}
+              </p>
             </div>
           ) : (
             <div className={styles.sliderWrap}>
@@ -411,7 +443,9 @@ const ReviewsArea1 = ({ className = "" }) => {
                         isActive ? styles.cardActive : styles.cardInactive,
                         distance === 1 ? styles.cardAdjacent : "",
                         distance >= 2 ? styles.cardFar : "",
-                      ].filter(Boolean).join(" ")}
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
                       key={r.id || i}
                       data-active={isActive ? "true" : "false"}
                       data-distance={distance}
@@ -441,9 +475,11 @@ const ReviewsArea1 = ({ className = "" }) => {
                             </span>
                           </div>
                         )}
-                        <h3 className={styles.cardName}>{
-                          (lang === "bg" ? (r.name_bg || r.name) : (r.name_en || r.name)) || "—"
-                        }</h3>
+                        <h3 className={styles.cardName}>
+                          {(lang === "bg"
+                            ? r.name_bg || r.name
+                            : r.name_en || r.name) || "—"}
+                        </h3>
                       </div>
                       <p className={styles.cardText}>{text}</p>
                     </article>

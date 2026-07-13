@@ -24,7 +24,7 @@ import { usePolicyModal } from "../../components/public/PolicyModal";
 import { useLang } from "../../i18n";
 import styles from "./footer1.module.css";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || "";
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 const SITE_INFO_CACHE = "__bibi_site_info_promise__";
 
 function fetchSiteInfo() {
@@ -51,17 +51,24 @@ const FOOTER_T = {
     cookies: "Cookies",
     credit: "/ Website design - O.la /",
     cta: "Get in touch",
-    menu: { catalog: "CATALOG", calculator: "CALCULATOR", about: "ABOUT US", blog: "BLOG" },
+    menu: {
+      catalog: "CATALOG",
+      calculator: "CALCULATOR",
+      about: "ABOUT US",
+      blog: "BLOG",
+    },
     defaultHours: "Mon - Fri, 10.00 - 19.00",
     evaxCredit: "/ Website made with Eva-X /",
     registrationLabel: "Registration address:",
-    defaultRegistrationAddress: "Republic of Bulgaria, 1415, Sofia, Cherni Vrah Blvd., 230",
+    defaultRegistrationAddress:
+      "Republic of Bulgaria, 1415, Sofia, Cherni Vrah Blvd., 230",
   },
   bg: {
     phoneLabel: "Телефонен номер:",
     addressLabel: "Адрес:",
     workingHours: "Работно време",
-    viberLabel: "Присъединете се към нашата група и получете най-горещите оферти:",
+    viberLabel:
+      "Присъединете се към нашата група и получете най-горещите оферти:",
     socialLabel: "Социални мрежи:",
     copyright: "Всички права запазени. BIBI CARS",
     conditions: "Общи условия",
@@ -69,11 +76,17 @@ const FOOTER_T = {
     cookies: "Бисквитки",
     credit: "/ Дизайн на сайта - O.la /",
     cta: "Свържете се с нас",
-    menu: { catalog: "КАТАЛОГ", calculator: "КАЛКУЛАТОР", about: "ЗА НАС", blog: "БЛОГ" },
+    menu: {
+      catalog: "КАТАЛОГ",
+      calculator: "КАЛКУЛАТОР",
+      about: "ЗА НАС",
+      blog: "БЛОГ",
+    },
     defaultHours: "Пн - Пт, 10.00 - 19.00",
     evaxCredit: "/ Сайтът е създаден с Eva-X /",
     registrationLabel: "Адрес на регистрация:",
-    defaultRegistrationAddress: "Република България, 1415, София, бул. Черни връх 230",
+    defaultRegistrationAddress:
+      "Република България, 1415, София, бул. Черни връх 230",
   },
 };
 
@@ -89,11 +102,15 @@ const Footer1 = ({ className = "" }) => {
     fetchSiteInfo().then((d) => {
       if (!cancelled) setSiteInfo(d);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const phones = useMemo(() => {
-    const fromFooter = (siteInfo?.footer?.contacts?.phones || []).filter(Boolean);
+    const fromFooter = (siteInfo?.footer?.contacts?.phones || []).filter(
+      Boolean,
+    );
     if (fromFooter.length) return fromFooter;
     return ["+359 875 313 158", "+359 897 884 804"];
   }, [siteInfo]);
@@ -101,7 +118,9 @@ const Footer1 = ({ className = "" }) => {
   const addresses = useMemo(() => {
     const langKey = lang === "bg" ? "bg" : "en";
     // 1) Admin-set localized list takes top priority.
-    const langList = (siteInfo?.footer?.contacts?.[`addresses_${langKey}`] || []).filter(Boolean);
+    const langList = (
+      siteInfo?.footer?.contacts?.[`addresses_${langKey}`] || []
+    ).filter(Boolean);
     if (langList.length) return langList;
     // 2) For BG, prefer the canonical BG translation over plain (likely EN)
     //    list to keep the locale clean. Admin must set addresses_bg to override.
@@ -132,9 +151,10 @@ const Footer1 = ({ className = "" }) => {
   const showViber = viber.enabled !== false && viber.url;
 
   // Viber label is admin-managed (per-language) with a sensible i18n fallback.
-  const viberLabel = (lang === "bg"
-    ? (viber.label_bg || viber.label_en)
-    : (viber.label_en || viber.label_bg)) || T.viberLabel;
+  const viberLabel =
+    (lang === "bg"
+      ? viber.label_bg || viber.label_en
+      : viber.label_en || viber.label_bg) || T.viberLabel;
 
   // Helper for socials
   const socialUrl = (k) => {
@@ -147,12 +167,19 @@ const Footer1 = ({ className = "" }) => {
 
   const registrationAddress = (() => {
     const langKey = lang === "bg" ? "bg" : "en";
-    const localized = siteInfo?.footer?.contacts?.[`registration_address_${langKey}`];
+    const localized =
+      siteInfo?.footer?.contacts?.[`registration_address_${langKey}`];
     if (localized) return localized;
     if (langKey === "bg") {
-      return T.defaultRegistrationAddress || "Република България, 1415, София, бул. Черни връх 230";
+      return (
+        T.defaultRegistrationAddress ||
+        "Република България, 1415, София, бул. Черни връх 230"
+      );
     }
-    return siteInfo?.footer?.contacts?.registration_address || T.defaultRegistrationAddress;
+    return (
+      siteInfo?.footer?.contacts?.registration_address ||
+      T.defaultRegistrationAddress
+    );
   })();
 
   return (
@@ -200,10 +227,18 @@ const Footer1 = ({ className = "" }) => {
 
       {/* ── Menu links (left middle) ─────────────────────────────────────── */}
       <nav className={styles.menuLinks}>
-        <Link to="/catalog" className={styles.menuLink}>{T.menu.catalog}</Link>
-        <Link to="/calculator" className={styles.menuLink}>{T.menu.calculator}</Link>
-        <Link to="/about" className={styles.menuLink}>{T.menu.about}</Link>
-        <Link to="/blog" className={styles.menuLink}>{T.menu.blog}</Link>
+        <Link to="/catalog" className={styles.menuLink}>
+          {T.menu.catalog}
+        </Link>
+        <Link to="/calculator" className={styles.menuLink}>
+          {T.menu.calculator}
+        </Link>
+        <Link to="/about" className={styles.menuLink}>
+          {T.menu.about}
+        </Link>
+        <Link to="/blog" className={styles.menuLink}>
+          {T.menu.blog}
+        </Link>
       </nav>
 
       {/* ── Address column — left=958, working hours bottom=466.55 ───────── */}

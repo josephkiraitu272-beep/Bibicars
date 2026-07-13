@@ -1,12 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import axios from 'axios';
-import { useParams } from 'react-router-dom';
-import { useLang } from '../../../../i18n';
-import { useSingleCarT } from '../i18n';
-import CarCard from './CarCard';
-import styles from './SimilarCars.module.css';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import axios from "axios";
+import { useParams } from "react-router-dom";
+import { useLang } from "../../../../i18n";
+import { useSingleCarT } from "../i18n";
+import CarCard from "./CarCard";
+import styles from "./SimilarCars.module.css";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 const PAGE_SIZE = 3;
 const MOBILE_BREAKPOINT = 768;
 
@@ -35,16 +35,19 @@ const MOBILE_BREAKPOINT = 768;
  * variant at a time based on the props passed in.
  * ───────────────────────────────────────────────────────────────────────── */
 const ArrowLeftCircle = ({ filled, disabled }) => {
-  const ringStroke = disabled ? '#5E5E5E' : '#FEAE00';
-  const ringFill = filled && !disabled ? '#FEAE00' : 'transparent';
-  const chevronStroke = disabled
-    ? '#5E5E5E'
-    : filled
-      ? '#18181B'
-      : '#FEAE00';
+  const ringStroke = disabled ? "#5E5E5E" : "#FEAE00";
+  const ringFill = filled && !disabled ? "#FEAE00" : "transparent";
+  const chevronStroke = disabled ? "#5E5E5E" : filled ? "#18181B" : "#FEAE00";
   return (
     <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
-      <circle cx="20" cy="20" r="19" stroke={ringStroke} fill={ringFill} strokeWidth="1" />
+      <circle
+        cx="20"
+        cy="20"
+        r="19"
+        stroke={ringStroke}
+        fill={ringFill}
+        strokeWidth="1"
+      />
       <path
         d="M23 13 16 20l7 7"
         stroke={chevronStroke}
@@ -58,16 +61,19 @@ const ArrowLeftCircle = ({ filled, disabled }) => {
 };
 
 const ArrowRightCircle = ({ filled, disabled }) => {
-  const ringStroke = disabled ? '#5E5E5E' : '#FEAE00';
-  const ringFill = filled && !disabled ? '#FEAE00' : 'transparent';
-  const chevronStroke = disabled
-    ? '#5E5E5E'
-    : filled
-      ? '#18181B'
-      : '#FEAE00';
+  const ringStroke = disabled ? "#5E5E5E" : "#FEAE00";
+  const ringFill = filled && !disabled ? "#FEAE00" : "transparent";
+  const chevronStroke = disabled ? "#5E5E5E" : filled ? "#18181B" : "#FEAE00";
   return (
     <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
-      <circle cx="20" cy="20" r="19" stroke={ringStroke} fill={ringFill} strokeWidth="1" />
+      <circle
+        cx="20"
+        cy="20"
+        r="19"
+        stroke={ringStroke}
+        fill={ringFill}
+        strokeWidth="1"
+      />
       <path
         d="M17 13l7 7-7 7"
         stroke={chevronStroke}
@@ -98,12 +104,12 @@ const ArrowRightCircle = ({ filled, disabled }) => {
  *   • `lastDir = 'prev'`         → left arrow FILLED, right arrow DEFAULT
  *   • Either arrow at the boundary becomes DISABLED regardless of `lastDir`.
  */
-const SimilarCars = ({ className = '' }) => {
+const SimilarCars = ({ className = "" }) => {
   const params = useParams();
   const { lang } = useLang();
   const t = useSingleCarT(lang);
   const currentVin = useMemo(
-    () => (params.slug || params.query || params.vin || '').toUpperCase(),
+    () => (params.slug || params.query || params.vin || "").toUpperCase(),
     [params],
   );
 
@@ -115,15 +121,15 @@ const SimilarCars = ({ className = '' }) => {
    * (outline-only) state per the design spec. */
   const [lastDir, setLastDir] = useState(null);
   const [isMobile, setIsMobile] = useState(
-    typeof window !== 'undefined' && window.innerWidth <= MOBILE_BREAKPOINT,
+    typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT,
   );
   const scrollerRef = useRef(null);
   const [activeIdx, setActiveIdx] = useState(0);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   useEffect(() => {
@@ -137,7 +143,9 @@ const SimilarCars = ({ className = '' }) => {
         });
         if (cancelled) return;
         const arr = Array.isArray(data?.items) ? data.items : [];
-        const filtered = arr.filter((x) => (x?.vin || '').toUpperCase() !== currentVin);
+        const filtered = arr.filter(
+          (x) => (x?.vin || "").toUpperCase() !== currentVin,
+        );
         setItems(filtered);
       } catch {
         if (!cancelled) setItems([]);
@@ -145,7 +153,9 @@ const SimilarCars = ({ className = '' }) => {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [currentVin]);
 
   /* Mobile: track which card is currently snapped into view based on
@@ -160,8 +170,8 @@ const SimilarCars = ({ className = '' }) => {
       const idx = Math.round(el.scrollLeft / w);
       setActiveIdx(Math.max(0, Math.min(items.length - 1, idx)));
     };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
   }, [isMobile, items.length]);
 
   /* Desktop pagination (3-per-page). Hidden on mobile via isMobile branch. */
@@ -179,30 +189,34 @@ const SimilarCars = ({ className = '' }) => {
     const el = scrollerRef.current;
     if (!el) return;
     const clamped = Math.max(0, Math.min(items.length - 1, idx));
-    el.scrollTo({ left: clamped * el.clientWidth, behavior: 'smooth' });
+    el.scrollTo({ left: clamped * el.clientWidth, behavior: "smooth" });
   };
 
   /* Boundary / state computations for the arrow visuals. */
   const prevDisabled = isMobile ? activeIdx <= 0 : safePage <= 1;
-  const nextDisabled = isMobile ? activeIdx >= mobileTotal - 1 : safePage >= totalPagesDesktop;
-  const prevFilled = lastDir === 'prev' && !prevDisabled;
-  const nextFilled = lastDir === 'next' && !nextDisabled;
+  const nextDisabled = isMobile
+    ? activeIdx >= mobileTotal - 1
+    : safePage >= totalPagesDesktop;
+  const prevFilled = lastDir === "prev" && !prevDisabled;
+  const nextFilled = lastDir === "next" && !nextDisabled;
 
   const handlePrev = () => {
     if (prevDisabled) return;
-    setLastDir('prev');
+    setLastDir("prev");
     if (isMobile) scrollToIdx(activeIdx - 1);
     else setPage((p) => Math.max(1, p - 1));
   };
   const handleNext = () => {
     if (nextDisabled) return;
-    setLastDir('next');
+    setLastDir("next");
     if (isMobile) scrollToIdx(activeIdx + 1);
     else setPage((p) => Math.min(totalPagesDesktop, p + 1));
   };
 
   return (
-    <section className={[styles.similarCarsContainerWrapper, className].join(' ')}>
+    <section
+      className={[styles.similarCarsContainerWrapper, className].join(" ")}
+    >
       <div className={styles.similarCarsContainer}>
         <h2 className={styles.similarCars}>
           <span>{t.similarPart1}</span>
@@ -221,9 +235,15 @@ const SimilarCars = ({ className = '' }) => {
           <div className={styles.pagination}>
             <button
               type="button"
-              className={[styles.pageBtn, styles.pageBtnPrev, prevFilled ? styles.pageBtnFilled : ''].join(' ')}
+              className={[
+                styles.pageBtn,
+                styles.pageBtnPrev,
+                prevFilled ? styles.pageBtnFilled : "",
+              ].join(" ")}
               aria-label={t.previous}
-              data-state={prevDisabled ? 'disabled' : prevFilled ? 'filled' : 'default'}
+              data-state={
+                prevDisabled ? "disabled" : prevFilled ? "filled" : "default"
+              }
               disabled={prevDisabled}
               onClick={handlePrev}
             >
@@ -233,7 +253,7 @@ const SimilarCars = ({ className = '' }) => {
               {(() => {
                 const total = items.length;
                 if (isMobile) {
-                  return `${String(mobileCurrent).padStart(2, '0')}/${String(total).padStart(2, '0')}`;
+                  return `${String(mobileCurrent).padStart(2, "0")}/${String(total).padStart(2, "0")}`;
                 }
                 /* Desktop: show the index of the LAST visible card on the
                  * current page ("seen 3 of 12") so the indicator reflects
@@ -241,14 +261,20 @@ const SimilarCars = ({ className = '' }) => {
                  * Previously this said "01/04" for 12 cars / 3 per page,
                  * which confused users into thinking only 4 cars existed. */
                 const lastVisible = Math.min(safePage * PAGE_SIZE, total);
-                return `${String(lastVisible).padStart(2, '0')}/${String(total).padStart(2, '0')}`;
+                return `${String(lastVisible).padStart(2, "0")}/${String(total).padStart(2, "0")}`;
               })()}
             </div>
             <button
               type="button"
-              className={[styles.pageBtn, styles.pageBtnNext, nextFilled ? styles.pageBtnFilled : ''].join(' ')}
+              className={[
+                styles.pageBtn,
+                styles.pageBtnNext,
+                nextFilled ? styles.pageBtnFilled : "",
+              ].join(" ")}
               aria-label={t.next}
-              data-state={nextDisabled ? 'disabled' : nextFilled ? 'filled' : 'default'}
+              data-state={
+                nextDisabled ? "disabled" : nextFilled ? "filled" : "default"
+              }
               disabled={nextDisabled}
               onClick={handleNext}
             >
@@ -266,8 +292,8 @@ const CarCardSkeleton = () => (
     <div className={styles.skeletonImage} />
     <div className={styles.skeletonLines}>
       <div className={styles.skeletonLine} />
-      <div className={styles.skeletonLine} style={{ width: '60%' }} />
-      <div className={styles.skeletonLine} style={{ width: '40%' }} />
+      <div className={styles.skeletonLine} style={{ width: "60%" }} />
+      <div className={styles.skeletonLine} style={{ width: "40%" }} />
     </div>
   </div>
 );

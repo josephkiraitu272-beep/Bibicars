@@ -6,7 +6,7 @@ import AnimatedHeading from "../../components/AnimatedHeading";
 import useInView from "../../components/useInView";
 import styles from "./turnkey-banner1.module.css";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || "";
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 const SITE_INFO_CACHE = "__bibi_site_info_promise__";
 
 function fetchSiteInfo() {
@@ -86,7 +86,9 @@ const TurnkeyBanner1 = ({ className = "" }) => {
       const url = info?.footer?.viber_community?.url;
       if (url && typeof url === "string") setViberUrl(url);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // ── Staggered reveal for the 5 zig-zag steps ──────────────────────────
@@ -110,8 +112,8 @@ const TurnkeyBanner1 = ({ className = "" }) => {
         alt=""
         aria-hidden="true"
       />
-      <div className={styles.bgTop}    aria-hidden="true" />
-      <div className={styles.bgScrim}  aria-hidden="true" />
+      <div className={styles.bgTop} aria-hidden="true" />
+      <div className={styles.bgScrim} aria-hidden="true" />
 
       <div className={styles.inner}>
         {/* ── Title ─────────────────────────────────────────────────── */}
@@ -211,7 +213,8 @@ const TurnkeyBanner1 = ({ className = "" }) => {
           <span className={styles.stepNum}>4/</span>
           <p className={styles.stepText}>
             {t.step4a}
-            <br />{t.step4b}
+            <br />
+            {t.step4b}
           </p>
         </div>
 
@@ -219,7 +222,8 @@ const TurnkeyBanner1 = ({ className = "" }) => {
           <span className={styles.stepNum}>5/</span>
           <p className={styles.stepText}>
             {t.step5a}
-            <br />{t.step5b}
+            <br />
+            {t.step5b}
           </p>
         </div>
 

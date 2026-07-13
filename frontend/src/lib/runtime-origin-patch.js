@@ -32,7 +32,7 @@ import axios from "axios";
 // Host that the bundle was built against (from REACT_APP_BACKEND_URL).
 function buildTimeBackendHost() {
   try {
-    const raw = process.env.REACT_APP_BACKEND_URL;
+    const raw = "https://backend-production-ae6d.up.railway.app";
     if (!raw) return null;
     return new URL(raw).hostname.toLowerCase();
   } catch {
@@ -85,47 +85,3 @@ export function rewriteIfStale(rawUrl) {
 }
 
 let installed = false;
-
-export function installRuntimeOriginPatch() {
-  if (installed) return;
-  installed = true;
-
-  // ── axios — global interceptor on the default + module instance ──
-  const tagInterceptor = (instance) => {
-    if (!instance || !instance.interceptors || !instance.interceptors.request) return;
-    instance.interceptors.request.use((config) => {
-      if (config.url) config.url = rewriteIfStale(config.url);
-      if (config.baseURL) config.baseURL = rewriteIfStale(config.baseURL);
-      return config;
-    });
-  };
-  tagInterceptor(axios);
-  // Also patch the default baseURL in case something reads it directly.
-  if (axios.defaults && axios.defaults.baseURL) {
-    axios.defaults.baseURL = rewriteIfStale(axios.defaults.baseURL);
-  }
-
-  // ── window.fetch — wrap once, preserving all other arguments ────
-  if (typeof window !== "undefined" && typeof window.fetch === "function") {
-    const original = window.fetch.bind(window);
-    window.fetch = (input, init) => {
-      if (typeof input === "string") {
-        return original(rewriteIfStale(input), init);
-      }
-      // Request object (rare in this codebase) — re-create with new URL
-      if (input && typeof input === "object" && "url" in input) {
-        const rewritten = rewriteIfStale(input.url);
-        if (rewritten !== input.url) {
-          const cloned = new Request(rewritten, input);
-          return original(cloned, init);
-        }
-      }
-      return original(input, init);
-    };
-  }
-}
-
-// Auto-install on import so consumers only need `import "./runtime-origin-patch"`.
-installRuntimeOriginPatch();
-
-export default installRuntimeOriginPatch;

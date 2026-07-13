@@ -1,25 +1,25 @@
 /**
  * SEO Collections Page
- * 
+ *
  * Landing page for SEO clusters (brand, model, budget)
  */
 
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import axios from 'axios';
-import { useLang } from '../../i18n';
-import { 
+import React, { useState, useEffect } from "react";
+import { useParams, Link } from "react-router-dom";
+import axios from "axios";
+import { useLang } from "../../i18n";
+import {
   ArrowLeft,
   CarSimple,
   Fire,
   Timer,
   SpinnerGap,
   Warning,
-  Tag
-} from '@phosphor-icons/react';
-import AuctionTimer from '../../components/public/AuctionTimer';
+  Tag,
+} from "@phosphor-icons/react";
+import AuctionTimer from "../../components/public/AuctionTimer";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 // ============ COLLECTIONS LIST ============
 
@@ -27,7 +27,7 @@ export const CollectionsPage = () => {
   const { t } = useLang();
   const [clusters, setClusters] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeType, setActiveType] = useState('all');
+  const [activeType, setActiveType] = useState("all");
 
   useEffect(() => {
     fetchClusters();
@@ -38,23 +38,24 @@ export const CollectionsPage = () => {
       const res = await axios.get(`${API_URL}/api/seo-clusters/public`);
       setClusters(res.data || []);
     } catch (err) {
-      console.error('Error fetching clusters:', err);
+      console.error("Error fetching clusters:", err);
     } finally {
       setLoading(false);
     }
   };
 
   const types = [
-    { key: 'all', label: 'Всі' },
-    { key: 'brand', label: 'Бренди' },
-    { key: 'model', label: 'Моделі' },
-    { key: 'budget', label: 'Бюджет' },
-    { key: 'bodyType', label: 'Тип кузова' },
+    { key: "all", label: "Всі" },
+    { key: "brand", label: "Бренди" },
+    { key: "model", label: "Моделі" },
+    { key: "budget", label: "Бюджет" },
+    { key: "bodyType", label: "Тип кузова" },
   ];
 
-  const filtered = activeType === 'all' 
-    ? clusters 
-    : clusters.filter(c => c.type === activeType);
+  const filtered =
+    activeType === "all"
+      ? clusters
+      : clusters.filter((c) => c.type === activeType);
 
   if (loading) {
     return (
@@ -76,14 +77,14 @@ export const CollectionsPage = () => {
 
           {/* Type Tabs */}
           <div className="flex gap-2 mt-6 overflow-x-auto pb-2">
-            {types.map(t => (
+            {types.map((t) => (
               <button
                 key={t.key}
                 onClick={() => setActiveType(t.key)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                   activeType === t.key
-                    ? 'bg-zinc-900 text-white'
-                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                    ? "bg-zinc-900 text-white"
+                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
                 }`}
               >
                 {t.label}
@@ -102,7 +103,7 @@ export const CollectionsPage = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filtered.map(cluster => (
+            {filtered.map((cluster) => (
               <Link
                 key={cluster.id || cluster.slug}
                 to={`/collections/${cluster.slug}`}
@@ -149,8 +150,8 @@ export const CollectionDetailPage = () => {
       const res = await axios.get(`${API_URL}/api/seo-clusters/public/${slug}`);
       setData(res.data);
     } catch (err) {
-      setError('Колекцію не знайдено');
-      console.error('Error fetching cluster:', err);
+      setError("Колекцію не знайдено");
+      console.error("Error fetching cluster:", err);
     } finally {
       setLoading(false);
     }
@@ -170,12 +171,9 @@ export const CollectionDetailPage = () => {
         <div className="text-center">
           <Warning size={48} className="mx-auto text-amber-500 mb-4" />
           <h2 className="text-xl font-semibold text-zinc-900 mb-2">
-            {error || 'Колекцію не знайдено'}
+            {error || "Колекцію не знайдено"}
           </h2>
-          <Link
-            to="/collections"
-            className="text-blue-600 hover:underline"
-          >
+          <Link to="/collections" className="text-blue-600 hover:underline">
             Переглянути всі колекції
           </Link>
         </div>
@@ -186,21 +184,24 @@ export const CollectionDetailPage = () => {
   const { cluster, listings = [] } = data;
 
   return (
-    <div className="min-h-screen bg-zinc-50" data-testid="collection-detail-page">
+    <div
+      className="min-h-screen bg-zinc-50"
+      data-testid="collection-detail-page"
+    >
       {/* Header */}
       <div className="bg-white border-b border-zinc-200">
         <div className="container mx-auto px-4 py-4">
-          <Link 
-            to="/collections" 
+          <Link
+            to="/collections"
             className="flex items-center gap-2 text-zinc-500 hover:text-zinc-900 transition-colors text-sm mb-4"
           >
             <ArrowLeft size={16} />
             Всі колекції
           </Link>
-          
+
           <h1 className="text-3xl font-bold text-zinc-900">{cluster.title}</h1>
           <p className="text-zinc-500 mt-2">{cluster.description}</p>
-          
+
           <div className="flex items-center gap-4 mt-4 text-sm text-zinc-500">
             <span>{listings.length} авто</span>
             {cluster.viewCount > 0 && (
@@ -219,7 +220,7 @@ export const CollectionDetailPage = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {listings.map(vehicle => (
+            {listings.map((vehicle) => (
               <VehicleCard key={vehicle.id || vehicle._id} vehicle={vehicle} />
             ))}
           </div>
@@ -232,11 +233,13 @@ export const CollectionDetailPage = () => {
 // ============ VEHICLE CARD ============
 
 const VehicleCard = ({ vehicle }) => {
-  const displayTitle = vehicle.title || 
-    `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim() ||
-    'Автомобіль';
+  const displayTitle =
+    vehicle.title ||
+    `${vehicle.year || ""} ${vehicle.make || ""} ${vehicle.model || ""}`.trim() ||
+    "Автомобіль";
 
-  const price = vehicle.currentBid || vehicle.buyNowPrice || vehicle.estimatedRetail;
+  const price =
+    vehicle.currentBid || vehicle.buyNowPrice || vehicle.estimatedRetail;
   const slug = vehicle.slug || vehicle.id || vehicle._id;
   const isHot = vehicle.rankingScore >= 0.65;
 
@@ -253,7 +256,9 @@ const VehicleCard = ({ vehicle }) => {
             src={vehicle.images[0]}
             alt={displayTitle}
             className="w-full h-full object-cover"
-            onError={(e) => { e.target.src = '/images/car-placeholder.jpg'; }}
+            onError={(e) => {
+              e.target.src = "/images/car-placeholder.jpg";
+            }}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-zinc-300">

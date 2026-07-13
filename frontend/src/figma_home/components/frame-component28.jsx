@@ -21,7 +21,7 @@ import styles from "./frame-component28.module.css";
  *     in the "Info → FAQ" tab.
  */
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || "";
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 // Fallback content used if API is unreachable (keeps the section non-empty
 // during the first paint). Mirrors the backend DEFAULT_SITE_INFO.faq seed.
@@ -148,10 +148,7 @@ const FrameComponent28 = ({ className = "", lang = "en" }) => {
                       the item is expanded. Per Figma — every open FAQ has
                       this horizontal accent line under the title so the
                       answer reads as a separate block. Hidden when collapsed. */}
-                  <div
-                    className={styles.openDivider}
-                    aria-hidden="true"
-                  />
+                  <div className={styles.openDivider} aria-hidden="true" />
                   <div
                     className={styles.answer}
                     data-testid={`faq-answer-${idx}`}

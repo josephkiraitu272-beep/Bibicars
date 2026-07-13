@@ -30,41 +30,41 @@ import React, {
   useEffect,
   useMemo,
   useState,
-} from 'react';
-import axios from 'axios';
-import { useLang } from '../../i18n';
+} from "react";
+import axios from "axios";
+import { useLang } from "../../i18n";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = "https://backend-production-ae6d.up.railway.app";
 
 // Allowed policy keys (matches backend enum).
-const POLICY_KEYS = ['privacy', 'terms', 'cookies', 'conditions'];
+const POLICY_KEYS = ["privacy", "terms", "cookies", "conditions"];
 
 // Localized fallback titles (used while loading or on fetch failure).
 const FALLBACK_TITLES = {
   en: {
-    privacy: 'Privacy Policy',
-    terms: 'Terms of Use',
-    cookies: 'Cookies',
-    conditions: 'Conditions',
+    privacy: "Privacy Policy",
+    terms: "Terms of Use",
+    cookies: "Cookies",
+    conditions: "Conditions",
   },
   bg: {
-    privacy: 'Политика за поверителност',
-    terms: 'Условия за ползване',
-    cookies: 'Бисквитки',
-    conditions: 'Общи условия',
+    privacy: "Политика за поверителност",
+    terms: "Условия за ползване",
+    cookies: "Бисквитки",
+    conditions: "Общи условия",
   },
 };
 
 const UI_T = {
   en: {
-    loading: 'Loading…',
-    empty: 'Content unavailable.',
-    close: 'Close',
+    loading: "Loading…",
+    empty: "Content unavailable.",
+    close: "Close",
   },
   bg: {
-    loading: 'Зареждане…',
-    empty: 'Съдържанието не е налично.',
-    close: 'Затвори',
+    loading: "Зареждане…",
+    empty: "Съдържанието не е налично.",
+    close: "Затвори",
   },
 };
 
@@ -108,8 +108,8 @@ export function PolicyModalProvider({ children }) {
 // ─── Modal view ───────────────────────────────────────────────────────────
 function PolicyModalView({ policyKey, onClose }) {
   const { lang } = useLang();
-  const ui = lang === 'bg' ? UI_T.bg : UI_T.en;
-  const apiLang = lang === 'bg' ? 'bg' : 'en';
+  const ui = lang === "bg" ? UI_T.bg : UI_T.en;
+  const apiLang = lang === "bg" ? "bg" : "en";
   const fallbackTitle =
     (FALLBACK_TITLES[apiLang] || FALLBACK_TITLES.en)[policyKey] || policyKey;
 
@@ -119,7 +119,7 @@ function PolicyModalView({ policyKey, onClose }) {
   // Lock page scroll while the modal is open.
   useEffect(() => {
     const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prev;
     };
@@ -128,10 +128,10 @@ function PolicyModalView({ policyKey, onClose }) {
   // Close on ESC.
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === "Escape") onClose();
     };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
   // Fetch the policy text whenever key / language changes.
